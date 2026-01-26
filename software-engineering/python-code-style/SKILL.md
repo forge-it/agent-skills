@@ -151,6 +151,44 @@ from myapp.utils import helper
 from myapp.models import User
 ```
 
+### 8. Preserve Logical Blank Lines (HIGH)
+
+Never remove blank lines that separate logical sections within functions. These blank lines are intentional and serve to visually group related operations. When refactoring or rewriting code, preserve the existing logical groupings.
+
+```python
+# Good - blank lines separate logical sections
+def process_order(order: Order):
+    # Validation section
+    validate_order(order)
+    check_inventory(order.items)
+
+    # Processing section
+    total = calculate_total(order.items)
+    apply_discounts(order, total)
+
+    # Persistence section
+    save_order(order)
+    send_confirmation(order.user_id)
+```
+
+### 9. No Single-Use One-Liner Helpers (HIGH)
+
+Never create one-liner helper methods or functions that are only used in a single place. Inline the logic directly where it's needed. One-liner functions only make sense when reused in multiple places or when they provide meaningful abstraction for complex logic.
+
+```python
+# Bad - unnecessary one-liner helper used once
+def get_user_name(user: User) -> str:
+    return user.profile.display_name
+
+def greet_user(user: User):
+    name = get_user_name(user)
+    print(f"Hello, {name}")
+
+# Good - inline the logic
+def greet_user(user: User):
+    print(f"Hello, {user.profile.display_name}")
+```
+
 ## Anti-Patterns to Avoid
 
 1. **Single-letter variables**: Using `x`, `i`, `p` instead of descriptive names
@@ -160,6 +198,8 @@ from myapp.models import User
 5. **Function-level imports**: Importing inside functions
 6. **Excessive comments**: Adding comments for self-explanatory code
 7. **Lists for immutable data**: Using lists when tuples or sets are appropriate
+8. **Removing logical blank lines**: Deleting blank lines that separate code sections
+9. **Single-use one-liner helpers**: Creating helper functions used only once
 
 ## Guidelines
 
