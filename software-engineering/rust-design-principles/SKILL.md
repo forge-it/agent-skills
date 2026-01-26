@@ -258,7 +258,7 @@ fn create_sender(channel: NotificationChannel) -> Box<dyn NotificationSender> {
 
 ## Anti-Patterns to Avoid
 
-1. **God classes**: Classes that do too many things (violates SRP)
+1. **God classes**: Classes/Structs that do too many things (violates SRP)
 2. **Premature abstraction**: Creating interfaces before they're needed
 3. **Pattern obsession**: Using patterns where simple code would suffice
 4. **Deep inheritance**: Preferring inheritance over composition
