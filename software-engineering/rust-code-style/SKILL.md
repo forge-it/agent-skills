@@ -1,0 +1,309 @@
+---
+name: rust-code-style
+description: Rust code style guidelines for clean, maintainable, and readable code with hexagonal architecture
+license: MIT
+metadata:
+  author: cristian.ciortea@proton.me
+  version: "0.0.1"
+---
+
+# Rust Code Style Skill
+
+Version: 0.0.1
+
+## Purpose
+
+This skill provides guidelines for writing clean, maintainable, and readable Rust code. It focuses on type annotations, naming conventions, code organization, error handling, and hexagonal architecture.
+
+## When to Apply
+
+Apply these guidelines when:
+- Creating new Rust code
+- Updating existing Rust code
+- Reviewing Rust code
+- Refactoring Rust modules
+
+## Core Principles
+
+### 1. Descriptive Naming (CRITICAL)
+
+Use descriptive, intent-revealing names. Good names show intent and are searchable. Never use single-letter variable or constant names except for closures with obvious context.
+
+```rust
+// Bad
+let t = 30;
+let d = Duration::from_secs(60);
+
+// Good
+let elapsed_time_in_days = 30;
+let request_timeout = Duration::from_secs(60);
+```
+
+### 2. Iterator and Closure Variables (CRITICAL)
+
+Always use descriptive parameter names in closures, even when they're short-lived. Never use single-letter or abbreviated names.
+
+```rust
+// Bad
+products.iter().filter(|p| p.price > 100)
+items.iter().find(|i| i.name == target_name)
+paths.iter().filter_map(|p| p.parent())
+
+// Good
+products.iter().filter(|product| product.price > 100)
+items.iter().find(|item| item.name == target_name)
+paths.iter().filter_map(|path| path.parent())
+```
+
+**Rationale:** Descriptive names improve code searchability and readability. Single-letter parameters force readers to mentally track what the variable represents, increasing cognitive load. This rule applies to ALL closures including `.map()`, `.filter()`, `.find()`, `.any()`, `.all()`, `.fold()`, and any other iterator or combinator methods.
+
+### 3. Type Inference (CRITICAL)
+
+Let Rust infer types when obvious. Add explicit annotations for clarity in complex situations or public APIs.
+
+```rust
+// Bad - unnecessary type annotation
+let count: i32 = 0;
+let name: String = String::from("hello");
+
+// Good - let Rust infer obvious types
+let count = 0;
+let name = String::from("hello");
+
+// Good - explicit annotation for clarity in complex situations
+let users: HashMap<UserId, Vec<Order>> = HashMap::new();
+```
+
+### 4. Error Handling (CRITICAL)
+
+Use `Result` and `Option` appropriately. Prefer the `?` operator over explicit matching when propagating errors. Use `thiserror` for custom error types.
+
+```rust
+// Bad - verbose explicit matching
+fn process_user(id: UserId) -> Result<User, Error> {
+    let data = match fetch_data(id) {
+        Ok(d) => d,
+        Err(e) => return Err(e),
+    };
+    Ok(parse_user(data))
+}
+
+// Good - use ? operator
+fn process_user(id: UserId) -> Result<User, Error> {
+    let data = fetch_data(id)?;
+    Ok(parse_user(data))
+}
+
+// Good - custom error with thiserror
+#[derive(Debug, thiserror::Error)]
+pub enum UserError {
+    #[error("user not found: {0}")]
+    NotFound(UserId),
+    #[error("invalid user data: {0}")]
+    InvalidData(String),
+}
+```
+
+### 5. Documentation (HIGH)
+
+Use `///` doc comments for public items. Use `//!` for module-level documentation. Follow Rust API documentation conventions with examples in doc comments for public functions.
+
+```rust
+//! User management module.
+//!
+//! This module provides functionality for creating and managing users.
+
+/// Creates a new user with the given name.
+///
+/// # Arguments
+///
+/// * `name` - The user's display name
+///
+/// # Returns
+///
+/// A `Result` containing the created `User` or an error if creation fails.
+///
+/// # Examples
+///
+/// ```
+/// let user = create_user("Alice")?;
+/// assert_eq!(user.name, "Alice");
+/// ```
+pub fn create_user(name: &str) -> Result<User, UserError> {
+    // ...
+}
+```
+
+### 6. Constants (HIGH)
+
+Define constants using `SCREAMING_SNAKE_CASE`. Place all constants at the top of the module after use statements.
+
+```rust
+use std::time::Duration;
+
+use crate::config::Config;
+
+const API_BASE_URL: &str = "https://api.example.com/v1";
+const MAX_RETRY_ATTEMPTS: u32 = 3;
+const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
+
+pub fn make_request(endpoint: &str) -> Result<Response, Error> {
+    // ...
+}
+```
+
+### 7. Modern Module Convention (HIGH)
+
+Use the modern Rust module convention with `module_name.rs` files. Never use `mod.rs` files.
+
+```
+src/
+├── main.rs
+├── lib.rs
+├── user.rs           # Good: module_name.rs
+├── user/
+│   ├── repository.rs
+│   └── service.rs
+└── order.rs
+```
+
+### 8. Import Organization (HIGH)
+
+Group use statements in the following order with blank lines between groups:
+1. Standard library (`std::`)
+2. External crates
+3. Local crate modules (`crate::`, `super::`)
+
+```rust
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use serde::{Deserialize, Serialize};
+use tokio::sync::RwLock;
+
+use crate::domain::User;
+use crate::infrastructure::Repository;
+```
+
+## Hexagonal Architecture
+
+### 9. Layer Separation (CRITICAL)
+
+Organize code into three layers:
+- `domain/`: Core business logic, entities, business rules
+- `application/`: Use cases, application services, port definitions
+- `infrastructure/`: Adapters (HTTP handlers, database implementations, external APIs)
+
+```
+src/
+├── domain/
+│   ├── user.rs          # User entity and business rules
+│   ├── order.rs         # Order entity and business rules
+│   └── mod.rs
+├── application/
+│   ├── ports.rs         # Trait definitions (ports)
+│   ├── user_service.rs  # Use cases
+│   └── mod.rs
+└── infrastructure/
+    ├── http/
+    │   └── handlers.rs  # HTTP adapters
+    ├── postgres/
+    │   └── user_repo.rs # Database adapters
+    └── mod.rs
+```
+
+### 10. Dependency Rule (CRITICAL)
+
+Dependencies point inward. Domain has no external dependencies. Application depends on domain. Infrastructure depends on application and domain.
+
+```rust
+// domain/user.rs - no external dependencies
+pub struct User {
+    pub id: UserId,
+    pub email: Email,
+}
+
+// application/ports.rs - defines traits
+pub trait UserRepository {
+    fn find_by_id(&self, id: UserId) -> Result<User, Error>;
+    fn save(&self, user: &User) -> Result<(), Error>;
+}
+
+// infrastructure/postgres/user_repo.rs - implements traits
+pub struct PostgresUserRepository {
+    pool: PgPool,
+}
+
+impl UserRepository for PostgresUserRepository {
+    fn find_by_id(&self, id: UserId) -> Result<User, Error> {
+        // Database implementation
+    }
+    
+    fn save(&self, user: &User) -> Result<(), Error> {
+        // Database implementation
+    }
+}
+```
+
+### 11. Ports and Adapters (HIGH)
+
+Define traits (ports) in domain/application layers. Implement them (adapters) in infrastructure. Use dependency injection to wire them together.
+
+```rust
+// application/user_service.rs
+pub struct UserService<R: UserRepository> {
+    repository: R,
+}
+
+impl<R: UserRepository> UserService<R> {
+    pub fn new(repository: R) -> Self {
+        Self { repository }
+    }
+    
+    pub fn get_user(&self, id: UserId) -> Result<User, Error> {
+        self.repository.find_by_id(id)
+    }
+}
+```
+
+## Anti-Patterns to Avoid
+
+1. **Single-letter variables**: Using `x`, `i`, `p` in closures instead of descriptive names
+2. **Excessive type annotations**: Adding types when inference is clear
+3. **Verbose error handling**: Using `match` when `?` suffices
+4. **mod.rs files**: Using old module convention instead of `module_name.rs`
+5. **Mixed imports**: Not grouping imports by origin
+6. **Layer violations**: Infrastructure code in domain layer
+7. **Excessive comments**: Adding comments for self-explanatory code
+
+## Guidelines
+
+### Type Annotations and Documentation
+- Let Rust infer obvious types
+- Add explicit annotations for complex types or public APIs
+- Use `///` for public item documentation
+- Use `//!` for module-level documentation
+- Document complex types with expected structure and usage
+
+### Naming
+- Use descriptive, intent-revealing names
+- Use searchable names (no single letters except in trivial closures)
+- Use `SCREAMING_SNAKE_CASE` for constants
+- Use descriptive names in ALL closures and iterators
+
+### Code Organization
+- Keep comments to a minimum
+- Use modern module convention (no `mod.rs`)
+- Group imports: std, external, local
+- Place constants at module top after imports
+
+### Error Handling
+- Use `Result` and `Option` appropriately
+- Prefer `?` operator for error propagation
+- Use `thiserror` for custom error types
+
+### Architecture
+- Separate domain, application, and infrastructure
+- Dependencies point inward
+- Define ports as traits in domain/application
+- Implement adapters in infrastructure

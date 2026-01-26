@@ -19,27 +19,39 @@ Each skill includes:
 
 | Skill | Description |
 |-------|-------------|
-| [logging](software-enginnering/logging/SKILL.md) | Wide events logging pattern for powerful debugging and analytics |
-| [python-testing](software-enginnering/python-testing/SKILL.md) | Python testing best practices using pytest |
-| [python-code-style](software-enginnering/python-code-style/SKILL.md) | Python code style for clean, maintainable code |
-| [git-workflow](software-enginnering/git-workflow/SKILL.md) | Git branch naming, commits, and version control |
-| [general-workflow](software-enginnering/general-workflow/SKILL.md) | Consultation-first approach for AI-assisted development |
+| [general-logging](software-engineering/general-logging/SKILL.md) | Wide events logging pattern for powerful debugging and analytics |
+| [general-workflow](software-engineering/general-workflow/SKILL.md) | Consultation-first approach for AI-assisted development |
+| [git-workflow](software-engineering/git-workflow/SKILL.md) | Git branch naming, commits, and version control |
+| [python-code-style](software-engineering/python-code-style/SKILL.md) | Python code style for clean, maintainable code |
+| [python-testing](software-engineering/python-testing/SKILL.md) | Python testing best practices using pytest |
+| [rust-code-style](software-engineering/rust-code-style/SKILL.md) | Rust code style with hexagonal architecture |
+| [rust-testing](software-engineering/rust-testing/SKILL.md) | Rust testing best practices using cargo test |
+| [rust-cargo-make](software-engineering/rust-cargo-make/SKILL.md) | Cargo-make task runner for Rust build automation |
+| [rust-design-principles](software-engineering/rust-design-principles/SKILL.md) | SOLID, KISS, and design patterns for Rust |
 
 ## Project Structure
 
 ```
 agent-skills/
 ├── README.md
-└── software-enginnering/
+└── software-engineering/
+    ├── general-logging/
+    │   └── SKILL.md
     ├── general-workflow/
     │   └── SKILL.md
     ├── git-workflow/
     │   └── SKILL.md
-    ├── logging/
-    │   └── SKILL.md
     ├── python-code-style/
     │   └── SKILL.md
-    └── python-testing/
+    ├── python-testing/
+    │   └── SKILL.md
+    ├── rust-cargo-make/
+    │   └── SKILL.md
+    ├── rust-code-style/
+    │   └── SKILL.md
+    ├── rust-design-principles/
+    │   └── SKILL.md
+    └── rust-testing/
         └── SKILL.md
 ```
 
@@ -53,8 +65,8 @@ Add skills to your project's `CLAUDE.md` file or reference them directly in conv
 # CLAUDE.md
 
 Please follow the guidelines in:
-- software-enginnering/logging/SKILL.md
-- software-enginnering/python-testing/SKILL.md
+- software-engineering/general-logging/SKILL.md
+- software-engineering/python-testing/SKILL.md
 ```
 
 ### With Other AI Assistants
