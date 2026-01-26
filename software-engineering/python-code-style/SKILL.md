@@ -27,21 +27,35 @@ Apply these guidelines when:
 
 ### 1. Descriptive Naming (CRITICAL)
 
-Use descriptive, intent-revealing names. Good names show intent and are searchable. Never use single-letter variable or constant names.
+Use descriptive, intent-revealing names. Good names show intent and are searchable. Never use single-letter variable or constant names, including in loops and comprehensions.
 
 ```python
 # Bad
 t = 30
 d = {"n": "John", "a": 25}
-[p for p in products if p.get("name") == target_name]
 
 # Good
 elapsed_time_in_days = 30
 user_data = {"name": "John", "age": 25}
-[product for product in products if product.get("name") == target_name]
 ```
 
-### 2. Type Hints (CRITICAL)
+### 2. Loop and Comprehension Variables (CRITICAL)
+
+Never use single-letter variables in loops or comprehensions. Always use descriptive names that show intent.
+
+```python
+# Bad
+[p for p in products if p.get("name") == target_name]
+for i in items:
+    process(i)
+
+# Good
+[product for product in products if product.get("name") == target_name]
+for item in items:
+    process(item)
+```
+
+### 3. Type Hints (CRITICAL)
 
 Use type hints to describe function parameters and return values. Never add the `-> None` return type hint to functions that always return `None`.
 
@@ -59,7 +73,7 @@ def get_user(user_id: int) -> User:
     return User.objects.get(id=user_id)
 ```
 
-### 3. Truthy/Falsy Checks (CRITICAL)
+### 4. Truthy/Falsy Checks (CRITICAL)
 
 Prefer truthy/falsy checks over explicit `None` comparisons when checking for missing/empty values.
 
@@ -73,7 +87,7 @@ if not product.company_id or not product.user_id:
     raise ValueError("Missing required fields")
 ```
 
-### 4. Google Style Docstrings (HIGH)
+### 5. Google Style Docstrings (HIGH)
 
 When writing docstrings, use Google style. Use docstrings only to describe complex data structures or provide usage examples for public methods.
 
@@ -102,7 +116,7 @@ def process_order(order_data: dict) -> dict:
     """
 ```
 
-### 5. Constants at Module Top (HIGH)
+### 6. Constants at Module Top (HIGH)
 
 Define constants using UPPERCASE_WITH_UNDERSCORES. Place all constants at the top of the module immediately after import statements.
 
@@ -118,7 +132,7 @@ def make_request(endpoint: str):
     ...
 ```
 
-### 6. Absolute Imports (HIGH)
+### 7. Absolute Imports (HIGH)
 
 Never use relative imports. Always use absolute imports. Never use function-level imports.
 
