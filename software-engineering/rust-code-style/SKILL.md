@@ -76,7 +76,7 @@ let users: HashMap<UserId, Vec<Order>> = HashMap::new();
 
 ### 4. Error Handling (CRITICAL)
 
-Use `Result` and `Option` appropriately. Prefer the `?` operator over explicit matching when propagating errors. Use `thiserror` for custom error types.
+Use `Result` and `Option` appropriately. Prefer the `?` operator over explicit matching when propagating errors.
 
 ```rust
 // Bad - verbose explicit matching
@@ -93,8 +93,12 @@ fn process_user(id: UserId) -> Result<User, Error> {
     let data = fetch_data(id)?;
     Ok(parse_user(data))
 }
+```
 
-// Good - custom error with thiserror
+For custom error types, use `thiserror` if the project already has it as a dependency in `Cargo.toml`:
+
+```rust
+// With thiserror (only if already in Cargo.toml)
 #[derive(Debug, thiserror::Error)]
 pub enum UserError {
     #[error("user not found: {0}")]
@@ -104,7 +108,7 @@ pub enum UserError {
 }
 ```
 
-### 5. Documentation (HIGH)
+### 5. Documentation (MEDIUM)
 
 Use `///` doc comments for public items. Use `//!` for module-level documentation. Follow Rust API documentation conventions with examples in doc comments for public functions.
 
@@ -185,86 +189,59 @@ use crate::domain::User;
 use crate::infrastructure::Repository;
 ```
 
-## Hexagonal Architecture
+## Architecture Patterns
 
-### 9. Layer Separation (CRITICAL)
+### 9. Choose the Right Architecture (CRITICAL)
 
-Organize code into three layers:
-- `domain/`: Core business logic, entities, business rules
-- `application/`: Use cases, application services, port definitions
-- `infrastructure/`: Adapters (HTTP handlers, database implementations, external APIs)
+Use the simplest architecture that handles your actual complexity. Different project types require different patterns.
+
+#### For Low-Level Systems Code (drivers, microkernels, embedded)
+
+Use clean module boundaries, HALs, and well-defined traits:
 
 ```
 src/
-├── domain/
-│   ├── user.rs          # User entity and business rules
-│   ├── order.rs         # Order entity and business rules
-│   └── mod.rs
-├── application/
-│   ├── ports.rs         # Trait definitions (ports)
-│   ├── user_service.rs  # Use cases
-│   └── mod.rs
-└── infrastructure/
-    ├── http/
-    │   └── handlers.rs  # HTTP adapters
-    ├── postgres/
-    │   └── user_repo.rs # Database adapters
-    └── mod.rs
+├── hal/              # Hardware Abstraction Layer
+│   ├── traits.rs     # Platform-agnostic traits
+│   └── platform/     # Platform-specific implementations
+├── protocol/         # Protocol handling, state machines
+├── device/           # Device-specific logic
+└── lib.rs
 ```
 
-### 10. Dependency Rule (CRITICAL)
+- The domain *is* the infrastructure in systems code
+- Use traits for hardware abstraction (e.g., `embedded-hal`)
+- Use state machines for protocol handling
+- Use `#[cfg(...)]` for platform-specific code
 
-Dependencies point inward. Domain has no external dependencies. Application depends on domain. Infrastructure depends on application and domain.
+#### For Business Applications (web services, APIs, CRUD apps)
 
-```rust
-// domain/user.rs - no external dependencies
-pub struct User {
-    pub id: UserId,
-    pub email: Email,
-}
+Hexagonal architecture (ports and adapters) makes sense when isolating business logic from external concerns:
 
-// application/ports.rs - defines traits
-pub trait UserRepository {
-    fn find_by_id(&self, id: UserId) -> Result<User, Error>;
-    fn save(&self, user: &User) -> Result<(), Error>;
-}
-
-// infrastructure/postgres/user_repo.rs - implements traits
-pub struct PostgresUserRepository {
-    pool: PgPool,
-}
-
-impl UserRepository for PostgresUserRepository {
-    fn find_by_id(&self, id: UserId) -> Result<User, Error> {
-        // Database implementation
-    }
-    
-    fn save(&self, user: &User) -> Result<(), Error> {
-        // Database implementation
-    }
-}
+```
+src/
+├── domain/           # Core business logic, entities
+├── application/      # Use cases, port definitions (traits)
+└── infrastructure/   # Adapters (HTTP, database, external APIs)
 ```
 
-### 11. Ports and Adapters (HIGH)
+- Dependencies point inward (domain has no external deps)
+- Define traits (ports) in domain/application
+- Implement adapters in infrastructure
+- Use dependency injection to wire together
 
-Define traits (ports) in domain/application layers. Implement them (adapters) in infrastructure. Use dependency injection to wire them together.
+### When to Use Hexagonal Architecture
 
-```rust
-// application/user_service.rs
-pub struct UserService<R: UserRepository> {
-    repository: R,
-}
+**Good fit:**
+- Web services with complex business rules
+- Applications with multiple external integrations (databases, APIs, message queues)
+- Projects that need to swap implementations (e.g., different databases)
 
-impl<R: UserRepository> UserService<R> {
-    pub fn new(repository: R) -> Self {
-        Self { repository }
-    }
-    
-    pub fn get_user(&self, id: UserId) -> Result<User, Error> {
-        self.repository.find_by_id(id)
-    }
-}
-```
+**Poor fit:**
+- Drivers and embedded code (the domain *is* the hardware)
+- Microkernels (scheduling, memory management are inherently tied to CPU)
+- Simple utilities or CLI tools
+- Protocol implementations
 
 ## Anti-Patterns to Avoid
 
@@ -273,7 +250,7 @@ impl<R: UserRepository> UserService<R> {
 3. **Verbose error handling**: Using `match` when `?` suffices
 4. **mod.rs files**: Using old module convention instead of `module_name.rs`
 5. **Mixed imports**: Not grouping imports by origin
-6. **Layer violations**: Infrastructure code in domain layer
+6. **Over-architecting**: Using hexagonal/enterprise patterns for systems code
 7. **Excessive comments**: Adding comments for self-explanatory code
 
 ## Guidelines

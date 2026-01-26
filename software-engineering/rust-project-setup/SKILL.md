@@ -1,31 +1,59 @@
 ---
-name: rust-cargo-make
-description: Cargo-make task runner best practices for Rust build automation
-license: MIT
-metadata:
-  author: cristian.ciortea@proton.me
-  version: "0.0.1"
+description: Use when setting up or configuring Rust projects
+globs:
+alwaysApply: false
 ---
 
-# Cargo Make Skill
+# Rust Project Setup
 
-Version: 0.0.1
+## rust-toolchain.toml (CRITICAL)
 
-## Purpose
+Always use a `rust-toolchain.toml` file to pin the Rust toolchain version. This ensures consistent builds across all developers and CI environments.
 
-This skill provides guidelines for using cargo-make as a task runner for Rust projects. It focuses on task organization, naming conventions, and best practices for build automation, testing, and deployment workflows.
+### Required Configuration
 
-## When to Apply
+Every Rust project should have a `rust-toolchain.toml` in the project root:
 
-Apply these guidelines when:
-- Setting up cargo-make for a new Rust project
-- Adding new build, test, or deployment tasks
-- Organizing existing Makefile.toml tasks
-- Working with CI/CD pipelines using cargo-make
+```toml
+[toolchain]
+channel = "stable"
+```
 
-## Core Principles
+### Why This Matters
 
-### 1. Task Categories (CRITICAL)
+- Ensures all team members use the same Rust version
+- Guarantees CI/CD builds match local development
+- Prevents "works on my machine" issues
+- Automatically switches toolchain when entering the project directory (with rustup)
+
+### Adding Components (Optional)
+
+If your project requires additional components:
+
+```toml
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]
+```
+
+### Adding Targets (Optional)
+
+For cross-compilation:
+
+```toml
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]
+targets = ["wasm32-unknown-unknown"]
+```
+
+---
+
+## Cargo Make (HIGH)
+
+Use cargo-make as a task runner for build automation, testing, and deployment workflows.
+
+### Task Categories
 
 Organize tasks into logical categories:
 - **Build tasks**: compilation, optimization, release builds
@@ -98,7 +126,7 @@ command = "cargo"
 args = ["check"]
 ```
 
-### 2. Task Naming (CRITICAL)
+### Task Naming (CRITICAL)
 
 Use clear, descriptive task names following kebab-case convention.
 
@@ -123,7 +151,7 @@ Standard naming patterns:
 - Deploy: `deploy`, `deploy-staging`, `deploy-production`
 - Utility: `format`, `lint`, `clean`, `check`
 
-### 3. Task Documentation (CRITICAL)
+### Task Documentation (CRITICAL)
 
 Each task should have a clear description explaining its purpose and any required preconditions.
 
@@ -136,7 +164,7 @@ script = [
 ]
 ```
 
-### 4. Task Dependencies (HIGH)
+### Task Dependencies
 
 Use task dependencies to create logical workflows. Complex tasks should compose simpler tasks rather than duplicating logic.
 
@@ -167,7 +195,7 @@ dependencies = [
 ]
 ```
 
-### 5. Default Task (HIGH)
+### Default Task
 
 Define a sensible default task (typically `build` or `check`) that runs when `makers` is invoked without arguments.
 
@@ -182,7 +210,7 @@ description = "Default task - format, lint, and test"
 dependencies = ["format", "lint", "test"]
 ```
 
-### 6. Environment Variables (HIGH)
+### Environment Variables
 
 Use environment variables for configuration that varies between environments.
 
@@ -208,7 +236,7 @@ env = { ENVIRONMENT = "production" }
 script = ["./scripts/deploy.sh"]
 ```
 
-### 7. Cross-Platform Support (HIGH)
+### Cross-Platform Support
 
 Ensure tasks work across different platforms when possible. Use cargo-make's platform-specific task variants when necessary.
 
@@ -229,7 +257,7 @@ command = "cmd"
 args = ["/c", "start", "target/doc/myapp/index.html"]
 ```
 
-### 8. Error Handling (HIGH)
+### Error Handling
 
 Tasks should fail fast and provide clear error messages when something goes wrong.
 
@@ -256,7 +284,7 @@ dependencies = ["verify-env", "build-release"]
 script = ["./scripts/deploy.sh"]
 ```
 
-## Anti-Patterns to Avoid
+### Cargo Make Anti-Patterns
 
 1. **Undocumented tasks**: Tasks without descriptions
 2. **Duplicated logic**: Copying commands instead of using dependencies
@@ -264,36 +292,3 @@ script = ["./scripts/deploy.sh"]
 4. **Missing defaults**: No default task defined
 5. **Hardcoded values**: Environment-specific values hardcoded in tasks
 6. **Platform assumptions**: Tasks that only work on one OS
-
-## Guidelines
-
-### Task Organization
-- Group tasks by category with comments
-- Use dependencies to compose complex workflows
-- Keep individual tasks focused and simple
-- Define a sensible default task
-
-### Naming Conventions
-- Use kebab-case for all task names
-- Follow standard prefixes: build-, test-, deploy-, etc.
-- Be descriptive but concise
-
-### Documentation
-- Every task needs a description
-- Document required environment variables
-- Note any preconditions or dependencies
-
-### Environment Handling
-- Use env section for configuration
-- Support environment-specific overrides
-- Never hardcode secrets or environment-specific values
-
-### Cross-Platform
-- Test tasks on all target platforms
-- Use platform-specific variants when needed
-- Prefer cross-platform commands when possible
-
-### Error Handling
-- Fail fast on errors
-- Provide clear error messages
-- Verify preconditions in dependent tasks
