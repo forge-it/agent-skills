@@ -155,34 +155,70 @@ All tests must be placed in the `tests/` directory. Never use `#[cfg(test)]` mod
 src/
 ├── main.rs
 ├── domain/
-│   └── user.rs
+│   └── salaries.rs
 └── infrastructure/
     └── db.rs
 
 tests/
-├── unit/                    # Unit tests mirror src/ structure
+├── unit.rs                  # Module entry point for unit tests
+├── unit/
 │   ├── domain/
-│   │   └── user.rs          # Tests for src/domain/user.rs
-│   └── infrastructure/
-│       └── db.rs            # Tests for src/infrastructure/db.rs
-├── integration/             # Integration tests mirror src/ structure
-│   ├── domain/
-│   │   └── user.rs
-│   └── infrastructure/
-│       └── db.rs
-├── api/                     # API/E2E tests
-│   ├── user_api.rs
-│   └── order_api.rs
+│   │   └── salaries_test.rs # Tests for src/domain/salaries.rs
+│   └── salary_calculation_service_test.rs
+├── api.rs                   # Module entry point for API tests
+├── api/
+│   ├── conftest.rs          # Shared setup/teardown for API tests
+│   ├── health_test.rs
+│   └── salaries_test.rs
 └── common/
     └── mod.rs               # Shared test utilities
 ```
 
-### 7. Test Directory Structure Mirrors Source (CRITICAL)
+### 7. Module Entry Point Files (CRITICAL)
 
-The test directory structure must mirror the source directory structure. Tests for `src/infrastructure/db.rs` go in `tests/unit/infrastructure/db.rs`.
+Each test category requires a module entry point file (`unit.rs`, `api.rs`) that declares its submodules. This is how Rust discovers and compiles the test files.
 
 ```rust
-// tests/unit/infrastructure/db.rs
+// tests/unit.rs
+mod unit {
+    mod salary_calculation_service_test;
+
+    mod domain {
+        mod salaries_test;
+    }
+}
+```
+
+```rust
+// tests/api.rs
+mod api {
+    mod conftest;
+    mod health_test;
+    mod salaries_test;
+}
+```
+
+### 8. Test File Naming Convention (CRITICAL)
+
+All test files must end with `_test.rs` suffix. This makes it immediately clear which files contain tests.
+
+```
+tests/
+├── unit/
+│   ├── domain/
+│   │   └── salaries_test.rs    # Good: _test.rs suffix
+│   └── user_service_test.rs    # Good: _test.rs suffix
+├── api/
+│   ├── conftest.rs             # Exception: shared config
+│   └── health_test.rs          # Good: _test.rs suffix
+```
+
+### 9. Test Directory Structure Mirrors Source (CRITICAL)
+
+The test directory structure must mirror the source directory structure. Tests for `src/infrastructure/db.rs` go in `tests/unit/infrastructure/db_test.rs`.
+
+```rust
+// tests/unit/infrastructure/db_test.rs
 use myproject::infrastructure::db::DatabaseConnection;
 
 #[test]
@@ -198,92 +234,176 @@ fn test_connection_returns_error_for_invalid_config() {
 }
 ```
 
-```rust
-// tests/unit/domain/user.rs
-use myproject::domain::user::User;
+### 10. Test Categories (HIGH)
 
-#[test]
-fn test_new_creates_user_with_given_name() {
-    let user = User::new("Alice");
-    assert_eq!(user.name, "Alice");
-}
-```
-
-### 8. Test Categories (HIGH)
-
-Organize tests into three categories:
+Organize tests into categories:
 
 - **unit/**: Tests for individual functions and structs in isolation
-- **integration/**: Tests that verify multiple components work together
-- **api/**: End-to-end tests that exercise the full API
+- **api/**: End-to-end tests that exercise the full API against a running server
 
 ```rust
-// tests/unit/domain/order.rs - Unit test
+// tests/unit/domain/order_test.rs - Unit test
 #[test]
 fn test_order_calculates_total_correctly() {
     let order = Order::new(vec![item1, item2]);
     assert_eq!(order.total_cents, 2500);
 }
 
-// tests/integration/domain/order.rs - Integration test
-#[tokio::test]
-async fn test_order_persists_to_database() {
-    let db = setup_test_db().await;
-    let repo = OrderRepository::new(db);
-    let order = Order::new(vec![item1]);
-    
-    repo.save(&order).await.unwrap();
-    let loaded = repo.find_by_id(order.id).await.unwrap();
-    
-    assert_eq!(loaded.id, order.id);
-}
-
-// tests/api/order_api.rs - API test
+// tests/api/orders_test.rs - API test
 #[tokio::test]
 async fn test_create_order_endpoint_returns_201() {
-    let app = spawn_test_app().await;
-    let response = app.post("/orders").json(&order_request).send().await;
+    let client = reqwest::Client::new();
+    let response = client
+        .post(format!("{}/orders", LOCALHOST))
+        .json(&order_request)
+        .send()
+        .await
+        .expect("Failed to send request");
     assert_eq!(response.status(), 201);
 }
 ```
 
-### 9. Complex Test Organization (HIGH)
+### 11. API Test Configuration with conftest.rs (HIGH)
 
-Within a test file, each struct impl or function gets its own dedicated test submodule when complex.
+Use a `conftest.rs` file in the `api/` directory for shared API test setup and teardown. Use `ctor` and `dtor` for server lifecycle management.
 
 ```rust
-// tests/unit/domain/user.rs
-use myproject::domain::user::User;
+// tests/api/conftest.rs
+use ctor::{ctor, dtor};
+use std::process::{Child, Command, Stdio};
+use std::sync::Mutex;
+use std::thread;
+use std::time::Duration;
 
-mod new {
-    use super::*;
-    
-    #[test]
-    fn test_new_creates_user_with_given_name() {
-        let user = User::new("Alice");
-        assert_eq!(user.name, "Alice");
-    }
-    
-    #[test]
-    fn test_new_generates_unique_id() {
-        let user1 = User::new("Alice");
-        let user2 = User::new("Bob");
-        assert_ne!(user1.id, user2.id);
-    }
+pub const LOCALHOST: &str = "http://localhost:8000";
+
+static SERVER_PROCESS: Mutex<Option<Child>> = Mutex::new(None);
+
+fn start_server_process() -> Child {
+    let binary_path = std::env::current_exe()
+        .expect("Failed to get test binary path")
+        .parent()
+        .and_then(|path| path.parent())
+        .expect("Failed to get target/debug directory")
+        .join("myproject-backend");
+
+    Command::new(binary_path)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to start test server")
 }
 
-mod validate {
-    use super::*;
-    
-    #[test]
-    fn test_validate_returns_error_for_empty_name() {
-        let result = User::validate("");
-        assert!(result.is_err());
+fn wait_for_server_ready(process: &mut Child) {
+    let client = reqwest::blocking::Client::new();
+    let max_attempts = 30;
+
+    for attempt in 1..=max_attempts {
+        if let Ok(response) = client.get(&format!("{}/health", LOCALHOST)).send() {
+            if response.status().is_success() {
+                println!("Test server ready after {} attempts", attempt);
+                return;
+            }
+        }
+        thread::sleep(Duration::from_millis(500));
+    }
+    panic!("Test server failed to become ready");
+}
+
+#[ctor]
+fn setup_api_tests() {
+    let mut server_process = start_server_process();
+    wait_for_server_ready(&mut server_process);
+    *SERVER_PROCESS.lock().unwrap() = Some(server_process);
+}
+
+#[dtor]
+fn teardown_api_tests() {
+    if let Some(mut server_process) = SERVER_PROCESS.lock().unwrap().take() {
+        let _ = server_process.kill();
+        let _ = server_process.wait();
     }
 }
 ```
 
-### 10. Fixtures and Setup (HIGH)
+```rust
+// tests/api/health_test.rs
+use super::conftest::LOCALHOST;
+
+#[tokio::test]
+async fn test_health_endpoint_returns_200() {
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("{}/health", LOCALHOST))
+        .send()
+        .await
+        .expect("Failed to send request");
+    assert_eq!(response.status(), 200);
+}
+```
+
+### 12. Complex Test Organization (HIGH)
+
+Within a test file, each struct or type gets its own dedicated test submodule. This provides clear organization when testing multiple related types in one file.
+
+```rust
+// tests/unit/domain/salaries_test.rs
+use myproject::domain::models::salaries::{Currency, Income, IncomeType, Salary};
+
+mod income {
+    use super::*;
+
+    #[test]
+    fn should_create_income_from_valid_string() {
+        let result = Income::new(Some("5000"));
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn should_fail_when_income_is_negative() {
+        let result = Income::new(Some("-100"));
+        assert!(result.is_err());
+    }
+}
+
+mod income_type {
+    use super::*;
+
+    #[test]
+    fn should_create_net_income_type_lowercase() {
+        let result = IncomeType::new(Some("net"));
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn should_fail_when_income_type_is_invalid() {
+        let result = IncomeType::new(Some("gross"));
+        assert!(result.is_err());
+    }
+}
+
+mod currency {
+    use super::*;
+
+    #[test]
+    fn should_create_dollar_currency_lowercase() {
+        let result = Currency::new(Some("dollar"));
+        assert!(result.is_ok());
+    }
+}
+
+mod salary {
+    use super::*;
+
+    #[test]
+    fn should_create_salary_with_all_required_fields() {
+        let result = Salary::new(Some("5000"), Some("net"), Some("ron"), None, None);
+        assert!(result.is_ok());
+    }
+}
+```
+
+### 13. Fixtures and Setup (HIGH)
 
 Use helper functions for test fixtures. Define shared fixtures in `tests/common/mod.rs`.
 
@@ -297,21 +417,12 @@ pub fn create_test_user() -> User {
     }
 }
 
-pub fn create_test_product() -> Product {
-    Product {
-        id: ProductId(1),
-        name: "Widget".to_string(),
-        price_cents: 1999,
-    }
-}
-
-// tests/unit/domain/order.rs
+// tests/unit/domain/order_test.rs
 mod common;
 
 #[test]
 fn test_create_order_with_valid_data() {
     let user = common::create_test_user();
-    let product = common::create_test_product();
     // ...
 }
 ```
@@ -319,13 +430,16 @@ fn test_create_order_with_valid_data() {
 ## Anti-Patterns to Avoid
 
 1. **Tests in source files**: Using `#[cfg(test)]` modules in `src/` instead of `tests/` directory
-2. **Manual mocks**: Creating mock implementations by hand instead of using `mockall`
-3. **Testing timestamps**: Asserting exact timing instead of business outcomes
-4. **Comments in tests**: Adding doc comments or inline comments to test functions
-5. **Testing logging**: Mocking or asserting on logger calls
-6. **Scattered test helpers**: Duplicating test fixtures across test files
-7. **Vague test names**: Using generic names like `test_user` or `test_order`
-8. **Flat test structure**: Not mirroring the source directory structure in tests
+2. **Missing module entry points**: Forgetting to create `unit.rs` or `api.rs` to declare submodules
+3. **Missing _test.rs suffix**: Not using the `_test.rs` suffix for test files
+4. **Manual mocks**: Creating mock implementations by hand instead of using `mockall`
+5. **Testing timestamps**: Asserting exact timing instead of business outcomes
+6. **Comments in tests**: Adding doc comments or inline comments to test functions
+7. **Testing logging**: Mocking or asserting on logger calls
+8. **Scattered test helpers**: Duplicating test fixtures across test files
+9. **Vague test names**: Using generic names like `test_user` or `test_order`
+10. **Flat test structure**: Not mirroring the source directory structure in tests
+11. **Missing conftest.rs**: Not centralizing API test setup/teardown
 
 ## Guidelines
 
@@ -334,6 +448,7 @@ fn test_create_order_with_valid_data() {
 - Use `#[tokio::test]` for async tests
 - Use `mockall` for mocking traits
 - Use `wiremock` or `httpmock` for HTTP mocking
+- Use `ctor`/`dtor` for API test server lifecycle
 
 ### Mocking
 - Use `mockall` for trait mocking
@@ -342,13 +457,16 @@ fn test_create_order_with_valid_data() {
 
 ### Structure
 - All tests in `tests/` directory, never in source files
-- Organize into `unit/`, `integration/`, and `api/` subdirectories
-- Mirror source directory structure: `src/domain/user.rs` → `tests/unit/domain/user.rs`
-- Dedicated submodule per function when complex
+- Create module entry point files: `tests/unit.rs`, `tests/api.rs`
+- All test files must end with `_test.rs` suffix
+- Organize into `unit/` and `api/` subdirectories
+- Mirror source directory structure: `src/domain/salaries.rs` → `tests/unit/domain/salaries_test.rs`
+- Dedicated submodule per struct/type when testing multiple types in one file
 - Shared fixtures in `tests/common/mod.rs`
+- API test configuration in `tests/api/conftest.rs`
 
 ### Naming
-- Pattern: `test_<action>_<outcome>_<optional_case>`
+- Pattern: `should_<expected_behavior>_when_<condition>` or `test_<action>_<outcome>_<optional_case>`
 - Be descriptive and explicit
 - Name should explain what is being tested
 
