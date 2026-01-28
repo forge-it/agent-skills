@@ -147,28 +147,115 @@ fn test_calculate_total_returns_zero_for_empty_cart() {
 }
 ```
 
-### 6. Test Module Organization (HIGH)
+### 6. All Tests in tests/ Directory (CRITICAL)
 
-Place unit tests in a `#[cfg(test)]` module at the bottom of the source file. Place integration tests in the `tests/` directory.
+All tests must be placed in the `tests/` directory. Never use `#[cfg(test)]` modules in source files. This provides clear separation between production code and test code, and makes test coverage easier to track.
+
+```
+src/
+├── main.rs
+├── domain/
+│   └── user.rs
+└── infrastructure/
+    └── db.rs
+
+tests/
+├── unit/                    # Unit tests mirror src/ structure
+│   ├── domain/
+│   │   └── user.rs          # Tests for src/domain/user.rs
+│   └── infrastructure/
+│       └── db.rs            # Tests for src/infrastructure/db.rs
+├── integration/             # Integration tests mirror src/ structure
+│   ├── domain/
+│   │   └── user.rs
+│   └── infrastructure/
+│       └── db.rs
+├── api/                     # API/E2E tests
+│   ├── user_api.rs
+│   └── order_api.rs
+└── common/
+    └── mod.rs               # Shared test utilities
+```
+
+### 7. Test Directory Structure Mirrors Source (CRITICAL)
+
+The test directory structure must mirror the source directory structure. Tests for `src/infrastructure/db.rs` go in `tests/unit/infrastructure/db.rs`.
 
 ```rust
-// src/user.rs
-pub struct User {
-    pub id: UserId,
-    pub name: String,
+// tests/unit/infrastructure/db.rs
+use myproject::infrastructure::db::DatabaseConnection;
+
+#[test]
+fn test_connection_pool_creates_connections() {
+    let pool = DatabaseConnection::new_pool(5);
+    assert_eq!(pool.size(), 5);
 }
 
-impl User {
-    pub fn new(name: &str) -> Self {
-        Self {
-            id: UserId::generate(),
-            name: name.to_string(),
-        }
-    }
+#[test]
+fn test_connection_returns_error_for_invalid_config() {
+    let result = DatabaseConnection::from_config(&InvalidConfig::default());
+    assert!(result.is_err());
+}
+```
+
+```rust
+// tests/unit/domain/user.rs
+use myproject::domain::user::User;
+
+#[test]
+fn test_new_creates_user_with_given_name() {
+    let user = User::new("Alice");
+    assert_eq!(user.name, "Alice");
+}
+```
+
+### 8. Test Categories (HIGH)
+
+Organize tests into three categories:
+
+- **unit/**: Tests for individual functions and structs in isolation
+- **integration/**: Tests that verify multiple components work together
+- **api/**: End-to-end tests that exercise the full API
+
+```rust
+// tests/unit/domain/order.rs - Unit test
+#[test]
+fn test_order_calculates_total_correctly() {
+    let order = Order::new(vec![item1, item2]);
+    assert_eq!(order.total_cents, 2500);
 }
 
-#[cfg(test)]
-mod tests {
+// tests/integration/domain/order.rs - Integration test
+#[tokio::test]
+async fn test_order_persists_to_database() {
+    let db = setup_test_db().await;
+    let repo = OrderRepository::new(db);
+    let order = Order::new(vec![item1]);
+    
+    repo.save(&order).await.unwrap();
+    let loaded = repo.find_by_id(order.id).await.unwrap();
+    
+    assert_eq!(loaded.id, order.id);
+}
+
+// tests/api/order_api.rs - API test
+#[tokio::test]
+async fn test_create_order_endpoint_returns_201() {
+    let app = spawn_test_app().await;
+    let response = app.post("/orders").json(&order_request).send().await;
+    assert_eq!(response.status(), 201);
+}
+```
+
+### 9. Complex Test Organization (HIGH)
+
+Within a test file, each struct impl or function gets its own dedicated test submodule when complex.
+
+```rust
+// tests/unit/domain/user.rs
+use myproject::domain::user::User;
+
+mod new {
     use super::*;
     
     #[test]
@@ -176,59 +263,29 @@ mod tests {
         let user = User::new("Alice");
         assert_eq!(user.name, "Alice");
     }
+    
+    #[test]
+    fn test_new_generates_unique_id() {
+        let user1 = User::new("Alice");
+        let user2 = User::new("Bob");
+        assert_ne!(user1.id, user2.id);
+    }
 }
-```
 
-### 7. Complex Test Organization (HIGH)
-
-Each struct impl or function gets its own dedicated test submodule when complex.
-
-```rust
-#[cfg(test)]
-mod tests {
+mod validate {
     use super::*;
     
-    mod new {
-        use super::*;
-        
-        #[test]
-        fn test_new_creates_user_with_given_name() {
-            // ...
-        }
-        
-        #[test]
-        fn test_new_generates_unique_id() {
-            // ...
-        }
-    }
-    
-    mod validate {
-        use super::*;
-        
-        #[test]
-        fn test_validate_returns_error_for_empty_name() {
-            // ...
-        }
+    #[test]
+    fn test_validate_returns_error_for_empty_name() {
+        let result = User::validate("");
+        assert!(result.is_err());
     }
 }
 ```
 
-### 8. Integration Test Organization (HIGH)
+### 10. Fixtures and Setup (HIGH)
 
-Integration tests go in `tests/` directory with one file per feature area.
-
-```
-tests/
-├── user_api.rs       # User API integration tests
-├── order_api.rs      # Order API integration tests
-├── auth.rs           # Authentication integration tests
-└── common/
-    └── mod.rs        # Shared test utilities
-```
-
-### 9. Fixtures and Setup (HIGH)
-
-Use helper functions for test fixtures. Define shared fixtures in a common test utilities module.
+Use helper functions for test fixtures. Define shared fixtures in `tests/common/mod.rs`.
 
 ```rust
 // tests/common/mod.rs
@@ -248,7 +305,7 @@ pub fn create_test_product() -> Product {
     }
 }
 
-// tests/order_api.rs
+// tests/unit/domain/order.rs
 mod common;
 
 #[test]
@@ -261,12 +318,14 @@ fn test_create_order_with_valid_data() {
 
 ## Anti-Patterns to Avoid
 
-1. **Manual mocks**: Creating mock implementations by hand instead of using `mockall`
-2. **Testing timestamps**: Asserting exact timing instead of business outcomes
-3. **Comments in tests**: Adding doc comments or inline comments to test functions
-4. **Testing logging**: Mocking or asserting on logger calls
-5. **Scattered test helpers**: Duplicating test fixtures across test files
-6. **Vague test names**: Using generic names like `test_user` or `test_order`
+1. **Tests in source files**: Using `#[cfg(test)]` modules in `src/` instead of `tests/` directory
+2. **Manual mocks**: Creating mock implementations by hand instead of using `mockall`
+3. **Testing timestamps**: Asserting exact timing instead of business outcomes
+4. **Comments in tests**: Adding doc comments or inline comments to test functions
+5. **Testing logging**: Mocking or asserting on logger calls
+6. **Scattered test helpers**: Duplicating test fixtures across test files
+7. **Vague test names**: Using generic names like `test_user` or `test_order`
+8. **Flat test structure**: Not mirroring the source directory structure in tests
 
 ## Guidelines
 
@@ -282,9 +341,9 @@ fn test_create_order_with_valid_data() {
 - Prefer sophisticated mocking libraries over manual implementations
 
 ### Structure
-- Unit tests in `#[cfg(test)]` module at bottom of source file
-- Integration tests in `tests/` directory
-- One test file per feature area for integration tests
+- All tests in `tests/` directory, never in source files
+- Organize into `unit/`, `integration/`, and `api/` subdirectories
+- Mirror source directory structure: `src/domain/user.rs` → `tests/unit/domain/user.rs`
 - Dedicated submodule per function when complex
 - Shared fixtures in `tests/common/mod.rs`
 
