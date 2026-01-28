@@ -1,6 +1,6 @@
 ---
 name: rust-design-idioms
-description: Rust-specific design idioms including Newtype pattern, type-safe domain modeling, and parse-don't-validate approach
+description: Rust-specific design idioms including Newtype pattern, type-safe domain modeling, parse-don't-validate approach, and structured error handling
 license: MIT
 metadata:
   author: cristian.ciortea@proton.me
@@ -22,6 +22,8 @@ Apply these guidelines when:
 - Preventing invalid states at compile time
 - Working with primitive types that have semantic meaning
 - Designing APIs that are hard to misuse
+- Defining error types for functions and libraries
+- Composing errors from multiple sources
 
 ## Core Idioms
 
@@ -336,6 +338,254 @@ impl<T> NonEmptyVec<T> {
 }
 ```
 
+### 10. Structured Error Types (CRITICAL)
+
+Design error types as enums that codify all possible failure states. This makes function signatures self-documenting and enables programmatic error handling via pattern matching.
+
+```rust
+// Bad - dynamic error loses structure
+fn parse_date(input: &str) -> Result<Date, Box<dyn std::error::Error>> {
+    // Callers can't pattern match on specific failures
+}
+
+// Good - structured enum captures all failure modes
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DateError {
+    InvalidMonth(u8),
+    InvalidDay { month: u8, day: u8 },
+    InvalidYear(i32),
+}
+
+impl std::fmt::Display for DateError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DateError::InvalidMonth(month) => {
+                write!(formatter, "month {} is not in range 1-12", month)
+            }
+            DateError::InvalidDay { month, day } => {
+                write!(formatter, "day {} is invalid for month {}", day, month)
+            }
+            DateError::InvalidYear(year) => {
+                write!(formatter, "year {} is out of supported range", year)
+            }
+        }
+    }
+}
+
+impl std::error::Error for DateError {}
+
+fn parse_date(input: &str) -> Result<Date, DateError> {
+    // Callers can handle specific cases
+}
+```
+
+### 11. No thiserror or anyhow (CRITICAL)
+
+Never use `thiserror` or `anyhow` crates. Implement the `std::error::Error` trait manually. This ensures full control over error types, avoids hidden magic, and keeps dependencies minimal.
+
+```rust
+// Bad - using thiserror
+#[derive(thiserror::Error, Debug)]
+pub enum MyError {
+    #[error("invalid input: {0}")]
+    InvalidInput(String),
+}
+
+// Bad - using anyhow
+fn process() -> anyhow::Result<()> {
+    // ...
+}
+
+// Good - manual implementation
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MyError {
+    InvalidInput(String),
+    NotFound { id: u64 },
+}
+
+impl std::fmt::Display for MyError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MyError::InvalidInput(input) => {
+                write!(formatter, "invalid input: {}", input)
+            }
+            MyError::NotFound { id } => {
+                write!(formatter, "resource with id {} not found", id)
+            }
+        }
+    }
+}
+
+impl std::error::Error for MyError {}
+```
+
+### 12. Compose Errors with Wrapper Enums (HIGH)
+
+When a function can fail with multiple error types, create a wrapper enum that composes them. Implement `From` for automatic conversion with the `?` operator.
+
+```rust
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DateError {
+    InvalidMonth(u8),
+    InvalidDay { month: u8, day: u8 },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TimeError {
+    InvalidHour(u8),
+    InvalidMinute(u8),
+}
+
+// Wrapper enum composes both error types
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DateTimeError {
+    Date(DateError),
+    Time(TimeError),
+}
+
+impl std::fmt::Display for DateTimeError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DateTimeError::Date(error) => write!(formatter, "{}", error),
+            DateTimeError::Time(error) => write!(formatter, "{}", error),
+        }
+    }
+}
+
+impl std::error::Error for DateTimeError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            DateTimeError::Date(error) => Some(error),
+            DateTimeError::Time(error) => Some(error),
+        }
+    }
+}
+
+// From implementations enable ? operator
+impl From<DateError> for DateTimeError {
+    fn from(error: DateError) -> Self {
+        DateTimeError::Date(error)
+    }
+}
+
+impl From<TimeError> for DateTimeError {
+    fn from(error: TimeError) -> Self {
+        DateTimeError::Time(error)
+    }
+}
+
+// Now ? works seamlessly
+fn parse_datetime(date_str: &str, time_str: &str) -> Result<DateTime, DateTimeError> {
+    let date = parse_date(date_str)?;  // DateError -> DateTimeError
+    let time = parse_time(time_str)?;  // TimeError -> DateTimeError
+    Ok(DateTime { date, time })
+}
+```
+
+### 13. Scoped Error Types (HIGH)
+
+Design error types scoped to specific operations rather than creating module-wide umbrella errors. Each function or type should have errors capturing only relevant failure modes.
+
+```rust
+// Bad - umbrella error for entire module
+pub enum BackupError {
+    IoError(std::io::Error),
+    NetworkError(NetworkError),
+    ParseError(ParseError),
+    ValidationError(String),
+    CompressionError(CompressionError),
+    EncryptionError(EncryptionError),
+    // Every function returns this, most variants impossible for most functions
+}
+
+// Good - scoped errors per operation
+pub enum BackupCreateError {
+    SourceNotFound(PathBuf),
+    InsufficientSpace { required: u64, available: u64 },
+    CompressionFailed(CompressionError),
+}
+
+pub enum BackupRestoreError {
+    BackupNotFound(BackupId),
+    DestinationNotWritable(PathBuf),
+    IntegrityCheckFailed { expected: Hash, actual: Hash },
+}
+
+pub enum BackupListError {
+    RepositoryNotAccessible(PathBuf),
+}
+```
+
+### 14. Error Context Without Losing Structure (MEDIUM)
+
+Add context to errors while preserving the ability to match on specific variants. Use wrapper variants or dedicated context fields.
+
+```rust
+// Good - context as wrapper variant
+#[derive(Debug)]
+pub enum FileProcessError {
+    Read { path: PathBuf, source: std::io::Error },
+    Parse { path: PathBuf, line: usize, source: ParseError },
+    Validation { path: PathBuf, source: ValidationError },
+}
+
+impl std::fmt::Display for FileProcessError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FileProcessError::Read { path, .. } => {
+                write!(formatter, "failed to read file: {}", path.display())
+            }
+            FileProcessError::Parse { path, line, .. } => {
+                write!(formatter, "parse error in {} at line {}", path.display(), line)
+            }
+            FileProcessError::Validation { path, .. } => {
+                write!(formatter, "validation failed for {}", path.display())
+            }
+        }
+    }
+}
+
+impl std::error::Error for FileProcessError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            FileProcessError::Read { source, .. } => Some(source),
+            FileProcessError::Parse { source, .. } => Some(source),
+            FileProcessError::Validation { source, .. } => Some(source),
+        }
+    }
+}
+```
+
+### 15. Library vs Application Error Handling (MEDIUM)
+
+Libraries should return structured, specific error types. Applications can use more dynamic approaches internally but should never expose them in public APIs.
+
+```rust
+// Library code - always structured errors
+pub fn parse_config(path: &Path) -> Result<Config, ConfigError> {
+    // Returns specific, matchable error type
+}
+
+// Application code - can use Box<dyn Error> internally for convenience
+fn main() {
+    if let Err(error) = run() {
+        eprintln!("Error: {}", error);
+        let mut source = error.source();
+        while let Some(cause) = source {
+            eprintln!("Caused by: {}", cause);
+            source = cause.source();
+        }
+        std::process::exit(1);
+    }
+}
+
+fn run() -> Result<(), Box<dyn std::error::Error>> {
+    let config = parse_config(Path::new("config.toml"))?;
+    // Internal application code can be more flexible
+    Ok(())
+}
+```
+
 ## Anti-Patterns to Avoid
 
 1. **Primitive obsession**: Using raw String, i32, etc. for domain concepts instead of newtypes
@@ -345,6 +595,11 @@ impl<T> NonEmptyVec<T> {
 5. **Missing trait implementations**: Forcing users to wrap your newtypes due to missing derives
 6. **Unconsidered Deref**: Implementing Deref without considering the expanded public interface
 7. **Bypassed constructors**: Using struct literal syntax to create instances without validation
+8. **Using thiserror or anyhow**: Relying on external crates instead of implementing Error manually
+9. **Dynamic error types in libraries**: Using `Box<dyn Error>` in public APIs instead of structured enums
+10. **Umbrella error enums**: Creating module-wide errors where most variants are impossible for most functions
+11. **String-based errors**: Using `String` or `&str` as error types instead of structured enums
+12. **Downcasting errors**: Relying on `downcast_ref` to handle errors programmatically
 
 ## Guidelines
 
@@ -369,6 +624,10 @@ impl<T> NonEmptyVec<T> {
 - Implement From/TryFrom for conversions
 
 ### Error Handling
-- Create dedicated error types for validation failures
-- Include the invalid value in error messages
-- Use thiserror for ergonomic error definitions
+- Never use `thiserror` or `anyhow` - implement `std::error::Error` manually
+- Design error types as enums capturing all possible failure states
+- Scope errors to specific operations, not entire modules
+- Implement `From` for composing errors and enabling the `?` operator
+- Include relevant context (paths, IDs, values) in error variants
+- Implement `source()` to preserve error chains
+- Libraries must return structured errors; applications can use `Box<dyn Error>` internally
