@@ -28,128 +28,37 @@ Apply these guidelines when:
 
 ### 1. Pre-migration State (CRITICAL)
 
-**The database must be empty before the first migration.** Never start with pre-existing tables or data. The first migration should create the complete initial schema from scratch.
+**Greenfield services should start from an empty database and build the schema exclusively through migrations.** This ensures consistent environments and reliable onboarding.
 
-```sql
--- CORRECT: First migration creates everything
--- migrations/20260130191544_initial_schema.sql
-CREATE TABLE users (
-    id SERIAL PRIMARY KEY,
-    email VARCHAR(255) NOT NULL UNIQUE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
+**Brownfield systems (existing databases) require an adoption strategy.** Do not pretend the database is empty. Choose one approach and document it:
+- **Baseline**: mark an existing schema version as the starting point, then apply incremental migrations going forward
+- **Schema capture**: capture the current schema as an initial migration (often generated), then proceed incrementally
+- **Parallel database/schema**: create a new database/schema and migrate traffic/data gradually
 
-CREATE TABLE posts (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER REFERENCES users(id),
-    title VARCHAR(255) NOT NULL,
-    content TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
+Key requirement: **for a given deployed unit, schema changes must be reproducible from source control and consistently applied across environments.**
 
--- INCORRECT: Starting with existing tables
--- The database should NOT have any tables before the first migration runs
-```
+### 2. First Migration is Self-Contained (CRITICAL)
 
-### 2. First Migration is Comprehensive (CRITICAL)
+**The first migration must be sufficient to bootstrap a new environment.** In a greenfield service, this typically means creating the initial schema (tables, indexes, constraints) needed for the application to start.
 
-**The first migration should create all tables, indexes, constraints, and initial data.** This migration is typically large and establishes the complete foundation of your application's data model.
-
-```sql
--- migrations/20260130191544_initial_schema.sql
--- This is a complete, self-contained schema definition
-
--- Core user tables
-CREATE TABLE users (
-    id BIGSERIAL PRIMARY KEY,
-    uuid UUID NOT NULL UNIQUE DEFAULT gen_random_uuid(),
-    email VARCHAR(320) NOT NULL UNIQUE,
-    username VARCHAR(50) NOT NULL UNIQUE,
-    hashed_password VARCHAR(255) NOT NULL,
-    is_active BOOLEAN NOT NULL DEFAULT true,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE user_profiles (
-    id BIGSERIAL PRIMARY KEY,
-    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    full_name VARCHAR(255),
-    avatar_url TEXT,
-    bio TEXT,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    UNIQUE(user_id)
-);
-
--- Application domain tables
-CREATE TABLE products (
-    id BIGSERIAL PRIMARY KEY,
-    sku VARCHAR(50) NOT NULL UNIQUE,
-    name VARCHAR(255) NOT NULL,
-    description TEXT,
-    price DECIMAL(10,2) NOT NULL,
-    stock_quantity INTEGER NOT NULL DEFAULT 0,
-    is_available BOOLEAN NOT NULL DEFAULT true,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE orders (
-    id BIGSERIAL PRIMARY KEY,
-    order_number VARCHAR(50) NOT NULL UNIQUE,
-    user_id BIGINT NOT NULL REFERENCES users(id),
-    total_amount DECIMAL(10,2) NOT NULL,
-    status VARCHAR(50) NOT NULL DEFAULT 'pending',
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-);
-
--- Indexes for performance
-CREATE INDEX idx_users_email ON users(email);
-CREATE INDEX idx_users_username ON users(username);
-CREATE INDEX idx_products_sku ON products(sku);
-CREATE INDEX idx_orders_user_id ON orders(user_id);
-CREATE INDEX idx_orders_status ON orders(status);
-CREATE INDEX idx_orders_created_at ON orders(created_at);
-
--- Initial data (if needed)
-INSERT INTO users (email, username, hashed_password) VALUES
-('admin@example.com', 'admin', 'hashed_password_here');
-```
+Guidelines:
+- Keep the initial migration understandable; it is the foundation for all environments
+- Avoid dialect-specific features unless you explicitly document them as required prerequisites
+- Be careful with “automatic” fields (e.g., `updated_at`): the database will not update them automatically unless you implement that behavior (via application code or database mechanisms)
 
 ### 3. Incremental Changes Only (CRITICAL)
 
 **All migrations after the first must be incremental changes only.** Each migration should make a single, focused change to the schema. Never recreate the entire schema in subsequent migrations.
 
-```sql
--- CORRECT: Incremental changes in separate migrations
+Guidelines:
+- Keep each migration small and focused
+- Prefer schema changes that are safe to apply while the application is running
+- Do not drop/recreate production tables as part of “schema evolution”
 
--- migrations/20260130192015_add_user_roles.sql
-ALTER TABLE users ADD COLUMN role VARCHAR(50) NOT NULL DEFAULT 'user';
-CREATE INDEX idx_users_role ON users(role);
-
--- migrations/20260130192530_create_product_categories.sql
-CREATE TABLE product_categories (
-    id BIGSERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL UNIQUE,
-    description TEXT,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-);
-
-ALTER TABLE products ADD COLUMN category_id BIGINT REFERENCES product_categories(id);
-CREATE INDEX idx_products_category_id ON products(category_id);
-
--- migrations/20260130193045_add_order_shipping.sql
-ALTER TABLE orders ADD COLUMN shipping_address TEXT;
-ALTER TABLE orders ADD COLUMN shipping_method VARCHAR(100);
-ALTER TABLE orders ADD COLUMN shipping_cost DECIMAL(10,2) DEFAULT 0;
-
--- INCORRECT: Recreating tables in later migrations
--- migrations/20260130193500_recreate_users.sql (WRONG!)
--- DROP TABLE users; -- NEVER do this in production!
--- CREATE TABLE users (...); -- This belongs in the first migration only
-```
+Primary keys (CRITICAL):
+- Prefer **UUIDv7** for primary keys when supported (for better index locality and write performance characteristics than fully random UUIDs)
+- Use **UUIDv4** when UUIDv7 is not available
+- Only use auto-incrementing integers when you have a clear reason and have evaluated trade-offs (predictability, sharding/merging difficulty, cross-system uniqueness)
 
 ### 4. Migration Types and Patterns
 
@@ -172,38 +81,43 @@ ALTER TABLE orders ADD COLUMN shipping_cost DECIMAL(10,2) DEFAULT 0;
 
 ### 5. Production Migration Strategy
 
-#### Zero-Downtime Principles
-1. **Add columns as NULLable first**, then backfill data, then add NOT NULL constraint
-2. **Remove columns in multiple steps**: stop using, verify, then remove
-3. **Change types carefully**: add new column, migrate data, switch, remove old
-4. **Use feature flags** to control new schema usage
+#### Zero-Downtime Principles (Expand/Contract) (CRITICAL)
+For production systems, treat schema changes as a multi-deploy process. The safe default is the **expand/contract** pattern:
 
-```sql
--- Safe column addition pattern
--- Step 1: Add column as NULLable
-ALTER TABLE users ADD COLUMN phone_number VARCHAR(20);
+1. **Expand**: introduce new schema elements in a backward-compatible way (new nullable columns, new tables, new indexes)
+2. **Dual compatibility**: deploy application code that can work with both old and new schema (feature flags help)
+3. **Backfill**: migrate existing data in a controlled way (often outside a single transaction; in batches)
+4. **Switch reads/writes**: move the application to the new schema
+5. **Contract**: remove old schema elements only after verifying they are no longer used
 
--- Step 2: Backfill data (in application code or separate migration)
-UPDATE users SET phone_number = 'default' WHERE phone_number IS NULL;
+Checklist:
+- Expand: introduce new schema elements in a backward-compatible way (new nullable columns, new tables, new indexes)
+- Dual compatibility: deploy application code that works with both old and new schema (feature flags help)
+- Backfill: migrate existing data in controlled batches; make it resumable and observable
+- Switch: move reads/writes to the new schema
+- Contract: remove old schema elements only after verifying they are no longer used
 
--- Step 3: Add NOT NULL constraint (after all data is populated)
-ALTER TABLE users ALTER COLUMN phone_number SET NOT NULL;
-
--- Safe column removal pattern
--- Step 1: Stop using the column in application code
--- Step 2: Verify no code uses the column (monitor for errors)
--- Step 3: Remove the column
-ALTER TABLE users DROP COLUMN old_column_name;
-```
+#### Operational Safety Notes (CRITICAL)
+- Some DDL operations can lock tables and block writes/reads depending on the database engine and version
+- Prefer “online”/non-blocking variants where your database supports them (e.g., online index creation)
+- For large tables, avoid long-running single-shot updates; backfill in batches and make the process resumable
+- Keep migrations idempotent where possible (or rely on your migration tool’s exactly-once guarantees)
 
 ### 6. Migration File Naming and Organization
 
 #### Folder Structure (CRITICAL)
-**The `migrations/` folder is always at the top level of the project.** It exists at the same level as other top-level directories like `src/`, `tests/`, `docs/`, etc.
+**Choose one canonical migrations location per deployable service and enforce it.** The exact folder name and placement should follow your migration framework and repository layout (especially in monorepos).
+
+Examples (all valid depending on framework/project):
+- `migrations/` at the service root
+- `db/migrate/` (common in some ecosystems)
+- `src/<app>/migrations/` (framework-driven layouts)
+
+Key rule: **there must be exactly one authoritative migrations location for the deployed unit**, and CI/CD should run migrations from that location.
 
 ```
 project-root/
-├── migrations/           # Top-level migrations folder
+├── migrations/           # Example location (service root)
 │   ├── 20260130191544_initial_schema.sql
 │   ├── 20260130192015_add_user_roles.sql
 │   └── 20260130192530_create_product_categories.sql
@@ -211,14 +125,18 @@ project-root/
 │   └── ...
 ├── tests/
 │   └── ...
-├── docs/
-│   └── ...
-└── Cargo.toml           # or package.json, pyproject.toml, etc.
+└── ...
 ```
 
 #### Naming Convention (CRITICAL)
-Always use the format: `YYYYMMDDHHMMSS_description.sql` (14-digit timestamp followed by underscore and description)
+Follow your migration tool’s naming and ordering convention and apply it consistently.
 
+Acceptable common patterns include:
+- Timestamp-based: `YYYYMMDDHHMMSS_description.sql`
+- Sequential: `0001_description.sql`
+- Tool-generated identifiers (when the framework enforces ordering)
+
+Example (timestamp-based):
 ```
 migrations/20260130191544_initial_schema.sql
 migrations/20260130192015_add_user_roles.sql
@@ -236,65 +154,56 @@ migrations/
 └── 20260130193500_add_user_preferences.sql
 ```
 
-### 7. Folder Convention Enforcement
+### 7. Migration Location Enforcement
 
-#### Absolute Requirement
-- **Always** use `migrations/` as the top-level folder name
-- **Never** nest migrations inside `src/`, `app/`, or other subdirectories
-- **Never** use different folder names like `db/migrations/`, `database/migrations/`, etc.
-- The `migrations/` folder must be directly accessible from the project root
+#### Absolute Requirements (CRITICAL)
+- **Exactly one canonical migrations location per deployable unit**
+- **Do not scatter migrations across multiple folders** for the same deployed service
+- The location must be configured in your migration tool and enforced in CI/CD
+- In monorepos, the canonical location is typically at the **service root**, not necessarily the repository root
 
 #### Project Layout Examples
 ```bash
-# CORRECT - migrations at top level
+# CORRECT - single canonical location (repo with one service)
 /my-project/
 ├── migrations/
 ├── src/
 ├── tests/
-└── Cargo.toml
+└── ...
 
-# CORRECT - migrations at top level with other common directories
+# CORRECT - monorepo with per-service migrations
+/monorepo/
+├── services/
+│   ├── billing/
+│   │   ├── migrations/
+│   │   └── src/
+│   └── identity/
+│       ├── migrations/
+│       └── src/
+└── ...
+
+# INCORRECT - multiple migration folders for the same deployed unit
 /my-project/
 ├── migrations/
-├── src/
-├── tests/
-├── docs/
-├── scripts/
-└── pyproject.toml
-
-# INCORRECT - migrations nested
-/my-project/
-├── src/
-│   ├── migrations/      # WRONG - should be at top level
-│   └── ...
-└── Cargo.toml
-
-# INCORRECT - different folder name
-/my-project/
-├── db/                  # WRONG - should be migrations/
-│   └── migrations/
-└── Cargo.toml
+├── db/migrations/        # WRONG - ambiguous source of truth
+└── ...
 ```
 
-### 8. Rollback Strategy
+### 8. Rollback / Reversal Strategy (CRITICAL)
 
-Every migration should have a corresponding rollback plan. For complex migrations, create separate rollback files.
+Every migration must have a documented reversal strategy, but **not every migration should be rolled back via “down” SQL**.
 
-```sql
--- Migration: migrations/20260130192530_create_product_categories.sql
-CREATE TABLE product_categories (
-    id BIGSERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL UNIQUE,
-    description TEXT,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-);
+Choose the safest option for the change:
+- **Down migration** (safe for additive changes like new tables/columns/indexes when no data is lost)
+- **Forward-fix** (preferred when rollback risks data loss; revert application behavior via feature flags and ship a corrective migration)
+- **Backup/restore** (for catastrophic cases; ensure you can restore and recover)
+- **Expand/contract reversal** (switch application back to old schema path, then clean up later)
 
-ALTER TABLE products ADD COLUMN category_id BIGINT REFERENCES product_categories(id);
-
--- Rollback: migrations/20260130192530_create_product_categories_rollback.sql
-ALTER TABLE products DROP COLUMN category_id;
-DROP TABLE product_categories;
-```
+Guidelines:
+- Require a documented reversal strategy for every migration.
+- Prefer **down migrations** only when they are demonstrably safe (typically additive changes where no data is lost).
+- Prefer **forward-fix** when rollback risks data loss or inconsistency (revert application behavior via feature flags, then ship a corrective migration).
+- Ensure you have a **backup/restore** plan for catastrophic recovery.
 
 ### 9. Testing Migrations
 
@@ -328,9 +237,9 @@ SELECT indexname FROM pg_indexes WHERE tablename = 'users';
 ## Guidelines
 
 ### Folder Structure
-- **Always** use `migrations/` at project root level
-- **Never** nest or rename the migrations folder
-- **Always** use timestamp-based naming: `YYYYMMDDHHMMSS_description.sql`
+- Use a single canonical migrations location per deployable unit (service)
+- Do not split migrations for the same service across multiple folders
+- Follow the naming/ordering convention required by your migration framework
 
 ### First Migration
 - Create complete schema from scratch
@@ -341,7 +250,8 @@ SELECT indexname FROM pg_indexes WHERE tablename = 'users';
 ### Subsequent Migrations
 - One logical change per migration
 - Keep migrations small and focused
-- Include both up and down directions
+- Prefer expand/contract for production changes
+- Provide a reversal strategy (down migration when safe; otherwise forward-fix/feature-flag/backup strategy)
 - Test with production-like data
 
 ### Production Deployment
@@ -351,14 +261,9 @@ SELECT indexname FROM pg_indexes WHERE tablename = 'users';
 - Verify application functionality after migration
 
 ### Migration Tools
-- Use established migration frameworks (Flyway, Liquibase, Django migrations, etc.)
-- Ensure the framework supports top-level `migrations/` folder
-- Configure the framework to look for migrations in the correct location
-- Maintain migration history table
-- Never skip migrations
-- Apply migrations in order
-- Use established migration frameworks (Flyway, Liquibase, Django migrations, etc.)
-- Maintain migration history table
+- Use an established migration framework (Flyway, Liquibase, Alembic, Django migrations, Rails migrations, etc.)
+- Configure the framework to look for migrations in the canonical location for the deployed unit
+- Maintain the migration history table/versioning metadata
 - Never skip migrations
 - Apply migrations in order
 
