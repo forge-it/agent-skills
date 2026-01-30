@@ -22,12 +22,15 @@ Each skill includes:
 | [general-logging](software-engineering/general-logging/SKILL.md) | Wide events logging pattern for powerful debugging and analytics |
 | [general-workflow](software-engineering/general-workflow/SKILL.md) | Consultation-first approach for AI-assisted development |
 | [git-workflow](software-engineering/git-workflow/SKILL.md) | Git branch naming, commits, and version control |
+| [database-management](software-engineering/database-management/SKILL.md) | Database schema management and migration strategies |
 | [python-code-style](software-engineering/python-code-style/SKILL.md) | Python code style for clean, maintainable code |
+| [python-commands](software-engineering/python-commands/SKILL.md) | Python command-line interface best practices |
 | [python-testing](software-engineering/python-testing/SKILL.md) | Python testing best practices using pytest |
 | [rust-code-style](software-engineering/rust-code-style/SKILL.md) | Rust code style with hexagonal architecture |
-| [rust-testing](software-engineering/rust-testing/SKILL.md) | Rust testing best practices using cargo test |
-| [rust-cargo-make](software-engineering/rust-cargo-make/SKILL.md) | Cargo-make task runner for Rust build automation |
 | [rust-design-principles](software-engineering/rust-design-principles/SKILL.md) | SOLID, KISS, and design patterns for Rust |
+| [rust-design-idioms](software-engineering/rust-design-idioms/SKILL.md) | Rust design idioms including newtype pattern and error handling |
+| [rust-project-setup](software-engineering/rust-project-setup/SKILL.md) | Rust project setup with toolchain and cargo-make |
+| [rust-testing](software-engineering/rust-testing/SKILL.md) | Rust testing best practices using cargo test |
 
 ## Project Structure
 
@@ -41,15 +44,21 @@ agent-skills/
     │   └── SKILL.md
     ├── git-workflow/
     │   └── SKILL.md
+    ├── database-management/
+    │   └── SKILL.md
     ├── python-code-style/
     │   └── SKILL.md
-    ├── python-testing/
+    ├── python-commands/
     │   └── SKILL.md
-    ├── rust-cargo-make/
+    ├── python-testing/
     │   └── SKILL.md
     ├── rust-code-style/
     │   └── SKILL.md
     ├── rust-design-principles/
+    │   └── SKILL.md
+    ├── rust-design-idioms/
+    │   └── SKILL.md
+    ├── rust-project-setup/
     │   └── SKILL.md
     └── rust-testing/
         └── SKILL.md
