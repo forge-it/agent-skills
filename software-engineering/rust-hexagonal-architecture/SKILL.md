@@ -342,38 +342,43 @@ impl From<CreateAuthorError> for ApiError {
 
 ### Recommended Directory Layout (HIGH)
 
+Use modern Rust module convention with `module_name.rs` files. Never use `mod.rs` files.
+
 ```
 src/
 ├── lib.rs
+├── domain.rs                 # mod domain { ... }
 ├── domain/
-│   ├── author/
-│   │   ├── mod.rs
-│   │   ├── model.rs          # Author, AuthorId, AuthorName
-│   │   ├── error.rs          # CreateAuthorError, FindAuthorError
-│   │   └── repository.rs     # AuthorRepository trait (port)
-│   └── mod.rs
+│   ├── author.rs             # mod author { ... }
+│   └── author/
+│       ├── model.rs          # Author, AuthorId, AuthorName
+│       ├── error.rs          # CreateAuthorError, FindAuthorError
+│       └── repository.rs     # AuthorRepository trait (port)
+├── application.rs            # mod application { ... }
 ├── application/
-│   ├── author/
-│   │   ├── mod.rs
-│   │   ├── service.rs        # AuthorService
-│   │   └── ports.rs          # AuthorMetrics, AuthorNotifier traits
-│   └── mod.rs
+│   └── author.rs             # mod author { ... }
+│   └── author/
+│       ├── service.rs        # AuthorService
+│       └── ports.rs          # AuthorMetrics, AuthorNotifier traits
+├── infrastructure.rs         # mod infrastructure { ... }
 ├── infrastructure/
+│   ├── http.rs               # mod http { ... }
 │   ├── http/
-│   │   ├── mod.rs
 │   │   ├── router.rs
+│   │   ├── handlers.rs       # mod handlers { ... }
 │   │   ├── handlers/
 │   │   │   └── author.rs     # HTTP handlers
+│   │   ├── models.rs         # mod models { ... }
 │   │   └── models/
 │   │       └── author.rs     # HTTP request/response types
+│   ├── persistence.rs        # mod persistence { ... }
 │   ├── persistence/
-│   │   ├── mod.rs
+│   │   ├── sqlite.rs         # mod sqlite { ... }
 │   │   └── sqlite/
-│   │       ├── mod.rs
 │   │       └── author.rs     # SqliteAuthorRepository
-│   ├── metrics/
-│   │   └── prometheus.rs     # PrometheusMetrics adapter
-│   └── mod.rs
+│   └── metrics.rs            # mod metrics { ... }
+│   └── metrics/
+│       └── prometheus.rs     # PrometheusMetrics adapter
 └── bin/
     └── server/
         └── main.rs           # Bootstrap and wiring
@@ -389,8 +394,8 @@ src/
 ├── domain.rs                 # All domain types
 ├── ports.rs                  # All port traits
 ├── services.rs               # All services
+├── adapters.rs               # mod adapters { ... }
 ├── adapters/
-│   ├── mod.rs
 │   ├── sqlite.rs
 │   └── http.rs
 └── main.rs

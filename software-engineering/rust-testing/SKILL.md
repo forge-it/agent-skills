@@ -309,10 +309,13 @@ All tests must be placed in the `tests/` directory. Never use `#[cfg(test)]` mod
 ```
 src/
 ├── main.rs
+├── domain.rs                # mod domain { ... }
 ├── domain/
 │   └── salaries.rs
+├── application.rs           # mod application { ... }
 ├── application/
 │   └── salary_service.rs
+├── infrastructure.rs        # mod infrastructure { ... }
 └── infrastructure/
     └── db.rs
 
@@ -332,8 +335,7 @@ tests/
 │   ├── conftest.rs          # Shared setup/teardown for API tests
 │   ├── health_test.rs
 │   └── salaries_test.rs
-└── common/
-    └── mod.rs               # Shared test utilities and mock implementations
+└── common.rs                # Shared test utilities and mock implementations
 ```
 
 ### 9. Module Entry Point Files (CRITICAL)
@@ -604,10 +606,10 @@ mod salary {
 
 ### 15. Fixtures and Setup (HIGH)
 
-Use helper functions for test fixtures. Define shared fixtures in `tests/common/mod.rs`.
+Use helper functions for test fixtures. Define shared fixtures in `tests/common.rs`.
 
 ```rust
-// tests/common/mod.rs
+// tests/common.rs
 pub fn create_test_user() -> User {
     User {
         id: UserId(1),
@@ -655,7 +657,7 @@ fn test_create_order_with_valid_data() {
 - Use `mockall` for simple trait mocking with expectations
 - Create custom mock implementations for ports when you need stateful behavior
 - Mock implementations should allow controlling return values and tracking calls
-- Place shared mock implementations in `tests/common/mod.rs`
+- Place shared mock implementations in `tests/common.rs`
 
 ### Test Scope by Layer
 - **Unit tests**: Test domain logic and services with mocked ports
@@ -671,7 +673,7 @@ fn test_create_order_with_valid_data() {
 - Mirror source directory structure: `src/domain/salaries.rs` → `tests/unit/domain/salaries_test.rs`
 - Mirror source directory structure for adapters: `src/infrastructure/db.rs` → `tests/integration/infrastructure/db_test.rs`
 - Dedicated submodule per struct/type when testing multiple types in one file
-- Shared fixtures and mock implementations in `tests/common/mod.rs`
+- Shared fixtures and mock implementations in `tests/common.rs`
 - API test configuration in `tests/api/conftest.rs`
 
 ### Naming
