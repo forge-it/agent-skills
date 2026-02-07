@@ -278,32 +278,41 @@ The domain layer has no external dependencies. Application services depend on do
 
 ### 7. Bootstrap in Main (HIGH)
 
-The `main` function's sole responsibility is instantiating and wiring components together. Keep it minimal to reduce the untestable code surface.
+The `main` function has two responsibilities: bring the application online and clean up once it's done. It constructs adapters, wires them into services, injects services into the server, and runs it. That's all.
+
+**Why minimize main:** `main` composes unmockable dependencies and handles errors by logging and exiting. The less code here, the smaller this testing dead zone. Integration test setup is often subtly different from main — by wrapping the server in your own `HttpServer` type, both main and tests can spin up the app with the config they need, without duplication.
 
 ```rust
-// Good - main only wires components
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Load configuration
     let config = Config::from_env()?;
+    tracing_subscriber::fmt::init();
 
-    // Create adapters
+    // Create adapters — main knows *which* implementations to use
     let repository = SqliteAuthorRepository::new(&config.database_url).await?;
     let metrics = PrometheusMetrics::new();
     let notifier = EmailNotifier::new(&config.smtp_url);
 
-    // Wire services
+    // Wire adapters into the service
     let author_service = DefaultAuthorService::new(repository, metrics, notifier);
 
-    // Create and run server
-    let app_state = AppState::new(author_service);
-    let router = create_router(app_state);
-    
-    let listener = tokio::net::TcpListener::bind(&config.bind_address).await?;
-    axum::serve(listener, router).await?;
-
-    Ok(())
+    // Inject service into server and run
+    let server_config = HttpServerConfig { port: &config.server_port };
+    let http_server = HttpServer::new(author_service, server_config).await?;
+    http_server.run().await
 }
+```
+
+**No framework leakage in main.** Even if the server uses axum internally, main doesn't know about axum. The `HttpServer` wrapper encapsulates route configuration, middleware, ports, and timeouts. If axum changes its API, only `HttpServer` internals change — main stays untouched.
+
+```rust
+// main.rs imports — all proprietary, no third-party framework types
+use hexarch::config::Config;
+use hexarch::domain::author::service::DefaultAuthorService;
+use hexarch::inbound::http::{HttpServer, HttpServerConfig};
+use hexarch::outbound::email_client::EmailNotifier;
+use hexarch::outbound::prometheus::PrometheusMetrics;
+use hexarch::outbound::sqlite::SqliteAuthorRepository;
 ```
 
 ### 8. Error Types Bridge Layers (HIGH)
