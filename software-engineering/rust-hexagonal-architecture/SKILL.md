@@ -148,10 +148,20 @@ impl AuthorRepository for SqliteAuthorRepository {
 
 Services coordinate operations across multiple ports. They handle cross-cutting concerns like metrics, notifications, and retry logic. Services should not contain transport or persistence logic.
 
+**Naming convention:** The trait (port) gets the clean name (`AuthorService`) since it defines the abstraction. The concrete struct uses a descriptive prefix (`DefaultAuthorService`) so it's unambiguous even out of context — no import aliases or module-qualified paths needed.
+
 ```rust
-// Good - service orchestrating business logic
+// Port - the trait gets the clean name
+pub trait AuthorService: Clone + Send + Sync + 'static {
+    fn create_author(
+        &self,
+        request: &CreateAuthorRequest,
+    ) -> impl Future<Output = Result<Author, CreateAuthorError>> + Send;
+}
+
+// Good - concrete service orchestrating business logic
 #[derive(Clone)]
-pub struct AuthorService<R, M, N>
+pub struct DefaultAuthorService<R, M, N>
 where
     R: AuthorRepository,
     M: AuthorMetrics,
@@ -162,7 +172,7 @@ where
     notifier: N,
 }
 
-impl<R, M, N> AuthorService<R, M, N>
+impl<R, M, N> DefaultAuthorService<R, M, N>
 where
     R: AuthorRepository,
     M: AuthorMetrics,
@@ -175,7 +185,14 @@ where
             notifier,
         }
     }
+}
 
+impl<R, M, N> AuthorService for DefaultAuthorService<R, M, N>
+where
+    R: AuthorRepository,
+    M: AuthorMetrics,
+    N: AuthorNotifier,
+{
     pub async fn create_author(
         &self,
         request: &CreateAuthorRequest,
@@ -203,7 +220,7 @@ HTTP handlers should only handle request/response translation. They deserialize 
 
 ```rust
 // Good - thin handler doing only translation
-pub async fn create_author<S: AuthorServiceTrait>(
+pub async fn create_author<S: AuthorService>(
     State(state): State<AppState<S>>,
     Json(body): Json<CreateAuthorHttpRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
@@ -276,7 +293,7 @@ async fn main() -> anyhow::Result<()> {
     let notifier = EmailNotifier::new(&config.smtp_url);
 
     // Wire services
-    let author_service = AuthorService::new(repository, metrics, notifier);
+    let author_service = DefaultAuthorService::new(repository, metrics, notifier);
 
     // Create and run server
     let app_state = AppState::new(author_service);
@@ -358,7 +375,7 @@ src/
 ├── application/
 │   └── author.rs             # mod author { ... }
 │   └── author/
-│       ├── service.rs        # AuthorService
+│       ├── service.rs        # AuthorService trait, DefaultAuthorService
 │       └── ports.rs          # AuthorMetrics, AuthorNotifier traits
 ├── infrastructure.rs         # mod infrastructure { ... }
 ├── infrastructure/
@@ -413,7 +430,7 @@ Entities that must change together in a single operation belong in the same doma
 
 ```rust
 // Same domain - must change atomically
-impl AuthorService {
+impl DefaultAuthorService {
     pub async fn delete_author(&self, id: &AuthorId) -> Result<(), DeleteAuthorError> {
         // Transaction ensures atomicity
         self.repository.delete_with_posts(id).await
@@ -421,7 +438,7 @@ impl AuthorService {
 }
 
 // Separate domains - eventual consistency acceptable
-impl AuthorService {
+impl DefaultAuthorService {
     pub async fn delete_author(&self, id: &AuthorId) -> Result<(), DeleteAuthorError> {
         self.repository.delete(id).await?;
         // Async event for other domain
