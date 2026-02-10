@@ -4,12 +4,12 @@ description: Rust-specific design idioms including Newtype pattern, type-safe do
 license: MIT
 metadata:
   author: cristian.ciortea@proton.me
-  version: "0.0.1"
+  version: "0.0.2"
 ---
 
 # Design Idioms Skill
 
-Version: 0.0.1
+Version: 0.0.2
 
 ## Purpose
 
