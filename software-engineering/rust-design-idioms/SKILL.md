@@ -338,7 +338,88 @@ impl<T> NonEmptyVec<T> {
 }
 ```
 
-### 10. Structured Error Types (CRITICAL)
+### 10. Config Structs for Complex Construction (CRITICAL)
+
+When a constructor or function takes more than 3-4 arguments, use a config struct instead of positional parameters. Long positional argument lists are unreadable, error-prone, and resist refactoring — even when every argument has a distinct type.
+
+```rust
+// Bad - positional argument soup
+let schedule = Schedule::new(
+    ScheduleId::new(),
+    ScheduleName::new("daily-postgres-backup")?,
+    CronExpression::new("0 0 2 * * *")?,
+    BackupStrategy::Dump,
+    SourceType::PostgreSql,
+    Some(Host::new("db-host")?),
+    Some(DatabaseName::new("production")?),
+    None,
+    Some(SecretName::new("postgres-credentials")?),
+    DestinationGatewayType::S3,
+    None,
+    Some(BucketName::new("my-backups")?),
+    Some(Directory::new("/postgres/daily")?),
+    Some(SecretName::new("aws-credentials")?),
+    Some(RetentionCount::new(24)?),
+    Some(RetentionCount::new(7)?),
+    Some(RetentionCount::new(4)?),
+    Some(RetentionCount::new(6)?),
+    true,
+    now,
+    now,
+);
+// No human can tell which None/Some is which.
+// Swapping two arguments may still compile.
+// Rust's type system cannot save you from argument order.
+
+// Good - config struct with named fields
+let schedule = Schedule::new(ScheduleConfig {
+    id: ScheduleId::new(),
+    name: ScheduleName::new("daily-postgres-backup")?,
+    cron: CronExpression::new("0 0 2 * * *")?,
+    backup_strategy: BackupStrategy::Dump,
+    source: SourceConfig {
+        source_type: SourceType::PostgreSql,
+        host: Some(Host::new("db-host")?),
+        database: Some(DatabaseName::new("production")?),
+        secret: Some(SecretName::new("postgres-credentials")?),
+    },
+    destination: DestinationConfig {
+        gateway_type: DestinationGatewayType::S3,
+        bucket: Some(BucketName::new("my-backups")?),
+        directory: Some(Directory::new("/postgres/daily")?),
+        secret: Some(SecretName::new("aws-credentials")?),
+    },
+    retention: RetentionConfig {
+        daily: Some(RetentionCount::new(24)?),
+        weekly: Some(RetentionCount::new(7)?),
+        monthly: Some(RetentionCount::new(4)?),
+        yearly: Some(RetentionCount::new(6)?),
+    },
+    enabled: true,
+    created_at: now,
+    updated_at: now,
+});
+// Every field is labeled. Related fields are grouped.
+// Impossible to silently swap arguments.
+```
+
+**Why this matters:**
+- Named fields are self-documenting — no need to count parameter positions
+- Related fields can be grouped into sub-structs for clarity
+- Adding or removing fields is a compiler-guided refactor, not a silent bug
+- `None, None, Some(...), None` sequences become meaningful: `host: None, database: None, secret: Some(...)`
+- Code review becomes possible — reviewers can actually verify correctness
+
+**When positional arguments are fine:**
+- 1 argument — always fine, no ambiguity possible
+- 2-3 arguments — fine when each has a distinct type and the call reads clearly
+
+**When to use a config struct:**
+- Constructors or functions with more than 3-4 parameters
+- Any function with multiple `Option` parameters
+- Any function with multiple parameters of the same type (even newtypes don't help when you have `Some(SecretName)` twice)
+
+### 11. Structured Error Types (CRITICAL)
 
 Design error types as enums that codify all possible failure states. This makes function signatures self-documenting and enables programmatic error handling via pattern matching.
 
@@ -379,7 +460,7 @@ fn parse_date(input: &str) -> Result<Date, DateError> {
 }
 ```
 
-### 11. No thiserror or anyhow (CRITICAL)
+### 12. No thiserror or anyhow (CRITICAL)
 
 Never use `thiserror` or `anyhow` crates. Implement the `std::error::Error` trait manually. This ensures full control over error types, avoids hidden magic, and keeps dependencies minimal.
 
@@ -419,7 +500,7 @@ impl std::fmt::Display for MyError {
 impl std::error::Error for MyError {}
 ```
 
-### 12. Compose Errors with Wrapper Enums (HIGH)
+### 13. Compose Errors with Wrapper Enums (HIGH)
 
 When a function can fail with multiple error types, create a wrapper enum that composes them. Implement `From` for automatic conversion with the `?` operator.
 
@@ -482,7 +563,7 @@ fn parse_datetime(date_str: &str, time_str: &str) -> Result<DateTime, DateTimeEr
 }
 ```
 
-### 13. Scoped Error Types (HIGH)
+### 14. Scoped Error Types (HIGH)
 
 Design error types scoped to specific operations rather than creating module-wide umbrella errors. Each function or type should have errors capturing only relevant failure modes.
 
@@ -516,7 +597,7 @@ pub enum BackupListError {
 }
 ```
 
-### 14. Error Context Without Losing Structure (MEDIUM)
+### 15. Error Context Without Losing Structure (MEDIUM)
 
 Add context to errors while preserving the ability to match on specific variants. Use wrapper variants or dedicated context fields.
 
@@ -556,7 +637,7 @@ impl std::error::Error for FileProcessError {
 }
 ```
 
-### 15. Library vs Application Error Handling (MEDIUM)
+### 16. Library vs Application Error Handling (MEDIUM)
 
 Libraries should return structured, specific error types. Applications can use more dynamic approaches internally but should never expose them in public APIs.
 
@@ -600,6 +681,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 10. **Umbrella error enums**: Creating module-wide errors where most variants are impossible for most functions
 11. **String-based errors**: Using `String` or `&str` as error types instead of structured enums
 12. **Downcasting errors**: Relying on `downcast_ref` to handle errors programmatically
+13. **Positional argument soup**: Constructors or functions with more than 3-4 positional parameters instead of config structs
 
 ## Guidelines
 
@@ -608,6 +690,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 - Keep inner fields private to enforce validation
 - Use tuple structs for simple wrappers: `struct UserId(Uuid);`
 - Use named fields when additional clarity is needed
+- Use config structs when constructors exceed 3-4 parameters
 
 ### Validation Strategy
 - Validate once at construction, trust the type afterward
