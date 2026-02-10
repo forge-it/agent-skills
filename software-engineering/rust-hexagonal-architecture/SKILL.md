@@ -144,6 +144,55 @@ impl AuthorRepository for SqliteAuthorRepository {
 
 **Wrapping principle:** Encapsulate third-party crates within custom types. Never expose database-specific errors through the port interface.
 
+**Port methods vs private helpers:** Port method implementations should focus on transaction boundaries, error translation, and domain object construction. Extract raw infrastructure operations (SQL queries, HTTP calls) into private helper methods on the adapter struct. This keeps port implementations readable and makes individual operations reusable when a port method needs to compose multiple database operations in a single transaction.
+
+```rust
+impl SqliteAuthorRepository {
+    // Private helper - raw SQL, returns infrastructure error
+    async fn save_author(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+        name: &AuthorName,
+    ) -> Result<AuthorId, sqlx::Error> {
+        let id = AuthorId::new();
+
+        sqlx::query("INSERT INTO authors (id, name) VALUES (?, ?)")
+            .bind(id.as_uuid())
+            .bind(name.as_str())
+            .execute(&mut **tx)
+            .await?;
+
+        Ok(id)
+    }
+}
+
+impl AuthorRepository for SqliteAuthorRepository {
+    // Port method - transaction lifecycle, error translation, domain construction
+    async fn create(
+        &self,
+        request: &CreateAuthorRequest,
+    ) -> Result<Author, CreateAuthorError> {
+        let mut tx = self.pool.begin().await
+            .map_err(|e| CreateAuthorError::Unknown(e.to_string()))?;
+
+        let author_id = self.save_author(&mut tx, request.name())
+            .await
+            .map_err(|e| {
+                if is_unique_constraint_violation(&e) {
+                    CreateAuthorError::Duplicate { name: request.name().clone() }
+                } else {
+                    CreateAuthorError::Unknown(e.to_string())
+                }
+            })?;
+
+        tx.commit().await
+            .map_err(|e| CreateAuthorError::Unknown(e.to_string()))?;
+
+        Ok(Author::new(author_id, request.name().clone()))
+    }
+}
+```
+
 ### 4. Services Orchestrate Business Logic (CRITICAL)
 
 Services coordinate operations across multiple ports. They handle cross-cutting concerns like metrics, notifications, and retry logic. Services should not contain transport or persistence logic.
@@ -491,7 +540,9 @@ Begin with large domains. Incorrect boundary assumptions are easier to correct w
 - Implement ports in infrastructure layer
 - Wrap third-party crates in custom types
 - Transform infrastructure errors to domain errors
-- Keep adapter code focused on translation
+- Port methods own transaction boundaries, error translation, and domain construction
+- Extract raw infrastructure operations (SQL, HTTP calls) into private helper methods
+- Private helpers return infrastructure errors; port methods translate them to domain errors
 
 ### Service Design
 - Accept ports via generics or trait objects
