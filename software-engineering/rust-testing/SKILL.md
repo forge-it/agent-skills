@@ -384,10 +384,11 @@ tests/
 ├── integration/
 │   ├── infrastructure/
 │   │   └── db.rs            # Adapter tests against real database
-│   ├── support.rs           # Exposes infra and fixtures for integration tests
+│   ├── support.rs           # Exposes infra, factories, and fixtures modules
 │   └── support/
 │       ├── infra.rs         # Docker, TestDatabase, Connection Pooling
-│       └── fixtures.rs      # Factories (create_*) and Seeding (save_*)
+│       ├── factories.rs     # Domain object builders (create_*)
+│       └── fixtures.rs      # Persist prerequisite data (save_*)
 ├── api.rs                   # Module entry point for API tests
 └── api/
     ├── conftest.rs          # Shared setup/teardown for API tests
@@ -712,10 +713,13 @@ mod salary {
 
 Each test category (`unit/`, `integration/`, `api/`) can have its own `support` module. This keeps test infrastructure scoped to where it belongs — integration tests need Docker and DB pools, unit tests may only need factories, and API tests have their own setup via `conftest.rs`.
 
-Within a support module, separate infrastructure concerns from domain data concerns:
+Within a support module, each file has a single, distinct job:
 
-- **`support/infra.rs`** — manages the physical world (Docker, TestDatabase, connection pools, cleanup). It doesn't know what a "Schedule" is. If you switch from Docker to a local DB, you only touch this file.
-- **`support/fixtures.rs`** — manages domain state. Factories (`create_*`) build domain objects in memory with sensible defaults. Seeding functions (`save_*`) persist prerequisite data through a `TestDatabase`. Their logic is about business rules (defaulting fields, linking foreign keys).
+| File | Concern | Knows about... | Output |
+|---|---|---|---|
+| `infra.rs` | Environment | Docker, SQL Connection, Ports | A running `TestDatabase` |
+| `factories.rs` | Data Shapes | Domain Structs, Business Rules | A struct in memory |
+| `fixtures.rs` | State | Factories + Infra + Repositories | A row in the actual database |
 
 ```
 tests/
@@ -723,15 +727,17 @@ tests/
 └── integration/
     ├── infrastructure/
     │   └── db.rs
-    ├── support.rs       // pub mod infra; pub mod fixtures;
+    ├── support.rs       // pub mod infra; pub mod factories; pub mod fixtures;
     └── support/
         ├── infra.rs     // Docker, TestDatabase, Connection Pooling
-        └── fixtures.rs  // Factories (create_*) and Seeding (save_*)
+        ├── factories.rs // Domain object builders (create_*)
+        └── fixtures.rs  // Persist prerequisite data (save_*)
 ```
 
 ```rust
 // tests/integration/support.rs
 pub mod infra;
+pub mod factories;
 pub mod fixtures;
 ```
 
@@ -768,9 +774,7 @@ impl TestDatabase {
 ```
 
 ```rust
-// tests/integration/support/fixtures.rs
-use super::infra::TestDatabase;
-
+// tests/integration/support/factories.rs
 pub fn create_test_schedule() -> Schedule {
     Schedule {
         id: ScheduleId::new(),
@@ -786,6 +790,12 @@ pub fn create_test_backup(schedule_id: &ScheduleId) -> Backup {
         status: BackupStatus::Pending,
     }
 }
+```
+
+```rust
+// tests/integration/support/fixtures.rs
+use super::infra::TestDatabase;
+use super::factories::create_test_schedule;
 
 pub async fn save_prerequisite_schedule(db: &TestDatabase) -> Schedule {
     let schedule = create_test_schedule();
@@ -805,7 +815,8 @@ pub async fn save_prerequisite_schedule(db: &TestDatabase) -> Schedule {
 ```rust
 // tests/integration/infrastructure/db.rs
 use super::support::infra::TestDatabase;
-use super::support::fixtures::{save_prerequisite_schedule, create_test_backup};
+use super::support::factories::create_test_backup;
+use super::support::fixtures::save_prerequisite_schedule;
 
 mod create_backup {
     use super::*;
@@ -833,7 +844,7 @@ mod create_backup {
 5. **Comments in tests**: Adding doc comments or inline comments to test functions
 6. **Testing logging**: Mocking or asserting on logger calls
 7. **Scattered test helpers**: Duplicating test fixtures and mock implementations across test files
-8. **Overloaded common.rs**: Putting infrastructure (Docker, DB pools) and domain fixtures (factories, seeding) in a single `common.rs` file — use per-category `support/` modules with separate `infra.rs` and `fixtures.rs` instead
+8. **Overloaded common.rs**: Putting infrastructure, factories, and fixtures in a single `common.rs` file — use per-category `support/` modules with separate `infra.rs`, `factories.rs`, and `fixtures.rs` instead
 9. **Vague test names**: Using generic names like `test_user` or `test_order`
 10. **Flat test structure**: Not mirroring the source directory structure in tests
 11. **Missing conftest.rs**: Not centralizing API test setup/teardown
@@ -870,7 +881,7 @@ mod create_backup {
 - Mirror source directory structure: `src/domain/salaries.rs` → `tests/unit/domain/salaries.rs`
 - Mirror source directory structure for adapters: `src/infrastructure/db.rs` → `tests/integration/infrastructure/db.rs`
 - Dedicated submodule per struct/type when testing multiple types in one file
-- Each test category owns its own `support/` module with `infra.rs` and `fixtures.rs` (see Section 15)
+- Each test category owns its own `support/` module with `infra.rs`, `factories.rs`, and `fixtures.rs` (see Section 15)
 - API test configuration in `tests/api/conftest.rs`
 
 ### Naming
