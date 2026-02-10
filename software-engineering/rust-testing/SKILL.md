@@ -42,19 +42,23 @@ mock! {
     }
 }
 
-#[test]
-fn test_get_user_returns_user_when_found() {
-    let mut mock_repo = MockUserRepository::new();
-    mock_repo
-        .expect_find_by_id()
-        .with(eq(UserId(123)))
-        .returning(|_| Ok(User { id: UserId(123), name: "Alice".into() }));
-    
-    let service = UserService::new(mock_repo);
-    let result = service.get_user(UserId(123));
-    
-    assert!(result.is_ok());
-    assert_eq!(result.unwrap().name, "Alice");
+mod get_user {
+    use super::*;
+
+    #[test]
+    fn should_return_user_when_found() {
+        let mut mock_repo = MockUserRepository::new();
+        mock_repo
+            .expect_find_by_id()
+            .with(eq(UserId(123)))
+            .returning(|_| Ok(User { id: UserId(123), name: "Alice".into() }));
+        
+        let service = UserService::new(mock_repo);
+        let result = service.get_user(UserId(123));
+        
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().name, "Alice");
+    }
 }
 ```
 
@@ -66,22 +70,26 @@ Use `wiremock` for HTTP mocking in integration tests.
 use wiremock::{MockServer, Mock, ResponseTemplate};
 use wiremock::matchers::{method, path};
 
-#[tokio::test]
-async fn test_fetch_user_returns_user_data() {
-    let mock_server = MockServer::start().await;
-    
-    Mock::given(method("GET"))
-        .and(path("/users/123"))
-        .respond_with(ResponseTemplate::new(200)
-            .set_body_json(json!({"id": 123, "name": "John"})))
-        .mount(&mock_server)
-        .await;
-    
-    let client = ApiClient::new(&mock_server.uri());
-    let result = client.fetch_user(123).await;
-    
-    assert!(result.is_ok());
-    assert_eq!(result.unwrap().name, "John");
+mod fetch_user {
+    use super::*;
+
+    #[tokio::test]
+    async fn should_return_user_data() {
+        let mock_server = MockServer::start().await;
+        
+        Mock::given(method("GET"))
+            .and(path("/users/123"))
+            .respond_with(ResponseTemplate::new(200)
+                .set_body_json(json!({"id": 123, "name": "John"})))
+            .mount(&mock_server)
+            .await;
+        
+        let client = ApiClient::new(&mock_server.uri());
+        let result = client.fetch_user(123).await;
+        
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().name, "John");
+    }
 }
 ```
 
@@ -95,10 +103,14 @@ Use `#[tokio::test]` for async tests. Ensure the tokio runtime is configured app
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 
 // tests/integration_test.rs
-#[tokio::test]
-async fn test_async_operation_completes_successfully() {
-    let result = perform_async_operation().await;
-    assert!(result.is_ok());
+mod perform_async_operation {
+    use super::*;
+
+    #[tokio::test]
+    async fn should_complete_successfully() {
+        let result = perform_async_operation().await;
+        assert!(result.is_ok());
+    }
 }
 ```
 
@@ -107,22 +119,26 @@ async fn test_async_operation_completes_successfully() {
 Tests should focus on business logic rather than exact timing or implementation details. Exact timestamps are not important for business requirements.
 
 ```rust
-// Bad - testing exact timestamp
-#[test]
-fn test_order_has_correct_timestamp() {
-    let order = Order::new(items);
-    assert_eq!(order.created_at, Utc::now()); // Flaky!
-}
+mod new {
+    use super::*;
 
-// Good - testing business logic
-#[test]
-fn test_order_calculates_correct_total() {
-    let items = vec![
-        Item { price: 1000, quantity: 2 },
-        Item { price: 500, quantity: 1 },
-    ];
-    let order = Order::new(items);
-    assert_eq!(order.total_cents, 2500);
+    // Bad - testing exact timestamp
+    #[test]
+    fn has_correct_timestamp() {
+        let order = Order::new(items);
+        assert_eq!(order.created_at, Utc::now()); // Flaky!
+    }
+
+    // Good - testing business logic
+    #[test]
+    fn should_calculate_correct_total() {
+        let items = vec![
+            Item { price: 1000, quantity: 2 },
+            Item { price: 500, quantity: 1 },
+        ];
+        let order = Order::new(items);
+        assert_eq!(order.total_cents, 2500);
+    }
 }
 ```
 
@@ -188,44 +204,48 @@ impl AuthorMetrics for MockMetrics {
 }
 
 // Test using mocked ports
-#[tokio::test]
-async fn test_create_author_records_success_metric() {
-    let repository = MockAuthorRepository::default();
-    let metrics = MockMetrics::default();
-    let notifier = MockNotifier::default();
+mod create_author {
+    use super::*;
 
-    let service = AuthorService::new(repository, metrics.clone(), notifier);
-    let request = CreateAuthorRequest {
-        name: AuthorName::new("Test Author").unwrap(),
-    };
+    #[tokio::test]
+    async fn should_record_success_metric() {
+        let repository = MockAuthorRepository::default();
+        let metrics = MockMetrics::default();
+        let notifier = MockNotifier::default();
 
-    let result = service.create_author(&request).await;
+        let service = AuthorService::new(repository, metrics.clone(), notifier);
+        let request = CreateAuthorRequest {
+            name: AuthorName::new("Test Author").unwrap(),
+        };
 
-    assert!(result.is_ok());
-    assert_eq!(*metrics.success_count.lock().await, 1);
-    assert_eq!(*metrics.failure_count.lock().await, 0);
-}
+        let result = service.create_author(&request).await;
 
-#[tokio::test]
-async fn test_create_author_records_failure_metric_on_duplicate() {
-    let repository = MockAuthorRepository::with_create_result(
-        Err(CreateAuthorError::Duplicate { 
-            name: AuthorName::new("Existing").unwrap() 
-        })
-    );
-    let metrics = MockMetrics::default();
-    let notifier = MockNotifier::default();
+        assert!(result.is_ok());
+        assert_eq!(*metrics.success_count.lock().await, 1);
+        assert_eq!(*metrics.failure_count.lock().await, 0);
+    }
 
-    let service = AuthorService::new(repository, metrics.clone(), notifier);
-    let request = CreateAuthorRequest {
-        name: AuthorName::new("Existing").unwrap(),
-    };
+    #[tokio::test]
+    async fn should_record_failure_metric_on_duplicate() {
+        let repository = MockAuthorRepository::with_create_result(
+            Err(CreateAuthorError::Duplicate { 
+                name: AuthorName::new("Existing").unwrap() 
+            })
+        );
+        let metrics = MockMetrics::default();
+        let notifier = MockNotifier::default();
 
-    let result = service.create_author(&request).await;
+        let service = AuthorService::new(repository, metrics.clone(), notifier);
+        let request = CreateAuthorRequest {
+            name: AuthorName::new("Existing").unwrap(),
+        };
 
-    assert!(result.is_err());
-    assert_eq!(*metrics.failure_count.lock().await, 1);
-    assert_eq!(*metrics.success_count.lock().await, 0);
+        let result = service.create_author(&request).await;
+
+        assert!(result.is_err());
+        assert_eq!(*metrics.failure_count.lock().await, 1);
+        assert_eq!(*metrics.success_count.lock().await, 0);
+    }
 }
 ```
 
@@ -239,66 +259,100 @@ Different layers in hexagonal architecture require different testing approaches:
 
 ```rust
 // Unit test - service with mocked repository
-#[tokio::test]
-async fn test_service_returns_not_found_when_author_missing() {
-    let repository = MockAuthorRepository::default(); // Empty repository
-    let service = AuthorService::new(repository, MockMetrics::default(), MockNotifier::default());
+mod get_author {
+    use super::*;
 
-    let result = service.get_author(&AuthorId::new()).await;
+    #[tokio::test]
+    async fn should_return_not_found_when_author_missing() {
+        let repository = MockAuthorRepository::default(); // Empty repository
+        let service = AuthorService::new(repository, MockMetrics::default(), MockNotifier::default());
 
-    assert!(matches!(result, Err(GetAuthorError::NotFound(_))));
+        let result = service.get_author(&AuthorId::new()).await;
+
+        assert!(matches!(result, Err(GetAuthorError::NotFound(_))));
+    }
 }
 
 // Integration test - adapter against real database
-#[tokio::test]
-async fn test_sqlite_repository_persists_author() {
-    let pool = setup_test_database().await;
-    let repository = SqliteAuthorRepository::new(pool);
+mod create {
+    use super::*;
 
-    let request = CreateAuthorRequest {
-        name: AuthorName::new("Integration Test Author").unwrap(),
-    };
-    let created = repository.create(&request).await.unwrap();
-    let found = repository.find_by_id(created.id()).await.unwrap();
+    #[tokio::test]
+    async fn should_persist_author() {
+        let pool = setup_test_database().await;
+        let repository = SqliteAuthorRepository::new(pool);
 
-    assert_eq!(found, Some(created));
+        let request = CreateAuthorRequest {
+            name: AuthorName::new("Integration Test Author").unwrap(),
+        };
+        let created = repository.create(&request).await.unwrap();
+        let found = repository.find_by_id(created.id()).await.unwrap();
+
+        assert_eq!(found, Some(created));
+    }
 }
 
 // End-to-end test - full HTTP request
-#[tokio::test]
-async fn test_create_author_endpoint_returns_201() {
-    let app = spawn_test_app().await;
-    
-    let response = app.client
-        .post(&format!("{}/authors", app.address))
-        .json(&json!({"name": "E2E Test Author"}))
-        .send()
-        .await
-        .unwrap();
+mod create_author_endpoint {
+    use super::*;
 
-    assert_eq!(response.status(), 201);
+    #[tokio::test]
+    async fn should_return_201() {
+        let app = spawn_test_app().await;
+        
+        let response = app.client
+            .post(&format!("{}/authors", app.address))
+            .json(&json!({"name": "E2E Test Author"}))
+            .send()
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), 201);
+    }
 }
 ```
 
 ### 7. Descriptive Naming (HIGH)
 
-Use descriptive test names following the pattern: `test_<action>_<outcome>_<optional_case>`
+Each function or method being tested gets its own `mod` named after it. Inside the mod, test names use the pattern `should_<expected_behavior>` or `should_<expected_behavior>_when_<condition>`. The `test_` prefix is not needed because the mod already provides context. The full path reads naturally: `calculate_total::should_return_zero_for_empty_cart`.
+
+Three levels of nesting depending on context:
+- **Standalone function** (e.g. `do_periods_overlap`): one mod named after the function, test cases inside
+- **Single struct per file** (e.g. `order_test.rs`): function mods at top level (the file already represents the struct)
+- **Multiple structs per file** (e.g. `salaries_test.rs`): struct mod → function mod → test cases (see Section 14)
 
 ```rust
-// Good examples
-#[test]
-fn test_do_periods_overlap_returns_false_when_arguments_are_not_datetimes() {
-    // ...
+// Good examples - each function gets its own mod
+mod do_periods_overlap {
+    use super::*;
+
+    #[test]
+    fn should_return_false_when_arguments_are_not_datetimes() {
+        // ...
+    }
+
+    #[test]
+    fn should_return_true_when_periods_intersect() {
+        // ...
+    }
 }
 
-#[test]
-fn test_upload_image_from_bytes_returns_the_overwritten_public_url() {
-    // ...
+mod upload_image_from_bytes {
+    use super::*;
+
+    #[test]
+    fn should_return_the_overwritten_public_url() {
+        // ...
+    }
 }
 
-#[test]
-fn test_calculate_total_returns_zero_for_empty_cart() {
-    // ...
+mod calculate_total {
+    use super::*;
+
+    #[test]
+    fn should_return_zero_for_empty_cart() {
+        // ...
+    }
 }
 ```
 
@@ -396,16 +450,24 @@ The test directory structure must mirror the source directory structure. Tests f
 // tests/unit/infrastructure/db_test.rs
 use myproject::infrastructure::db::DatabaseConnection;
 
-#[test]
-fn test_connection_pool_creates_connections() {
-    let pool = DatabaseConnection::new_pool(5);
-    assert_eq!(pool.size(), 5);
+mod new_pool {
+    use super::*;
+
+    #[test]
+    fn should_create_connections() {
+        let pool = DatabaseConnection::new_pool(5);
+        assert_eq!(pool.size(), 5);
+    }
 }
 
-#[test]
-fn test_connection_returns_error_for_invalid_config() {
-    let result = DatabaseConnection::from_config(&InvalidConfig::default());
-    assert!(result.is_err());
+mod from_config {
+    use super::*;
+
+    #[test]
+    fn should_return_error_for_invalid_config() {
+        let result = DatabaseConnection::from_config(&InvalidConfig::default());
+        assert!(result.is_err());
+    }
 }
 ```
 
@@ -419,48 +481,64 @@ Organize tests into categories:
 
 ```rust
 // tests/unit/domain/order_test.rs - Unit test for domain logic
-#[test]
-fn test_order_calculates_total_correctly() {
-    let order = Order::new(vec![item1, item2]);
-    assert_eq!(order.total_cents, 2500);
+mod new {
+    use super::*;
+
+    #[test]
+    fn should_calculate_total_correctly() {
+        let order = Order::new(vec![item1, item2]);
+        assert_eq!(order.total_cents, 2500);
+    }
 }
 
 // tests/unit/application/order_service_test.rs - Unit test for service with mocked ports
-#[tokio::test]
-async fn test_create_order_validates_inventory() {
-    let repository = MockOrderRepository::default();
-    let inventory = MockInventoryService::with_available_stock(10);
-    let service = OrderService::new(repository, inventory);
+mod create_order {
+    use super::*;
 
-    let result = service.create_order(&order_request).await;
+    #[tokio::test]
+    async fn should_validate_inventory() {
+        let repository = MockOrderRepository::default();
+        let inventory = MockInventoryService::with_available_stock(10);
+        let service = OrderService::new(repository, inventory);
 
-    assert!(result.is_ok());
+        let result = service.create_order(&order_request).await;
+
+        assert!(result.is_ok());
+    }
 }
 
 // tests/integration/persistence/sqlite_order_repository_test.rs - Integration test for adapter
-#[tokio::test]
-async fn test_sqlite_repository_persists_and_retrieves_order() {
-    let pool = setup_test_database().await;
-    let repository = SqliteOrderRepository::new(pool);
+mod save {
+    use super::*;
 
-    let order = create_test_order();
-    repository.save(&order).await.unwrap();
-    let found = repository.find_by_id(order.id()).await.unwrap();
+    #[tokio::test]
+    async fn should_persist_and_retrieve_order() {
+        let pool = setup_test_database().await;
+        let repository = SqliteOrderRepository::new(pool);
 
-    assert_eq!(found, Some(order));
+        let order = create_test_order();
+        repository.save(&order).await.unwrap();
+        let found = repository.find_by_id(order.id()).await.unwrap();
+
+        assert_eq!(found, Some(order));
+    }
 }
 
 // tests/api/orders_test.rs - End-to-end API test
-#[tokio::test]
-async fn test_create_order_endpoint_returns_201() {
-    let client = reqwest::Client::new();
-    let response = client
-        .post(format!("{}/orders", LOCALHOST))
-        .json(&order_request)
-        .send()
-        .await
-        .expect("Failed to send request");
-    assert_eq!(response.status(), 201);
+mod create_order_endpoint {
+    use super::*;
+
+    #[tokio::test]
+    async fn should_return_201() {
+        let client = reqwest::Client::new();
+        let response = client
+            .post(format!("{}/orders", LOCALHOST))
+            .json(&order_request)
+            .send()
+            .await
+            .expect("Failed to send request");
+        assert_eq!(response.status(), 201);
+    }
 }
 ```
 
@@ -531,21 +609,25 @@ fn teardown_api_tests() {
 // tests/api/health_test.rs
 use super::conftest::LOCALHOST;
 
-#[tokio::test]
-async fn test_health_endpoint_returns_200() {
-    let client = reqwest::Client::new();
-    let response = client
-        .get(format!("{}/health", LOCALHOST))
-        .send()
-        .await
-        .expect("Failed to send request");
-    assert_eq!(response.status(), 200);
+mod health_endpoint {
+    use super::*;
+
+    #[tokio::test]
+    async fn should_return_200() {
+        let client = reqwest::Client::new();
+        let response = client
+            .get(format!("{}/health", LOCALHOST))
+            .send()
+            .await
+            .expect("Failed to send request");
+        assert_eq!(response.status(), 200);
+    }
 }
 ```
 
 ### 14. Complex Test Organization (HIGH)
 
-Within a test file, each struct or type gets its own dedicated test submodule. This provides clear organization when testing multiple related types in one file.
+Within a test file, each struct or type gets its own dedicated test submodule, and each function being tested gets a nested submodule within it. This provides clear organization when testing multiple related types in one file.
 
 ```rust
 // tests/unit/domain/salaries_test.rs
@@ -554,52 +636,68 @@ use myproject::domain::models::salaries::{Currency, Income, IncomeType, Salary};
 mod income {
     use super::*;
 
-    #[test]
-    fn should_create_income_from_valid_string() {
-        let result = Income::new(Some("5000"));
-        assert!(result.is_ok());
-    }
+    mod new {
+        use super::*;
 
-    #[test]
-    fn should_fail_when_income_is_negative() {
-        let result = Income::new(Some("-100"));
-        assert!(result.is_err());
+        #[test]
+        fn should_create_from_valid_string() {
+            let result = Income::new(Some("5000"));
+            assert!(result.is_ok());
+        }
+
+        #[test]
+        fn should_fail_when_negative() {
+            let result = Income::new(Some("-100"));
+            assert!(result.is_err());
+        }
     }
 }
 
 mod income_type {
     use super::*;
 
-    #[test]
-    fn should_create_net_income_type_lowercase() {
-        let result = IncomeType::new(Some("net"));
-        assert!(result.is_ok());
-    }
+    mod new {
+        use super::*;
 
-    #[test]
-    fn should_fail_when_income_type_is_invalid() {
-        let result = IncomeType::new(Some("gross"));
-        assert!(result.is_err());
+        #[test]
+        fn should_accept_net_lowercase() {
+            let result = IncomeType::new(Some("net"));
+            assert!(result.is_ok());
+        }
+
+        #[test]
+        fn should_fail_when_invalid() {
+            let result = IncomeType::new(Some("gross"));
+            assert!(result.is_err());
+        }
     }
 }
 
 mod currency {
     use super::*;
 
-    #[test]
-    fn should_create_dollar_currency_lowercase() {
-        let result = Currency::new(Some("dollar"));
-        assert!(result.is_ok());
+    mod new {
+        use super::*;
+
+        #[test]
+        fn should_accept_dollar_lowercase() {
+            let result = Currency::new(Some("dollar"));
+            assert!(result.is_ok());
+        }
     }
 }
 
 mod salary {
     use super::*;
 
-    #[test]
-    fn should_create_salary_with_all_required_fields() {
-        let result = Salary::new(Some("5000"), Some("net"), Some("ron"), None, None);
-        assert!(result.is_ok());
+    mod new {
+        use super::*;
+
+        #[test]
+        fn should_create_with_all_required_fields() {
+            let result = Salary::new(Some("5000"), Some("net"), Some("ron"), None, None);
+            assert!(result.is_ok());
+        }
     }
 }
 ```
@@ -621,10 +719,14 @@ pub fn create_test_user() -> User {
 // tests/unit/domain/order_test.rs
 mod common;
 
-#[test]
-fn test_create_order_with_valid_data() {
-    let user = common::create_test_user();
-    // ...
+mod create_order {
+    use super::*;
+
+    #[test]
+    fn should_succeed_with_valid_data() {
+        let user = common::create_test_user();
+        // ...
+    }
 }
 ```
 
@@ -677,9 +779,13 @@ fn test_create_order_with_valid_data() {
 - API test configuration in `tests/api/conftest.rs`
 
 ### Naming
-- Pattern: `should_<expected_behavior>_when_<condition>` or `test_<action>_<outcome>_<optional_case>`
-- Be descriptive and explicit
-- Name should explain what is being tested
+- Each function/method gets its own `mod` named after it
+- Inside the mod, test names use `should_<expected_behavior>` or `should_<expected_behavior>_when_<condition>`
+- No `test_` prefix needed — the mod provides context
+- Full path reads naturally: `create_order::should_validate_inventory`
+- Standalone function: one mod, test cases inside
+- Single-struct file: function mods at top level (file = struct context)
+- Multi-struct file: struct mod → function mod → test cases (see Section 14)
 
 ### Hexagonal Architecture Testing
 - Services are tested with mocked ports (repositories, external services)
