@@ -68,7 +68,11 @@ pub struct CreateAuthorRequest {
 }
 ```
 
-**Key distinction:** Separate request/creation models from persistent entity representations. APIs diverge from domain structures over time, and decoupling prevents cascading changes.
+**Separate creation requests from persistent entities.** `Author` represents a fully persisted entity with an `id` assigned by the system. `CreateAuthorRequest` carries only the data the domain needs to create one — here just a `name`. It would be tempting to collapse both into a single struct with `id: Option<Uuid>`, but this is a trap:
+
+- **Models diverge over time.** In real applications, the data required to *create* an entity rarely stays identical to the data that *represents* it. A `Customer` may accumulate dozens of optional fields and relations over its lifetime, while `CreateCustomerRequest` stays lean — only the minimum needed to open an account. Forcing both through one struct means every schema change cascades into unrelated creation code.
+- **The type system enforces the distinction.** If `AuthorRepository::create` accepts `CreateAuthorRequest`, callers cannot accidentally pass an `Author` (or vice versa). There is no ambiguity about whether an `id` is present.
+- **Building for change.** Hexagonal architecture anticipates that APIs, persistence schemas, and domain representations will evolve independently. Separating these models encodes that capacity from day one, even when the initial versions look nearly identical.
 
 ### 2. Ports Define Boundaries (CRITICAL)
 
