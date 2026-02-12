@@ -243,6 +243,76 @@ src/
 - Simple utilities or CLI tools
 - Protocol implementations
 
+### 10. Explicit Struct Field Initialization (CRITICAL)
+
+Always use explicit `field: value` syntax when initializing structs. Never use the shorthand where the field name matches the variable name. Explicit initialization makes it immediately clear which value maps to which field, improving readability and making the code resilient to refactoring.
+
+```rust
+#[derive(Clone)]
+pub struct AppState<SS, BS, RS>
+where
+    SS: ScheduleService,
+    BS: BackupService,
+    RS: RestoreService,
+{
+    pub schedule_service: SS,
+    pub backup_service: BS,
+    pub restore_service: RS,
+}
+
+// Bad - shorthand hides the field-to-value mapping
+let state = AppState {
+    schedule_service,
+    backup_service,
+    restore_service,
+};
+
+// Good - explicit field: value makes the mapping clear
+let state = AppState {
+    schedule_service: schedule_service,
+    backup_service: backup_service,
+    restore_service: restore_service,
+};
+```
+
+This also applies to simpler structs:
+
+```rust
+// Bad
+let config = DatabaseConfig {
+    host,
+    port,
+    max_connections,
+};
+
+// Good
+let config = DatabaseConfig {
+    host: host,
+    port: port,
+    max_connections: max_connections,
+};
+```
+
+When using the newtype pattern, pass the struct directly into the constructor rather than constructing the newtype first and then setting fields. Map each field explicitly from the source (e.g., a request object) to the config struct:
+
+```rust
+// Good - explicit field mapping from request into newtype constructor
+let schedule = Schedule::new(ScheduleConfig {
+    id: ScheduleId::new(),
+    name: request.name.clone(),
+    cron_expression: request.cron_expression.clone(),
+    strategy: request.strategy,
+    source_type: request.source_type,
+    source_host: request.source_host.clone(),
+    source_database: request.source_database.clone(),
+    enabled: request.enabled,
+    created_at: now,
+    updated_at: now,
+});
+```
+
+**Rationale:** Explicit field initialization acts as self-documentation. When reading code, you can immediately see the intent without needing to verify that a local variable has the exact same name as the struct field. It also prevents subtle bugs when renaming variables during refactoring.
+
 ## Anti-Patterns to Avoid
 
 1. **Single-letter variables**: Using `x`, `i`, `p` in closures instead of descriptive names
@@ -252,6 +322,7 @@ src/
 5. **Mixed imports**: Not grouping imports by origin
 6. **Over-architecting**: Using hexagonal/enterprise patterns for systems code
 7. **Excessive comments**: Adding comments for self-explanatory code
+8. **Struct field shorthand**: Using `field` instead of `field: field` in struct initialization
 
 ## Guidelines
 
