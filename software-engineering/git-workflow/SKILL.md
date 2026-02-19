@@ -9,7 +9,7 @@ metadata:
 
 # Git Workflow Skill
 
-Version: 0.0.1
+Version: 0.0.2
 
 ## Purpose
 
@@ -40,11 +40,15 @@ git diff
 
 **NEVER use `git push` without explicit permission.** Always ask for explicit permission before every single `git push` operation.
 
-### 3. Commit Only When Prompted (CRITICAL)
+### 3. No AI Co-Author Trailers (CRITICAL)
+
+**NEVER add `Co-Authored-By:` or any other trailer that attributes an AI tool to a commit.** This applies to all AI assistants including Claude, Cursor, GitHub Copilot, ChatGPT, and any other AI. Commit history must reflect only the human author(s).
+
+### 4. Commit Only When Prompted (CRITICAL)
 
 Only create commits when explicitly prompted to do so. Never commit automatically.
 
-### 4. Branch Naming (HIGH)
+### 5. Branch Naming (HIGH)
 
 Create branches using the pattern: `<TICKET-NUMBER>-<what-problem-is-fixed>`
 
@@ -67,7 +71,7 @@ git checkout -b new-feature
 git checkout -b johns-branch
 ```
 
-### 5. Commit Message Format (HIGH)
+### 6. Commit Message Format (HIGH)
 
 Structure commits as: `"<TICKET-NUMBER>: What are the main changes and why"`
 
@@ -96,7 +100,7 @@ git commit -m "updates"
 git commit -m "WIP"
 ```
 
-### 6. Message Proportionality (HIGH)
+### 7. Message Proportionality (HIGH)
 
 Make commit messages proportional to changes:
 - Small changes (typos, minor fixes) = short, concise messages
@@ -124,6 +128,7 @@ git commit -m "FEAT-456: Implement user authentication system
 4. **Generic messages**: Using "fix", "update", "changes" without context
 5. **Missing prefix**: Commits without ticket number or conventional prefix
 6. **Disproportionate messages**: Long messages for tiny changes or vice versa
+7. **AI co-author trailers**: Never add `Co-Authored-By:` trailers attributing AI tools (Claude, Cursor, Copilot, ChatGPT, or any other AI assistant) to commits. Commit messages must reflect only the human author(s).
 
 ## Guidelines
 
