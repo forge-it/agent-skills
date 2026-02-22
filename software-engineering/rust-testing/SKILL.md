@@ -9,7 +9,7 @@ metadata:
 
 # Rust Testing Skill
 
-Version: 0.0.3
+Version: 0.0.4
 
 ## Purpose
 
@@ -102,7 +102,7 @@ Use `#[tokio::test]` for async tests. Ensure the tokio runtime is configured app
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 
-// tests/integration_test.rs
+// tests/integration/async_ops.rs
 mod perform_async_operation {
     use super::*;
 
@@ -433,20 +433,39 @@ mod api {
 }
 ```
 
-### 10. Test File Naming Convention (CRITICAL)
+### 10. Test Naming Convention — No `_test` Suffix (CRITICAL)
 
-Test files mirror the source file name exactly — no `_test` suffix. The `tests/` directory and the subdirectory category (`unit/`, `integration/`, `api/`) already provide the test context. Adding a `_test` suffix is redundant and unidiomatic in Rust.
+Test files and test modules must never use a `_test` suffix. Test files mirror the source file name exactly. Test modules are named after the function or type being tested. The `tests/` directory and the subdirectory category (`unit/`, `integration/`, `api/`) already provide the test context. Adding a `_test` suffix is redundant and unidiomatic in Rust.
 
 ```
 tests/
 ├── unit/
 │   ├── domain/
 │   │   └── salaries.rs         # Good: mirrors src/domain/salaries.rs
+│   │   └── salaries_test.rs    # Bad: never suffix with _test
 │   └── application/
 │       └── salary_service.rs   # Good: mirrors src/application/salary_service.rs
 ├── api/
 │   ├── conftest.rs             # Exception: shared config
 │   └── health.rs               # Good: no _test suffix
+```
+
+```rust
+// Good — module named after the function being tested
+mod calculate_total {
+    use super::*;
+
+    #[test]
+    fn should_return_zero_for_empty_cart() { /* ... */ }
+}
+
+// Bad — never suffix test modules with _test
+mod calculate_total_test {
+    use super::*;
+
+    #[test]
+    fn should_return_zero_for_empty_cart() { /* ... */ }
+}
 ```
 
 ### 11. Test Directory Structure Mirrors Source (CRITICAL)
@@ -839,7 +858,7 @@ mod create_backup {
 
 1. **Tests in source files**: Using `#[cfg(test)]` modules in `src/` instead of `tests/` directory
 2. **Missing module entry points**: Forgetting to create `unit.rs`, `integration.rs`, or `api.rs` to declare submodules
-3. **Using _test.rs suffix**: Adding a `_test` suffix to test files — test files should mirror the source file name exactly since `tests/` already provides context
+3. **Using _test suffix**: Adding a `_test` suffix to test files or test modules — test files mirror the source file name exactly and test modules are named after the function/type being tested, since `tests/` already provides context
 4. **Testing timestamps**: Asserting exact timing instead of business outcomes
 5. **Comments in tests**: Adding doc comments or inline comments to test functions
 6. **Testing logging**: Mocking or asserting on logger calls
@@ -876,7 +895,7 @@ mod create_backup {
 ### Structure
 - All tests in `tests/` directory, never in source files
 - Create module entry point files: `tests/unit.rs`, `tests/integration.rs`, `tests/api.rs`
-- Test files mirror source file names exactly — no `_test` suffix
+- Test files and test modules must never use a `_test` suffix
 - Organize into `unit/`, `integration/`, and `api/` subdirectories
 - Mirror source directory structure: `src/domain/salaries.rs` → `tests/unit/domain/salaries.rs`
 - Mirror source directory structure for adapters: `src/infrastructure/db.rs` → `tests/integration/infrastructure/db.rs`
