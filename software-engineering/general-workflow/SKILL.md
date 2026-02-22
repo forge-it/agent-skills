@@ -4,12 +4,12 @@ description: General workflow rules for AI-assisted development with consultatio
 license: MIT
 metadata:
   author: cristian.ciortea@proton.me
-  version: "0.0.1"
+  version: "0.0.2"
 ---
 
 # General Workflow Skill
 
-Version: 0.0.1
+Version: 0.0.2
 
 ## Purpose
 
@@ -91,6 +91,10 @@ Each has trade-offs. What's your preference?"
 - Present pros and cons objectively
 - Respect user preferences even if you disagree
 - Document the chosen approach
+
+### Codebase Exploration
+- When listing or exploring project files, always exclude `.git/` directories. They contain thousands of internal objects that waste context tokens and provide no useful information.
+- Prefer targeted searches (specific files, patterns, grep) over broad recursive directory listings.
 
 ### Process Flow
 ```

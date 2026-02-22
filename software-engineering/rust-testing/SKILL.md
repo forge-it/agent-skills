@@ -4,7 +4,7 @@ description: Rust testing best practices using cargo test with focus on clarity,
 license: MIT
 metadata:
   author: cristian.ciortea@proton.me
-  version: "0.0.3"
+  version: "0.0.4"
 ---
 
 # Rust Testing Skill
