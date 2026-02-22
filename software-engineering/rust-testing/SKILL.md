@@ -4,12 +4,12 @@ description: Rust testing best practices using cargo test with focus on clarity,
 license: MIT
 metadata:
   author: cristian.ciortea@proton.me
-  version: "0.0.4"
+  version: "0.0.5"
 ---
 
 # Rust Testing Skill
 
-Version: 0.0.4
+Version: 0.0.5
 
 ## Purpose
 
@@ -737,8 +737,11 @@ Within a support module, each file has a single, distinct job:
 | File | Concern | Knows about... | Output |
 |---|---|---|---|
 | `infra.rs` | Environment | Docker, SQL Connection, Ports | A running `TestDatabase` |
+| `builders.rs` | Service Construction | Application services, Adapters, Config | A configured service ready to use |
 | `factories.rs` | Data Shapes | Domain Structs, Business Rules | A struct in memory |
 | `fixtures.rs` | State | Factories + Infra + Repositories | A row in the actual database |
+| `mocks.rs` | Test Doubles | Traits, Ports, External interfaces | Mock structs implementing traits |
+| `helpers.rs` | Test Utilities | Assertions, Conversions, Formatters | Convenience functions for test code |
 
 ```
 tests/
@@ -746,18 +749,24 @@ tests/
 └── integration/
     ├── infrastructure/
     │   └── db.rs
-    ├── support.rs       // pub mod infra; pub mod factories; pub mod fixtures;
+    ├── support.rs       // pub mod infra; pub mod builders; pub mod factories; pub mod fixtures; pub mod mocks; pub mod helpers;
     └── support/
         ├── infra.rs     // Docker, TestDatabase, Connection Pooling
-        ├── factories.rs // Domain object builders (create_*)
-        └── fixtures.rs  // Persist prerequisite data (save_*)
+        ├── builders.rs  // Service construction (build_*)
+        ├── factories.rs // Domain object creation (create_*)
+        ├── fixtures.rs  // Persist prerequisite data (save_*)
+        ├── mocks.rs     // Mock implementations (Mock*)
+        └── helpers.rs   // General test utilities
 ```
 
 ```rust
 // tests/integration/support.rs
 pub mod infra;
+pub mod builders;
 pub mod factories;
 pub mod fixtures;
+pub mod mocks;
+pub mod helpers;
 ```
 
 ```rust
@@ -829,13 +838,115 @@ pub async fn save_prerequisite_schedule(db: &TestDatabase) -> Schedule {
 }
 ```
 
+```rust
+// tests/integration/support/builders.rs
+// Builders construct fully configured application services ready for testing.
+// They wire together real or mock dependencies so tests can focus on behavior.
+use super::mocks::MockStorageBackend;
+
+pub fn build_encryption_service() -> EncryptionService {
+    let config = EncryptionConfig {
+        algorithm: Algorithm::Aes256Gcm,
+        key: SecretKey::from_bytes(&[0u8; 32]),
+    };
+    EncryptionService::new(config)
+}
+
+pub fn build_secret_service(
+    repository: impl SecretRepository,
+    encryption: EncryptionService,
+) -> SecretService<impl SecretRepository> {
+    SecretService::new(repository, encryption)
+}
+
+pub fn build_backup_service_with_mock_storage() -> BackupService<MockStorageBackend> {
+    let storage = MockStorageBackend::default();
+    BackupService::new(storage)
+}
+```
+
+```rust
+// tests/integration/support/mocks.rs
+// Mock implementations of traits and ports used across tests.
+// Each mock allows controlling return values and optionally tracking calls.
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
+#[derive(Clone, Default)]
+pub struct MockStorageBackend {
+    pub stored: Arc<Mutex<Vec<(String, Vec<u8>)>>>,
+    pub get_result: Arc<Mutex<Option<Result<Vec<u8>, StorageError>>>>,
+}
+
+impl StorageBackend for MockStorageBackend {
+    async fn put(&self, key: &str, data: &[u8]) -> Result<(), StorageError> {
+        self.stored.lock().await.push((key.to_string(), data.to_vec()));
+        Ok(())
+    }
+
+    async fn get(&self, _key: &str) -> Result<Vec<u8>, StorageError> {
+        if let Some(result) = self.get_result.lock().await.take() {
+            return result;
+        }
+        Err(StorageError::NotFound)
+    }
+}
+
+#[derive(Clone, Default)]
+pub struct MockNotificationService {
+    pub sent: Arc<Mutex<Vec<Notification>>>,
+}
+
+impl NotificationPort for MockNotificationService {
+    async fn send(&self, notification: Notification) -> Result<(), NotifyError> {
+        self.sent.lock().await.push(notification);
+        Ok(())
+    }
+}
+```
+
+```rust
+// tests/integration/support/helpers.rs
+// General-purpose test utilities that simplify common testing patterns.
+// These are convenience functions, not domain-specific.
+
+pub fn random_email() -> String {
+    format!("test-{}@example.com", uuid::Uuid::new_v4())
+}
+
+pub fn assert_json_contains(body: &serde_json::Value, key: &str, expected: &str) {
+    let actual = body.get(key)
+        .unwrap_or_else(|| panic!("key '{}' not found in JSON body", key))
+        .as_str()
+        .unwrap_or_else(|| panic!("key '{}' is not a string", key));
+    assert_eq!(actual, expected);
+}
+
+pub async fn retry_until<F, Fut>(max_attempts: u32, delay_ms: u64, f: F) -> bool
+where
+    F: Fn() -> Fut,
+    Fut: std::future::Future<Output = bool>,
+{
+    for _ in 0..max_attempts {
+        if f().await {
+            return true;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+    }
+    false
+}
+```
+
 **Usage in tests:**
 
 ```rust
 // tests/integration/infrastructure/db.rs
 use super::support::infra::TestDatabase;
-use super::support::factories::create_test_backup;
+use super::support::builders::build_encryption_service;
+use super::support::factories::{create_test_backup, create_secret_request};
 use super::support::fixtures::save_prerequisite_schedule;
+use super::support::mocks::MockStorageBackend;
+use super::support::helpers::random_email;
 
 mod create_backup {
     use super::*;
@@ -852,6 +963,23 @@ mod create_backup {
         assert_eq!(saved.schedule_id(), schedule.id());
     }
 }
+
+mod store_secret {
+    use super::*;
+
+    #[tokio::test]
+    async fn should_encrypt_and_persist() {
+        let db = TestDatabase::new().await;
+        let encryption = build_encryption_service();
+        let repository = PgSecretRepository::new(db.pool.clone());
+        let service = SecretService::new(repository, encryption);
+
+        let request = create_secret_request();
+        let result = service.store(&request).await;
+
+        assert!(result.is_ok());
+    }
+}
 ```
 
 ## Anti-Patterns to Avoid
@@ -863,7 +991,7 @@ mod create_backup {
 5. **Comments in tests**: Adding doc comments or inline comments to test functions
 6. **Testing logging**: Mocking or asserting on logger calls
 7. **Scattered test helpers**: Duplicating test fixtures and mock implementations across test files
-8. **Overloaded common.rs**: Putting infrastructure, factories, and fixtures in a single `common.rs` file — use per-category `support/` modules with separate `infra.rs`, `factories.rs`, and `fixtures.rs` instead
+8. **Overloaded common.rs**: Putting infrastructure, factories, fixtures, builders, mocks, and helpers in a single `common.rs` file — use per-category `support/` modules with separate files for each concern instead
 9. **Vague test names**: Using generic names like `test_user` or `test_order`
 10. **Flat test structure**: Not mirroring the source directory structure in tests
 11. **Missing conftest.rs**: Not centralizing API test setup/teardown
@@ -884,7 +1012,7 @@ mod create_backup {
 - Use `mockall` for simple trait mocking with expectations
 - Create custom mock implementations for ports when you need stateful behavior
 - Mock implementations should allow controlling return values and tracking calls
-- Place shared mock implementations in each category's `support/` module (see Section 15)
+- Place shared mock implementations in `support/mocks.rs` (see Section 15)
 
 ### Test Scope by Layer
 - **Unit tests**: Test domain logic and services with mocked ports
@@ -900,7 +1028,7 @@ mod create_backup {
 - Mirror source directory structure: `src/domain/salaries.rs` → `tests/unit/domain/salaries.rs`
 - Mirror source directory structure for adapters: `src/infrastructure/db.rs` → `tests/integration/infrastructure/db.rs`
 - Dedicated submodule per struct/type when testing multiple types in one file
-- Each test category owns its own `support/` module with `infra.rs`, `factories.rs`, and `fixtures.rs` (see Section 15)
+- Each test category owns its own `support/` module with `infra.rs`, `builders.rs`, `factories.rs`, `fixtures.rs`, `mocks.rs`, and `helpers.rs` (see Section 15)
 - API test configuration in `tests/api/conftest.rs`
 
 ### Naming
