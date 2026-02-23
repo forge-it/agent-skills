@@ -742,6 +742,7 @@ Within a support module, each file has a single, distinct job:
 | `fixtures.rs` | State | Factories + Infra + Repositories | A row in the actual database |
 | `mocks.rs` | Test Doubles | Traits, Ports, External interfaces | Mock structs implementing traits |
 | `helpers.rs` | Test Utilities | Assertions, Conversions, Formatters | Convenience functions for test code |
+| `constants.rs` | Shared Values | Test defaults, Magic strings, Limits | Reusable constants across tests |
 
 ```
 tests/
@@ -749,14 +750,15 @@ tests/
 └── integration/
     ├── infrastructure/
     │   └── db.rs
-    ├── support.rs       // pub mod infra; pub mod builders; pub mod factories; pub mod fixtures; pub mod mocks; pub mod helpers;
+    ├── support.rs       // pub mod infra; pub mod builders; pub mod factories; pub mod fixtures; pub mod mocks; pub mod helpers; pub mod constants;
     └── support/
         ├── infra.rs     // Docker, TestDatabase, Connection Pooling
         ├── builders.rs  // Service construction (build_*)
         ├── factories.rs // Domain object creation (create_*)
         ├── fixtures.rs  // Persist prerequisite data (save_*)
         ├── mocks.rs     // Mock implementations (Mock*)
-        └── helpers.rs   // General test utilities
+        ├── helpers.rs   // General test utilities
+        └── constants.rs // Shared test constants
 ```
 
 ```rust
@@ -767,6 +769,7 @@ pub mod factories;
 pub mod fixtures;
 pub mod mocks;
 pub mod helpers;
+pub mod constants;
 ```
 
 ```rust
@@ -937,6 +940,16 @@ where
 }
 ```
 
+```rust
+// tests/integration/support/constants.rs
+pub const DEFAULT_ENCRYPTION_KEY: &[u8; 32] = &[0u8; 32];
+pub const TEST_BUCKET_NAME: &str = "test-bucket";
+pub const MAX_RETRY_ATTEMPTS: u32 = 3;
+pub const DEFAULT_TIMEOUT_MS: u64 = 5000;
+pub const TEST_USER_EMAIL: &str = "default@example.com";
+pub const TEST_USER_NAME: &str = "Test User";
+```
+
 **Usage in tests:**
 
 ```rust
@@ -1028,7 +1041,7 @@ mod store_secret {
 - Mirror source directory structure: `src/domain/salaries.rs` → `tests/unit/domain/salaries.rs`
 - Mirror source directory structure for adapters: `src/infrastructure/db.rs` → `tests/integration/infrastructure/db.rs`
 - Dedicated submodule per struct/type when testing multiple types in one file
-- Each test category owns its own `support/` module with `infra.rs`, `builders.rs`, `factories.rs`, `fixtures.rs`, `mocks.rs`, and `helpers.rs` (see Section 15)
+- Each test category owns its own `support/` module with `infra.rs`, `builders.rs`, `factories.rs`, `fixtures.rs`, `mocks.rs`, `helpers.rs`, and `constants.rs` (see Section 15)
 - API test configuration in `tests/api/conftest.rs`
 
 ### Naming
