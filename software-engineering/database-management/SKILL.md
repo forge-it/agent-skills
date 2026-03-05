@@ -4,12 +4,12 @@ description: Database schema management and migration strategies for production 
 license: MIT
 metadata:
   author: cristian.ciortea@proton.me
-  version: "0.0.1"
+  version: "0.0.2"
 ---
 
 # Database Management Skill
 
-Version: 0.0.1
+Version: 0.0.2
 
 ## Purpose
 
@@ -60,7 +60,19 @@ Primary keys (CRITICAL):
 - Use **UUIDv4** when UUIDv7 is not available
 - Only use auto-incrementing integers when you have a clear reason and have evaluated trade-offs (predictability, sharding/merging difficulty, cross-system uniqueness)
 
-### 4. Migration Types and Patterns
+### 4. Development Phase: Single Migration Strategy (CRITICAL)
+
+**During the development phase (before production deployment), do not create additional migration files.** Instead, merge all schema changes into the initial schema migration. This keeps the migration history clean and avoids accumulating throwaway migrations that will never run incrementally in production.
+
+Guidelines:
+- When a schema change is needed, modify the initial migration file directly to include the new tables, columns, or indexes
+- Delete any extra migration files that were created
+- Reset the migration version tracker in the development database to point to the initial migration
+- Only start creating incremental migrations once the service has been deployed to production and real data exists
+
+**This rule does not apply once the service is in production.** After production deployment, follow the incremental changes principle (section 3).
+
+
 
 #### Additive Changes (Safe)
 - Adding new tables
