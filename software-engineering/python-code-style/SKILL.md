@@ -4,12 +4,12 @@ description: Python code style guidelines for clean, maintainable, and readable 
 license: MIT
 metadata:
   author: cristian.ciortea@proton.me
-  version: "0.0.1"
+  version: "0.0.3"
 ---
 
 # Python Code Style Skill
 
-Version: 0.0.1
+Version: 0.0.3
 
 ## Purpose
 
@@ -43,16 +43,35 @@ user_data = {"name": "John", "age": 25}
 
 Never use single-letter variables in loops or comprehensions. Always use descriptive names that show intent.
 
+The collection variable and the loop variable must be consistent: the collection must be the plural form of the loop variable. Never use a generic or mismatched name for the collection while using a specific name for the loop variable.
+
 ```python
-# Bad
+# Bad - single-letter variables
 [p for p in products if p.get("name") == target_name]
 for i in items:
     process(i)
 
-# Good
+# Bad - collection name doesn't match loop variable
+hosts = get_compute_hosts()
+for compute_host in hosts:
+    process(compute_host)
+
+networks = get_network_cards()
+for network_card in networks:
+    process(network_card)
+
+# Good - collection and loop variable are consistent
 [product for product in products if product.get("name") == target_name]
 for item in items:
     process(item)
+
+compute_hosts = get_compute_hosts()
+for compute_host in compute_hosts:
+    process(compute_host)
+
+network_cards = get_network_cards()
+for network_card in network_cards:
+    process(network_card)
 ```
 
 ### 3. Type Hints (CRITICAL)
@@ -189,6 +208,23 @@ def greet_user(user: User):
     print(f"Hello, {user.profile.display_name}")
 ```
 
+### 10. Tuples and Sets for Immutable Collections (HIGH)
+
+Use tuples for ordered immutable collections and sets for unique immutable collections. Never use lists for constant data that will not be mutated. Lists are mutable, consume more memory, and carry the wrong semantic intent when the data is fixed.
+
+```python
+# Bad - list used for a constant collection of values
+DOCKER_COMPOSE_SERVICES = ["postgres", "minio"]
+SUPPORTED_FORMATS = ["pdf", "docx", "html"]
+
+# Good - tuple signals immutability and is more efficient
+DOCKER_COMPOSE_SERVICES = ("postgres", "minio")
+SUPPORTED_FORMATS = ("pdf", "docx", "html")
+
+# Good - set when uniqueness and membership testing matter
+ALLOWED_ROLES = {"admin", "editor", "viewer"}
+```
+
 ## Anti-Patterns to Avoid
 
 1. **Single-letter variables**: Using `x`, `i`, `p` instead of descriptive names
@@ -197,7 +233,7 @@ def greet_user(user: User):
 4. **Relative imports**: Using `.` or `..` in imports
 5. **Function-level imports**: Importing inside functions
 6. **Excessive comments**: Adding comments for self-explanatory code
-7. **Lists for immutable data**: Using lists when tuples or sets are appropriate
+7. **Lists for immutable data**: Using a list for any constant or immutable collection instead of a tuple (ordered) or set (unique)
 8. **Removing logical blank lines**: Deleting blank lines that separate code sections
 9. **Single-use one-liner helpers**: Creating helper functions used only once
 
@@ -218,7 +254,7 @@ def greet_user(user: User):
 
 ### Code Organization
 - Keep comments to a minimum
-- Use tuples or sets instead of lists for immutable/unique data
+- Use tuples for ordered immutable collections, sets for unique immutable collections — never lists for constant data
 - Use absolute imports only
 - No function-level imports
 - Group imports: stdlib, third-party, local (with blank lines between)
