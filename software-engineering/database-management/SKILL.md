@@ -1,15 +1,8 @@
 ---
-name: database-management
-description: Database schema management and migration strategies for production systems
-license: MIT
-metadata:
-  author: cristian.ciortea@proton.me
-  version: "0.0.2"
+version: "0.0.2"
 ---
 
 # Database Management Skill
-
-Version: 0.0.2
 
 ## Purpose
 

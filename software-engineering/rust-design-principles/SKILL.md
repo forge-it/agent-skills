@@ -1,15 +1,8 @@
 ---
-name: rust-design-principles
-description: Rust software design principles including SOLID, KISS, and design pattern usage guidelines
-license: MIT
-metadata:
-  author: cristian.ciortea@proton.me
-  version: "0.0.1"
+version: "0.0.1"
 ---
 
 # Design Principles Skill
-
-Version: 0.0.1
 
 ## Purpose
 

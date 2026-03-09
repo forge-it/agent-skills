@@ -1,7 +1,5 @@
 ---
-description: Use when running python commands
-globs:
-alwaysApply: false
+version: "0.0.1"
 ---
 
 # Python Command Execution

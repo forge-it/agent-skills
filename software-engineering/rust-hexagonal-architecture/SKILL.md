@@ -1,15 +1,8 @@
 ---
-name: rust-hexagonal-architecture
-description: Hexagonal architecture (ports and adapters) patterns for Rust business applications
-license: MIT
-metadata:
-  author: cristian.ciortea@proton.me
-  version: "0.0.1"
+version: "0.0.1"
 ---
 
 # Hexagonal Architecture Skill
-
-Version: 0.0.1
 
 ## Purpose
 
