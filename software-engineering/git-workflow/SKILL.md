@@ -4,12 +4,12 @@ description: Git workflow guidelines for branches, commits, and version control 
 license: MIT
 metadata:
   author: cristian.ciortea@proton.me
-  version: "0.0.1"
+  version: "0.0.3"
 ---
 
 # Git Workflow Skill
 
-Version: 0.0.2
+Version: 0.0.3
 
 ## Purpose
 
@@ -42,7 +42,7 @@ git diff
 
 ### 3. No AI Co-Author Trailers (CRITICAL)
 
-**NEVER add `Co-Authored-By:` or any other trailer that attributes an AI tool to a commit.** This applies to all AI assistants including Claude, Cursor, GitHub Copilot, ChatGPT, and any other AI. Commit history must reflect only the human author(s).
+**NEVER add `Co-Authored-By:` or `Made-By:` or any other trailer that attributes an AI tool to a commit.** This applies to all AI assistants including Claude, Cursor, GitHub Copilot, ChatGPT, and any other AI. Commit history must reflect only the human author(s).
 
 ### 4. Commit Only When Prompted (CRITICAL)
 
