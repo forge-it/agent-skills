@@ -101,8 +101,6 @@ metadata:
 
 # Skill Name
 
-Version: 0.0.1
-
 ## Purpose
 What this skill helps with.
 
