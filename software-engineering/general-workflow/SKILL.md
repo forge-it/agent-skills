@@ -4,12 +4,12 @@ description: General workflow rules for AI-assisted development with consultatio
 license: MIT
 metadata:
   author: cristian.ciortea@proton.me
-  version: "0.0.3"
+  version: "0.0.4"
 ---
 
 # General Workflow Skill
 
-Version: 0.0.3
+Version: 0.0.4
 
 ## Purpose
 
@@ -93,7 +93,7 @@ Each has trade-offs. What's your preference?"
 - Document the chosen approach
 
 ### Codebase Exploration
-- When listing or exploring project files, always exclude `.git/`, `target/`, `node_modules/`, `__pycache__`, `dist` directories. They contain thousands of internal objects that waste context tokens and provide no useful information.
+- When listing or exploring project files, always exclude `.git/`, `target/`, `node_modules/`, `__pycache__`, `dist`, `poetry.lock`, `uv.lock` directories. They contain thousands of internal objects that waste context tokens and provide no useful information.
 - Prefer targeted searches (specific files, patterns, grep) over broad recursive directory listings.
 
 ### Process Flow
