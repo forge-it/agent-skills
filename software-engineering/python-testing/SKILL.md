@@ -1,15 +1,8 @@
 ---
-name: python-testing
-description: Python testing best practices using pytest with focus on clarity and maintainability
-license: MIT
-metadata:
-  author: cristian.ciortea@proton.me
-  version: "0.0.1"
+version: "0.0.1"
 ---
 
 # Python Testing Skill
-
-Version: 0.0.1
 
 ## Purpose
 

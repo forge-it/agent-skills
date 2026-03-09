@@ -1,16 +1,8 @@
 ---
-name: cli-design
-description: Command-line interface design guidelines for building human-friendly, robust, and composable CLI tools
-license: MIT
-metadata:
-  author: cristian.ciortea@proton.me
-  version: "0.0.1"
-  based_on: "Command Line Interface Guidelines (https://clig.dev/)"
+version: "0.0.1"
 ---
 
 # CLI Design Skill
-
-Version: 0.0.1
 
 Based on: [Command Line Interface Guidelines](https://clig.dev/) — an open-source guide to help you write better command-line programs, taking traditional UNIX principles and updating them for the modern day.
 

@@ -1,7 +1,5 @@
 ---
-description: Use when setting up or configuring Rust projects
-globs:
-alwaysApply: false
+version: "0.0.1"
 ---
 
 # Rust Project Setup

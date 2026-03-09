@@ -1,15 +1,8 @@
 ---
-name: rust-testing
-description: Rust testing best practices using cargo test with focus on clarity, maintainability, and hexagonal architecture testability
-license: MIT
-metadata:
-  author: cristian.ciortea@proton.me
-  version: "0.0.5"
+version: "0.0.5"
 ---
 
 # Rust Testing Skill
-
-Version: 0.0.5
 
 ## Purpose
 

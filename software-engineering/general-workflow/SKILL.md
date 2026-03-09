@@ -1,15 +1,8 @@
 ---
-name: general-workflow
-description: General workflow rules for AI-assisted development with consultation-first approach
-license: MIT
-metadata:
-  author: cristian.ciortea@proton.me
-  version: "0.0.4"
+version: "0.0.4"
 ---
 
 # General Workflow Skill
-
-Version: 0.0.4
 
 ## Purpose
 

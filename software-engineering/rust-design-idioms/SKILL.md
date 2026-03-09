@@ -1,15 +1,8 @@
 ---
-name: rust-design-idioms
-description: Rust-specific design idioms including Newtype pattern, type-safe domain modeling, parse-don't-validate approach, and structured error handling
-license: MIT
-metadata:
-  author: cristian.ciortea@proton.me
-  version: "0.0.2"
+version: "0.0.2"
 ---
 
 # Design Idioms Skill
-
-Version: 0.0.2
 
 ## Purpose
 

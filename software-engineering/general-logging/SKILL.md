@@ -1,15 +1,8 @@
 ---
-name: logging-best-practices
-description: Logging best practices focused on wide events for powerful debugging and analytics
-license: MIT
-metadata:
-  author: cristian.ciortea@proton.me
-  version: "0.0.1"
+version: "0.0.1"
 ---
 
 # Logging Best Practices Skill
-
-Version: 0.0.1
 
 ## Purpose
 

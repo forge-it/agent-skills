@@ -1,15 +1,8 @@
 ---
-name: git-workflow
-description: Git workflow guidelines for branches, commits, and version control best practices
-license: MIT
-metadata:
-  author: cristian.ciortea@proton.me
-  version: "0.0.3"
+version: "0.0.3"
 ---
 
 # Git Workflow Skill
-
-Version: 0.0.3
 
 ## Purpose
 

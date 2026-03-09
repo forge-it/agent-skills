@@ -1,15 +1,8 @@
 ---
-name: python-code-style
-description: Python code style guidelines for clean, maintainable, and readable code
-license: MIT
-metadata:
-  author: cristian.ciortea@proton.me
-  version: "0.0.3"
+version: "0.0.3"
 ---
 
 # Python Code Style Skill
-
-Version: 0.0.3
 
 ## Purpose
 

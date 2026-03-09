@@ -1,15 +1,8 @@
 ---
-name: rust-code-style
-description: Rust code style guidelines for clean, maintainable, and readable code with hexagonal architecture
-license: MIT
-metadata:
-  author: cristian.ciortea@proton.me
-  version: "0.0.1"
+version: "0.0.1"
 ---
 
 # Rust Code Style Skill
-
-Version: 0.0.1
 
 ## Purpose
 
