@@ -1,5 +1,5 @@
 ---
-version: "0.0.3"
+version: "0.0.4"
 ---
 
 # Python Code Style Skill
@@ -218,17 +218,45 @@ SUPPORTED_FORMATS = ("pdf", "docx", "html")
 ALLOWED_ROLES = {"admin", "editor", "viewer"}
 ```
 
+### 11. Pathlib over os.path (HIGH)
+
+Always prefer `pathlib.Path` over `os.path`, `os.makedirs`, `os.remove`, `os.rename`, `os.rmdir`, and manual `open()` for file read/write. Pathlib provides a cleaner, object-oriented API for filesystem operations.
+
+```python
+# Bad - os.path and os module functions
+import os
+
+os.makedirs("/tmp/cache", exist_ok=True)
+config_path = os.path.join("/tmp/cache", "config.yaml")
+if os.path.exists(config_path):
+    with open(config_path) as config_file:
+        content = config_file.read()
+os.remove(config_path)
+
+# Good - pathlib
+from pathlib import Path
+
+cache_dir = Path("/tmp/cache")
+cache_dir.mkdir(parents=True, exist_ok=True)
+config_path = cache_dir / "config.yaml"
+if config_path.exists():
+    content = config_path.read_text()
+config_path.unlink(missing_ok=True)
+```
+
 ## Anti-Patterns to Avoid
 
 1. **Single-letter variables**: Using `x`, `i`, `p` instead of descriptive names
-2. **Redundant None returns**: Adding `-> None` to void functions
-3. **Explicit None checks**: Using `is None` when truthy/falsy works
-4. **Relative imports**: Using `.` or `..` in imports
-5. **Function-level imports**: Importing inside functions
-6. **Excessive comments**: Adding comments for self-explanatory code
-7. **Lists for immutable data**: Using a list for any constant or immutable collection instead of a tuple (ordered) or set (unique)
-8. **Removing logical blank lines**: Deleting blank lines that separate code sections
-9. **Single-use one-liner helpers**: Creating helper functions used only once
+2. **Mismatched collection/loop names**: Using a generic collection name (e.g., `hosts`) with a specific loop variable (e.g., `compute_host`) — the collection must be the plural of the loop variable (e.g., `compute_hosts`)
+3. **Redundant None returns**: Adding `-> None` to void functions
+4. **Explicit None checks**: Using `is None` when truthy/falsy works
+5. **Relative imports**: Using `.` or `..` in imports
+6. **Function-level imports**: Importing inside functions
+7. **Excessive comments**: Adding comments for self-explanatory code
+8. **Lists for immutable data**: Using a list for any constant or immutable collection instead of a tuple (ordered) or set (unique)
+9. **Removing logical blank lines**: Deleting blank lines that separate code sections
+10. **Single-use one-liner helpers**: Creating helper functions used only once
+11. **os.path over pathlib**: Using `os.path`, `os.makedirs`, `os.remove` instead of `pathlib.Path`
 
 ## Guidelines
 
@@ -248,6 +276,7 @@ ALLOWED_ROLES = {"admin", "editor", "viewer"}
 ### Code Organization
 - Keep comments to a minimum
 - Use tuples for ordered immutable collections, sets for unique immutable collections — never lists for constant data
+- Use `pathlib.Path` for all filesystem operations — never `os.path`, `os.makedirs`, `os.remove`, `os.rename`
 - Use absolute imports only
 - No function-level imports
 - Group imports: stdlib, third-party, local (with blank lines between)
