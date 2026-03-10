@@ -1,5 +1,10 @@
 ---
-version: "0.0.2"
+name: rust-design-idioms
+description: Apply Rust-specific design idioms to leverage the type system for safer, more expressive code.
+license: UNLICENSED
+metadata:
+  author: Cristian
+  version: "0.0.2"
 ---
 
 # Design Idioms Skill

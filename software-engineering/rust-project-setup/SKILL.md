@@ -1,5 +1,10 @@
 ---
-version: "0.0.1"
+name: rust-project-setup
+description: Set up Rust projects with pinned toolchain versions and consistent build configurations.
+license: UNLICENSED
+metadata:
+  author: Cristian
+  version: "0.0.1"
 ---
 
 # Rust Project Setup

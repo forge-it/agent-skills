@@ -1,5 +1,10 @@
 ---
-version: "0.0.1"
+name: rust-hexagonal-architecture
+description: Implement hexagonal architecture (ports and adapters) in Rust for testable and maintainable applications.
+license: UNLICENSED
+metadata:
+  author: Cristian
+  version: "0.0.1"
 ---
 
 # Hexagonal Architecture Skill

@@ -1,5 +1,10 @@
 ---
-version: "0.0.1"
+name: python-testing
+description: Write effective Python tests with pytest focused on clarity and business logic.
+license: UNLICENSED
+metadata:
+  author: Cristian
+  version: "0.0.1"
 ---
 
 # Python Testing Skill

@@ -1,5 +1,10 @@
 ---
-version: "0.0.1"
+name: rust-design-principles
+description: Apply SOLID principles, KISS, and appropriate design patterns in software development.
+license: UNLICENSED
+metadata:
+  author: Cristian
+  version: "0.0.1"
 ---
 
 # Design Principles Skill

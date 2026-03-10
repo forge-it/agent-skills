@@ -1,5 +1,10 @@
 ---
-version: "0.0.3"
+name: git-workflow
+description: Git branch naming, commit message quality, and safe push practices.
+license: UNLICENSED
+metadata:
+  author: Cristian
+  version: "0.0.3"
 ---
 
 # Git Workflow Skill

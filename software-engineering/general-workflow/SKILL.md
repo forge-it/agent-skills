@@ -1,5 +1,10 @@
 ---
-version: "0.0.4"
+name: general-workflow
+description: Consultation-first workflow guidelines for AI-assisted software development.
+license: UNLICENSED
+metadata:
+  author: Cristian
+  version: "0.0.4"
 ---
 
 # General Workflow Skill

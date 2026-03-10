@@ -1,5 +1,10 @@
 ---
-version: "0.0.2"
+name: database-management
+description: Safe, incremental database schema changes and migrations for zero-downtime deployments.
+license: UNLICENSED
+metadata:
+  author: Cristian
+  version: "0.0.2"
 ---
 
 # Database Management Skill

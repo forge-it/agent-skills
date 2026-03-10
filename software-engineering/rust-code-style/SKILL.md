@@ -1,5 +1,10 @@
 ---
-version: "0.0.1"
+name: rust-code-style
+description: Write clean, maintainable, and readable Rust code with consistent style and error handling.
+license: UNLICENSED
+metadata:
+  author: Cristian
+  version: "0.0.1"
 ---
 
 # Rust Code Style Skill
