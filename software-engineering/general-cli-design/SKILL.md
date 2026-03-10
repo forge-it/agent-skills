@@ -1,5 +1,10 @@
 ---
-version: "0.0.1"
+name: general-cli-design
+description: Design human-friendly, robust, and composable command-line interfaces.
+license: UNLICENSED
+metadata:
+  author: Cristian
+  version: "0.0.1"
 ---
 
 # CLI Design Skill

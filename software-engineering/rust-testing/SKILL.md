@@ -1,5 +1,10 @@
 ---
-version: "0.0.5"
+name: rust-testing
+description: Write effective Rust tests with clarity and maintainability for hexagonal architecture applications.
+license: UNLICENSED
+metadata:
+  author: Cristian
+  version: "0.0.5"
 ---
 
 # Rust Testing Skill

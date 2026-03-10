@@ -1,5 +1,10 @@
 ---
-version: "0.0.1"
+name: python-commands
+description: Execute Python commands correctly through virtual environments and package managers.
+license: UNLICENSED
+metadata:
+  author: Cristian
+  version: "0.0.1"
 ---
 
 # Python Command Execution

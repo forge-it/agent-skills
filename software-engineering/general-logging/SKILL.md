@@ -1,5 +1,10 @@
 ---
-version: "0.0.1"
+name: general-logging
+description: Implement effective logging using wide events (canonical log lines) for debugging and analytics.
+license: UNLICENSED
+metadata:
+  author: Cristian
+  version: "0.0.1"
 ---
 
 # Logging Best Practices Skill

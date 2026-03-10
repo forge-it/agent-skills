@@ -1,5 +1,10 @@
 ---
-version: "0.0.4"
+name: python-code-style
+description: Write clean, maintainable, and readable Python code with type hints and consistent style.
+license: UNLICENSED
+metadata:
+  author: Cristian
+  version: "0.0.5"
 ---
 
 # Python Code Style Skill
@@ -218,7 +223,45 @@ SUPPORTED_FORMATS = ("pdf", "docx", "html")
 ALLOWED_ROLES = {"admin", "editor", "viewer"}
 ```
 
-### 11. Pathlib over os.path (HIGH)
+### 11. DTOs for Dictionaries with More Than 3 Fields (CRITICAL)
+
+Never return or pass raw dictionaries with more than 3 key-value pairs. Define a dataclass DTO instead foor simple cases or msgspec.Struct for performance-critical (serialization-heavy). This enforces type safety, enables IDE support, and makes the data contract explicit.
+
+```python
+# Bad - raw dict with more than 3 fields
+def build_payment(raw: dict) -> dict:
+    return {
+        "payment_type": "tax",
+        "recipient_name": raw["beneficiary"],
+        "recipient_iban": raw["iban"],
+        "amount": float(raw["amount"]),
+        "currency": "RON",
+        "reference": raw["name"],
+    }
+
+# Good - DTO with typed fields
+from pydantic import BaseModel
+
+class ScrapedPayment(BaseModel):
+    payment_type: str
+    recipient_name: str
+    recipient_iban: str
+    amount: float
+    currency: str
+    reference: str
+
+def build_payment(raw: dict) -> ScrapedPayment:
+    return ScrapedPayment(
+        payment_type="tax",
+        recipient_name=raw["beneficiary"],
+        recipient_iban=raw["iban"],
+        amount=float(raw["amount"]),
+        currency="RON",
+        reference=raw["name"],
+    )
+```
+
+### 12. Pathlib over os.path (HIGH)
 
 Always prefer `pathlib.Path` over `os.path`, `os.makedirs`, `os.remove`, `os.rename`, `os.rmdir`, and manual `open()` for file read/write. Pathlib provides a cleaner, object-oriented API for filesystem operations.
 
@@ -257,6 +300,7 @@ config_path.unlink(missing_ok=True)
 9. **Removing logical blank lines**: Deleting blank lines that separate code sections
 10. **Single-use one-liner helpers**: Creating helper functions used only once
 11. **os.path over pathlib**: Using `os.path`, `os.makedirs`, `os.remove` instead of `pathlib.Path`
+12. **Raw dicts with more than 3 fields**: Passing or returning `dict` with more than 3 keys instead of a typed dataclass DTO
 
 ## Guidelines
 
