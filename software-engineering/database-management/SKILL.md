@@ -1,10 +1,10 @@
 ---
 name: database-management
-description: Safe, incremental database schema changes and migrations for zero-downtime deployments.
+description: Guidelines for managing database schemas and migrations safely. Use when creating or modifying database schemas, writing migration files, or planning schema changes for production deployments.
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.2"
+  version: "0.0.3"
 ---
 
 # Database Management Skill

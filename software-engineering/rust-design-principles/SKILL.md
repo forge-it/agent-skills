@@ -1,10 +1,10 @@
 ---
 name: rust-design-principles
-description: Apply SOLID principles, KISS, and appropriate design patterns in software development.
+description: Guidelines for applying software design principles. Use when designing new features, refactoring existing code, or making architectural decisions.
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.1"
+  version: "0.0.2"
 ---
 
 # Design Principles Skill

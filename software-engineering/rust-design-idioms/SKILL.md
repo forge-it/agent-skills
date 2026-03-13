@@ -1,10 +1,10 @@
 ---
 name: rust-design-idioms
-description: Apply Rust-specific design idioms to leverage the type system for safer, more expressive code.
+description: Rust-specific design idioms for encoding invariants in the type system and structuring errors. Use when modeling domain types or designing error handling in Rust code.
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.2"
+  version: "0.0.3"
 ---
 
 # Design Idioms Skill

@@ -1,10 +1,10 @@
 ---
 name: general-cli-design
-description: Design human-friendly, robust, and composable command-line interfaces.
+description: Guidelines for designing command-line interfaces that are human-friendly, composable, and robust. Use when building or modifying a CLI tool, adding subcommands or flags, or implementing help text and error messages.
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.1"
+  version: "0.0.2"
 ---
 
 # CLI Design Skill

@@ -1,10 +1,10 @@
 ---
 name: python-code-style
-description: Write clean, maintainable, and readable Python code with type hints and consistent style.
+description: Defines code style conventions for Python. Use it when writing or reviewing Python code.
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.5"
+  version: "0.0.6"
 ---
 
 # Python Code Style Skill

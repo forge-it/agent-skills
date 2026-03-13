@@ -1,10 +1,10 @@
 ---
 name: rust-code-style
-description: Write clean, maintainable, and readable Rust code with consistent style and error handling.
+description: Coding conventions and style rules for Rust. Apply when writing or reviewing any Rust code.
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.1"
+  version: "0.0.2"
 ---
 
 # Rust Code Style Skill

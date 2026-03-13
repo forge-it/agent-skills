@@ -1,10 +1,10 @@
 ---
 name: general-logging
-description: Implement effective logging using wide events (canonical log lines) for debugging and analytics.
+description: Defines how to structure logs in any application. Use it when adding or updating logging code.
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.1"
+  version: "0.0.2"
 ---
 
 # Logging Best Practices Skill
