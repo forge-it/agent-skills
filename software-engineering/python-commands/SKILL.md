@@ -1,10 +1,10 @@
 ---
 name: python-commands
-description: Execute Python commands correctly through virtual environments and package managers.
+description: Ensures Python commands run inside the correct virtual environment. Apply whenever executing Python scripts or modules from the terminal in a project.
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.1"
+  version: "0.0.2"
 ---
 
 # Python Command Execution

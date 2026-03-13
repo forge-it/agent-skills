@@ -1,10 +1,10 @@
 ---
 name: rust-testing
-description: Write effective Rust tests with clarity and maintainability for hexagonal architecture applications.
+description: Guidelines for writing effective Rust tests. Use when writing or modifying Rust unit, integration, or API tests.
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.5"
+  version: "0.0.6"
 ---
 
 # Rust Testing Skill

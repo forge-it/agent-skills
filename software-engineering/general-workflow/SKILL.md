@@ -1,10 +1,10 @@
 ---
 name: general-workflow
-description: Consultation-first workflow guidelines for AI-assisted software development.
+description: Defines how to collaborate on software tasks. Use it on every request that involves writing, changing, or debugging code.
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.4"
+  version: "0.0.5"
 ---
 
 # General Workflow Skill

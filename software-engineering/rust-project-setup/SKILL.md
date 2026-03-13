@@ -1,10 +1,10 @@
 ---
 name: rust-project-setup
-description: Set up Rust projects with pinned toolchain versions and consistent build configurations.
+description: Guidelines for bootstrapping a Rust project with consistent toolchain pinning and build automation. Use when starting a new Rust project or adding a task runner.
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.1"
+  version: "0.0.2"
 ---
 
 # Rust Project Setup

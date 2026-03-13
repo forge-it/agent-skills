@@ -1,10 +1,10 @@
 ---
 name: python-testing
-description: Write effective Python tests with pytest focused on clarity and business logic.
+description: Guidelines for writing effective Python tests with pytest. Use when creating or modifying any Python test file.
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.1"
+  version: "0.0.2"
 ---
 
 # Python Testing Skill

@@ -1,10 +1,10 @@
 ---
 name: rust-hexagonal-architecture
-description: Implement hexagonal architecture (ports and adapters) in Rust for testable and maintainable applications.
+description: Guidelines for structuring Rust business applications around a central domain with ports and adapters. Use when building web services or APIs with external integrations like databases or third-party APIs. Not applicable for systems code, drivers, or simple CLI tools.
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.1"
+  version: "0.0.2"
 ---
 
 # Hexagonal Architecture Skill

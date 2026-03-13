@@ -1,10 +1,10 @@
 ---
 name: git-workflow
-description: Git branch naming, commit message quality, and safe push practices.
+description: Guidelines for working with Git version control. Use whenever creating branches, writing commit messages, or pushing changes.
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.3"
+  version: "0.0.4"
 ---
 
 # Git Workflow Skill
