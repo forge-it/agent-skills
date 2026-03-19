@@ -4,7 +4,7 @@ description: Defines code style conventions for Python. Use it when writing or r
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.6"
+  version: "0.0.9"
 ---
 
 # Python Code Style Skill
@@ -149,6 +149,49 @@ def make_request(endpoint: str):
     ...
 ```
 
+Any literal value (string, number, etc.) that appears in more than one place across the codebase **must** be extracted into a named constant. Define the constant once in the module that owns the concept, then import it everywhere else. Never duplicate the raw literal.
+
+```python
+# Bad - same string defined independently in two modules
+# startup/node_models.py
+NODE_MODEL_CATALOG = (
+    NodeModel(name="s1.medium", ...),
+)
+
+# services/datacenter_settings.py
+DEFAULT_NODE_MODEL_NAME = "s1.medium"   # duplicate!
+
+# Bad - same tuple of values repeated in test infra
+# conftest.py
+AVAILABLE_NAMES = ("s1.small", "s1.medium", "s1.large")   # duplicate!
+
+# Good - single definition in the authoritative module
+# startup/node_models.py
+NODE_MODEL_NAME_SMALL = "s1.small"
+NODE_MODEL_NAME_MEDIUM = "s1.medium"
+NODE_MODEL_NAME_LARGE = "s1.large"
+
+NODE_MODEL_CATALOG = (
+    NodeModel(name=NODE_MODEL_NAME_SMALL, ...),
+    NodeModel(name=NODE_MODEL_NAME_MEDIUM, ...),
+    NodeModel(name=NODE_MODEL_NAME_LARGE, ...),
+)
+
+# services/datacenter_settings.py  — imports, never re-defines
+from vulcan.infrastructure.startup.node_models import NODE_MODEL_NAME_MEDIUM
+
+DEFAULT_NODE_MODEL_NAME = NODE_MODEL_NAME_MEDIUM
+
+# conftest.py  — imports, never re-defines
+from vulcan.infrastructure.startup.node_models import (
+    NODE_MODEL_NAME_LARGE,
+    NODE_MODEL_NAME_MEDIUM,
+    NODE_MODEL_NAME_SMALL,
+)
+
+AVAILABLE_NAMES = (NODE_MODEL_NAME_SMALL, NODE_MODEL_NAME_MEDIUM, NODE_MODEL_NAME_LARGE)
+```
+
 ### 7. Absolute Imports (HIGH)
 
 Never use relative imports. Always use absolute imports. Never use function-level imports.
@@ -261,7 +304,65 @@ def build_payment(raw: dict) -> ScrapedPayment:
     )
 ```
 
-### 12. Pathlib over os.path (HIGH)
+### 12. Composition over Inheritance (CRITICAL)
+
+Prefer composing objects by holding explicit dependencies rather than inheriting from a base class. Inheritance couples classes tightly and hides where behaviour comes from. Shared logic should live in module-level functions (when stateless) or be injected as a dependency.
+
+Only use inheritance for true is-a relationships (e.g. a framework base class like `pydantic.BaseModel`). Never create a base class solely to share helper methods or common instance attributes between sibling classes.
+
+When shared helpers depend on a repository or other collaborator, extract them as module-level functions that accept the collaborator as an explicit parameter.
+
+```python
+# Bad - base class exists only to share helpers between siblings
+class BaseDatacenterSettingsService:
+    def __init__(self):
+        self._node_model_repository = NodeModelRepository()
+
+    def _resolve_node_model(self, name: str | None = None) -> NodeModel:
+        model_name = name or DEFAULT_NODE_MODEL_NAME
+        return self._node_model_repository.find_by_name(model_name)
+
+class DatacenterSettingsCreationService(BaseDatacenterSettingsService):
+    def __init__(self):
+        super().__init__()
+        self._repository = DatacenterSettingsRepository()
+
+class DatacenterSettingsEditingService(BaseDatacenterSettingsService):
+    def __init__(self):
+        super().__init__()
+        self._repository = DatacenterSettingsRepository()
+
+# Good - shared logic is a module-level function; each service owns its dependencies
+def _resolve_node_model(node_model_repository: NodeModelRepository, name: str | None = None) -> NodeModel:
+    model_name = name or DEFAULT_NODE_MODEL_NAME
+    return node_model_repository.find_by_name(model_name)
+
+class DatacenterSettingsCreationService:
+    def __init__(self):
+        self._repository = DatacenterSettingsRepository()
+        self._node_model_repository = NodeModelRepository()
+
+class DatacenterSettingsEditingService:
+    def __init__(self):
+        self._repository = DatacenterSettingsRepository()
+        self._node_model_repository = NodeModelRepository()
+```
+
+### 13. Assert Statements Must Include Error Messages (CRITICAL)
+
+Every `assert` statement must include a descriptive error message. A bare `assert` without a message produces an unhelpful `AssertionError` with no context when it triggers.
+
+```python
+# Bad - no message, useless in production logs
+assert node_model is not None
+assert len(items) > 0
+
+# Good - descriptive message explains what went wrong
+assert node_model is not None, f"Node model '{model_name}' not found"
+assert len(items) > 0, "Expected at least one item in the collection"
+```
+
+### 14. Pathlib over os.path (HIGH)
 
 Always prefer `pathlib.Path` over `os.path`, `os.makedirs`, `os.remove`, `os.rename`, `os.rmdir`, and manual `open()` for file read/write. Pathlib provides a cleaner, object-oriented API for filesystem operations.
 
@@ -300,7 +401,10 @@ config_path.unlink(missing_ok=True)
 9. **Removing logical blank lines**: Deleting blank lines that separate code sections
 10. **Single-use one-liner helpers**: Creating helper functions used only once
 11. **os.path over pathlib**: Using `os.path`, `os.makedirs`, `os.remove` instead of `pathlib.Path`
-12. **Raw dicts with more than 3 fields**: Passing or returning `dict` with more than 3 keys instead of a typed dataclass DTO
+12. **Bare asserts**: Using `assert` without an error message — always include a descriptive string
+13. **Raw dicts with more than 3 fields**: Passing or returning `dict` with more than 3 keys instead of a typed dataclass DTO
+14. **Duplicate literal values**: Defining the same string, number, or tuple literal in more than one place instead of extracting it into a named constant in the authoritative module and importing it everywhere
+15. **Inheritance for shared helpers**: Creating a base class solely to share helper methods or common attributes between sibling classes — use module-level functions and direct dependency ownership instead
 
 ## Guidelines
 
