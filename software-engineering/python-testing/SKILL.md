@@ -4,7 +4,7 @@ description: Guidelines for writing effective Python tests with pytest. Use when
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.2"
+  version: "0.0.3"
 ---
 
 # Python Testing Skill
@@ -119,6 +119,65 @@ tests/
 └── utils/
     └── test_helpers.py
 ```
+
+### 7. The Conftest Layering Pattern (HIGH)
+
+Pytest's `conftest.py` hierarchy is the native mechanism for scoping test infrastructure. Each test category (`unit/`, `integration/`, `api/`) gets its own `conftest.py` with fixtures appropriate to that level. Infrastructure composes through fixture dependencies — not through imports from support modules.
+
+Each `conftest.py` layer has a distinct responsibility:
+
+| Layer | Concern | Typical fixtures |
+|---|---|---|
+| `tests/conftest.py` | Environment | DB engine, testcontainers, event loop (`autouse`, session-scoped) |
+| `tests/unit/conftest.py` | Isolation | Fakes, in-memory adapters, patched dependencies |
+| `tests/integration/conftest.py` | State | DB session, transaction rollback (`autouse`), seeding helpers |
+| `tests/api/conftest.py` | HTTP | Test client, auth headers, request builders |
+
+Data shapes use `factory_boy` — declare factory classes in a `factories.py` at the appropriate level:
+
+```
+tests/
+├── conftest.py              # Session-scoped: engine, testcontainers (autouse)
+├── factories.py             # factory_boy declarations shared across all tests
+├── unit/
+│   ├── conftest.py          # Fakes, in-memory adapters
+│   └── services/
+│       └── test_user_service.py
+├── integration/
+│   ├── conftest.py          # DB session, transaction rollback (autouse), seeders
+│   ├── factories.py         # Integration-specific factory_boy classes
+│   └── infrastructure/
+│       └── test_user_repository.py
+└── api/
+    ├── conftest.py          # Test client, auth headers
+    ├── helpers.py           # Response assertion utilities
+    └── routes/
+        └── test_users.py
+```
+
+Seeders and builders are fixtures in `conftest.py` that compose other fixtures — not standalone modules:
+
+```python
+# tests/integration/conftest.py
+
+@pytest.fixture(autouse=True)
+def db_session(engine):
+    connection = engine.connect()
+    transaction = connection.begin()
+    session = Session(bind=connection)
+    yield session
+    transaction.rollback()
+    connection.close()
+
+@pytest.fixture
+def seeded_user(db_session, user_factory):
+    user = user_factory.create()
+    db_session.add(user)
+    db_session.flush()
+    return user
+```
+
+Only things that are **not** fixtures belong in standalone modules: assertion helpers (`helpers.py`), shared constants (`constants.py`), and factory declarations (`factories.py`).
 
 ## Anti-Patterns to Avoid
 
