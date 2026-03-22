@@ -226,18 +226,3 @@ const role = inject('userRole')      // type is unknown
 **When to use:** Data needed 3+ levels deep where intermediate components don't use it. For direct parent-child, use props. For global state with read/write from anywhere, use Pinia stores.
 
 ---
-
-<!-- 
-## Pattern N: [Name]
-**Why:**
-**Rule:**
-```vue
-✅ example
-```
-```vue
-❌ counterexample
-```
-**When to skip/use:**
-
-Add new patterns here as discovered during Days 3–10.
--->
