@@ -333,7 +333,7 @@ let schedule = Schedule::new(ScheduleConfig {
 
 ### Naming
 - Use descriptive, intent-revealing names
-- Use searchable names (no single letters except in trivial closures)
+- Use searchable names (no single letters)
 - Use `SCREAMING_SNAKE_CASE` for constants
 - Use descriptive names in ALL closures and iterators
 
