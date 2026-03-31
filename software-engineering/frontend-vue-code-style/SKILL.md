@@ -5,29 +5,6 @@ vibe: Keeps Vue codebases predictable, traceable, and free of spaghetti.
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.2"
----
-
-# Vue Code Style — Patterns & Conventions
-
-A living collection of patterns that every component, composable, and store in this codebase must follow. When in doubt, check here first.
-
----
-
-## Pattern 1: Props Down, Emits Up (One-Way Data Flow)
-
-**Why:** Without it, child components mutate parent state directly, nobody can trace where a change came from, and debugging becomes a nightmare.
-
-**Rule:** A child component never modifies data it receives. It declares what it accepts via `defineProps<T>()`, and reports user actions via `defineEmits<T>()`. The parent owns the state and decides what to do.
-```vue
-
----
-name: Vue Code Style
-description: Patterns and conventions for writing clean, maintainable Vue 3 applications. Use when writing or reviewing Vue components, composables, stores, or project structure — enforces consistent data flow, component design, and type safety across the codebase.
-vibe: Keeps Vue codebases predictable, traceable, and free of spaghetti.
-license: UNLICENSED
-metadata:
-  author: Cristian
   version: "0.1.0"
 ---
 
@@ -147,9 +124,9 @@ defineEmits<{
       <button @click="$emit('retry')">Retry</button>
     </div>
     <table v-else>
-      <tr v-for="b in backups" :key="b.id">
-        <td>{{ b.name }}</td>
-        <td><button @click="$emit('delete', b.id)">Delete</button></td>
+      <tr v-for="backup in backups" :key="backup.id">
+        <td>{{ backup.name }}</td>
+        <td><button @click="$emit('delete', backup.id)">Delete</button></td>
       </tr>
     </table>
   </div>
@@ -256,11 +233,11 @@ export function useBackupSearch(backups: Ref<Backup[]>) {
   const showArchived = ref(false)
 
   const filteredBackups = computed(() =>
-    backups.value.filter(b => {
-      const matchesSearch = b.name
+    backups.value.filter(backup => {
+      const matchesSearch = backup.name
         .toLowerCase()
         .includes(searchQuery.value.toLowerCase())
-      const matchesStatus = showArchived.value || b.status !== 'archived'
+      const matchesStatus = showArchived.value || backup.status !== 'archived'
       return matchesSearch && matchesStatus
     })
   )
@@ -342,7 +319,7 @@ export function useNotifications() {
   }
 
   function dismiss(id: string): void {
-    notifications.value = notifications.value.filter(n => n.id !== id)
+    notifications.value = notifications.value.filter(notification => notification.id !== id)
   }
 
   return {
@@ -363,3 +340,203 @@ export function useItems() {
 ```
 
 **When to use shared:** Cross-component state that isn't global enough for a Pinia store — notifications, toasts, a sidebar collapse toggle, a "currently editing" flag. **When to use per-component:** Any logic where each component instance needs its own independent copy — form state, local search queries, component-scoped timers.
+
+---
+
+## Pattern 6: Descriptive Naming (CRITICAL)
+
+**Why:** Single-letter variables and abbreviations force readers to mentally decode what a name represents. They destroy searchability, make code reviews harder, and turn simple debugging into a guessing game.
+
+**Rule:** Never use single-letter variable names or abbreviations. Every variable, parameter, loop variable, and callback parameter must be a descriptive, intent-revealing name. The collection variable and the loop/callback variable must be consistent — the collection is the plural form, the loop variable is the singular.
+
+```vue
+<!-- ✅ CORRECT — descriptive, searchable, consistent -->
+<template>
+  <tr v-for="backup in backups" :key="backup.id">
+    <td>{{ backup.name }}</td>
+    <td>{{ backup.status }}</td>
+  </tr>
+</template>
+```
+```vue
+<!-- ❌ WRONG — single-letter loop variable -->
+<template>
+  <tr v-for="b in backups" :key="b.id">
+    <td>{{ b.name }}</td>
+  </tr>
+</template>
+```
+
+```typescript
+// ✅ CORRECT — callback parameters are descriptive
+backups.value.filter(backup => backup.status !== 'archived')
+notifications.value.filter(notification => notification.id !== id)
+users.map(user => user.email)
+
+// ❌ WRONG — single-letter or abbreviated callback parameters
+backups.value.filter(b => b.status !== 'archived')
+notifications.value.filter(n => n.id !== id)
+users.map(u => u.email)
+```
+
+```typescript
+// ✅ CORRECT — descriptive variable names
+const searchQuery = ref('')
+const selectedBackupId = ref<string | null>(null)
+const isLoading = ref(false)
+
+// ❌ WRONG — abbreviated or vague names
+const sq = ref('')
+const selId = ref<string | null>(null)
+const loading = ref(false)  // "loading" is ambiguous — loading what?
+```
+
+**Rationale:** This rule applies everywhere: `v-for` loops, `.map()`, `.filter()`, `.find()`, `.reduce()`, `.forEach()`, computed properties, and any other context where a variable is introduced. No exceptions.
+
+---
+
+## Pattern 7: No Duplicate Literals — Extract Constants (CRITICAL)
+
+**Why:** Hardcoded string or number literals scattered across multiple files are invisible coupling. When the value changes, you have to find every copy — miss one and you have a silent bug. Constants give the value a name, a single source of truth, and make the intent searchable.
+
+**Rule:** Any literal value (string, number, etc.) that appears in more than one place across the codebase **must** be extracted into a named constant. Define the constant once in the module that owns the concept, then import it everywhere else. Never duplicate the raw literal.
+
+```typescript
+// ✅ CORRECT — single source of truth, imported everywhere
+// constants/backups.ts
+export const BACKUP_STATUS_ACTIVE = 'active' as const
+export const BACKUP_STATUS_FAILED = 'failed' as const
+export const BACKUP_STATUS_ARCHIVED = 'archived' as const
+
+export const MAX_BACKUP_RETENTION_DAYS = 90
+
+// composables/useBackups.ts
+import { BACKUP_STATUS_ARCHIVED } from '@/constants/backups'
+
+const filteredBackups = computed(() =>
+  backups.value.filter(backup => backup.status !== BACKUP_STATUS_ARCHIVED)
+)
+```
+
+```typescript
+// ❌ WRONG — same string hardcoded in multiple places
+// composables/useBackups.ts
+backups.value.filter(backup => backup.status !== 'archived')
+
+// composables/useBackupSearch.ts
+const matchesStatus = showArchived.value || backup.status !== 'archived'  // duplicate!
+
+// components/BackupBadge.vue
+const badgeClass = props.status === 'archived' ? 'bg-gray-400' : 'bg-green-500'  // duplicate!
+```
+
+```typescript
+// ❌ WRONG — same number used in multiple places without a name
+setTimeout(poll, 30000)        // what does 30000 mean?
+setTimeout(healthCheck, 30000) // is it intentionally the same?
+
+// ✅ CORRECT — named constant, intent is clear
+const POLLING_INTERVAL_MS = 30_000
+setTimeout(poll, POLLING_INTERVAL_MS)
+setTimeout(healthCheck, POLLING_INTERVAL_MS)
+```
+
+Here's Pattern 6 in the same format:
+
+---
+
+## Pattern 8: Route Organization — Named Routes, Lazy Loading, Typed Meta, Reactive Params
+
+**Why:** Hardcoded paths like `router.push('/backups/bk-001')` break silently when you rename routes. Eagerly imported route components bloat the initial bundle. Untyped `route.meta` gives you `unknown` everywhere. Destructured `route.params` loses reactivity and causes stale data.
+
+**Rule:** Always navigate by route name, never by path string. Lazy-load every route component with dynamic `import()`. Type `RouteMeta` globally so guards and components get type safety. Read route params through `computed()` to stay reactive — never destructure `route.params` directly.
+
+```typescript
+// ✅ CORRECT — named routes, lazy-loaded, typed meta
+// src/app/router.ts
+import { createRouter, createWebHistory } from 'vue-router'
+
+const router = createRouter({
+  history: createWebHistory(import.meta.env.BASE_URL),
+  routes: [
+    {
+      path: '/',
+      component: () => import('@/app/AppLayout.vue'),
+      meta: { requiresAuth: true },
+      children: [
+        {
+          path: 'backups',
+          name: 'backups',
+          component: () => import('@/features/backups/BackupListPage.vue'),
+          meta: { title: 'Backups' },
+        },
+        {
+          path: 'backups/:id',
+          name: 'backup-detail',
+          component: () => import('@/features/backups/BackupDetailPage.vue'),
+          meta: { title: 'Backup Details' },
+        },
+      ],
+    },
+    {
+      path: '/:pathMatch(.*)*',
+      name: 'not-found',
+      component: () => import('@/app/NotFoundPage.vue'),
+    },
+  ],
+})
+```
+
+```typescript
+// ✅ CORRECT — type RouteMeta globally
+// src/app/router.d.ts
+import 'vue-router'
+
+declare module 'vue-router' {
+  interface RouteMeta {
+    requiresAuth?: boolean
+    title?: string
+    requiredRole?: 'admin' | 'viewer' | 'editor'
+  }
+}
+```
+
+```typescript
+// ✅ CORRECT — navigate by name, read params reactively
+import { computed } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+
+const router = useRouter()
+const route = useRoute()
+
+// Navigate by name — rename the path later without breaking this
+router.push({ name: 'backup-detail', params: { id: 'bk-001' } })
+
+// Reactive param — updates when URL changes
+const backupId = computed(() => route.params.id as string)
+```
+
+```typescript
+// ❌ WRONG — hardcoded path, breaks silently if path changes
+router.push('/backups/bk-001')
+router.push(`/backups/${id}`)
+```
+
+```typescript
+// ❌ WRONG — eagerly imported, included in main bundle even if never visited
+import SettingsPage from '@/features/settings/SettingsPage.vue'
+
+{
+  path: 'settings',
+  component: SettingsPage,  // loaded on startup, wastes bandwidth
+}
+```
+
+```typescript
+// ❌ WRONG — destructured params, loses reactivity
+const { id } = route.params  // plain string snapshot, goes stale on navigation
+
+// ❌ WRONG — untyped meta, guard has no type safety
+if (to.meta.requiresAuth) {  // 'unknown', no autocomplete, no compile-time check
+}
+```

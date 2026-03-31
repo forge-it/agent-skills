@@ -25,7 +25,7 @@ Apply these guidelines when:
 
 ### 1. Descriptive Naming (CRITICAL)
 
-Use descriptive, intent-revealing names. Good names show intent and are searchable. Never use single-letter variable or constant names except for closures with obvious context.
+Use descriptive, intent-revealing names. Good names show intent and are searchable. Never use single-letter variable or constant names, including in closures and iterators.
 
 ```rust
 // Bad
@@ -152,6 +152,26 @@ const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 pub fn make_request(endpoint: &str) -> Result<Response, Error> {
     // ...
 }
+```
+
+Any literal value (string, number, etc.) that appears in more than one place across the codebase **must** be extracted into a named constant. Define the constant once in the module that owns the concept, then import it everywhere else. Never duplicate the raw literal.
+
+```rust
+// Bad - same string defined independently in two modules
+// handlers/backup.rs
+const BACKUP_STATUS_ACTIVE: &str = "active";
+
+// services/scheduler.rs
+const STATUS_ACTIVE: &str = "active";  // duplicate!
+
+// Good - single definition in the authoritative module
+// domain/backup.rs
+pub const BACKUP_STATUS_ACTIVE: &str = "active";
+pub const BACKUP_STATUS_FAILED: &str = "failed";
+pub const BACKUP_STATUS_ARCHIVED: &str = "archived";
+
+// handlers/backup.rs
+use crate::domain::backup::BACKUP_STATUS_ACTIVE;
 ```
 
 ### 7. Modern Module Convention (HIGH)
@@ -321,6 +341,7 @@ let schedule = Schedule::new(ScheduleConfig {
 6. **Over-architecting**: Using hexagonal/enterprise patterns for systems code
 7. **Excessive comments**: Adding comments for self-explanatory code
 8. **Struct field shorthand**: Using `field` instead of `field: field` in struct initialization
+9. **Duplicate literal values**: Defining the same string, number, or other literal in more than one place instead of extracting it into a named constant in the authoritative module and importing it everywhere
 
 ## Guidelines
 
@@ -342,6 +363,7 @@ let schedule = Schedule::new(ScheduleConfig {
 - Use modern module convention (no `mod.rs`)
 - Group imports: std, external, local
 - Place constants at module top after imports
+- Extract any literal that appears more than once into a named constant
 
 ### Error Handling
 - Use `Result` and `Option` appropriately
