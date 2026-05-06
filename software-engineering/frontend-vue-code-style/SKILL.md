@@ -5,7 +5,7 @@ vibe: Keeps Vue codebases predictable, traceable, and free of spaghetti.
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.1.0"
+  version: "0.0.2"
 ---
 
 # Vue Code Style — Patterns & Conventions
@@ -395,7 +395,213 @@ const loading = ref(false)  // "loading" is ambiguous — loading what?
 
 ---
 
-## Pattern 7: No Duplicate Literals — Extract Constants (CRITICAL)
+## Pattern 7: Store Scope and Boundaries
+
+**Why:** Pinia stores are easy to overuse. Without strict boundaries, teams end up with god-stores that mix auth, entities, UI flags, filters, and view-specific logic in one reactive blob. That destroys traceability, creates accidental coupling between features, and makes it unclear whether state belongs in props, a composable, or a store.
+
+**Rule:** Use one store per feature domain. Reach for a store only when state must be shared across unrelated parts of the app, survive route navigation, or benefit from Pinia devtools inspection. Stores own durable state, getters, and simple mutations or API actions. Composables own view-specific derived logic layered on top of store state. When destructuring a store, always use `storeToRefs()` for state and getters, and destructure actions directly from the store instance. Never build a god-store.
+
+```typescript
+// ✅ CORRECT — one store per domain, setup-store syntax, simple state + actions
+// src/features/backups/stores/useBackupStore.ts
+import { computed, ref } from 'vue'
+import { defineStore } from 'pinia'
+import type { Backup } from '../types'
+
+export const useBackupStore = defineStore('backups', () => {
+  const backups = ref<Backup[]>([])
+  const isLoading = ref(false)
+  const error = ref<string | null>(null)
+
+  const activeBackups = computed(() =>
+    backups.value.filter(backup => backup.status === 'active')
+  )
+
+  async function fetchBackups(): Promise<void> {
+    isLoading.value = true
+    error.value = null
+
+    try {
+      const response = await fetch('/api/backups')
+      if (!response.ok) {
+        throw new Error('Failed to fetch backups')
+      }
+
+      backups.value = await response.json()
+    } catch (caughtError) {
+      error.value = caughtError instanceof Error ? caughtError.message : 'Unknown error'
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  function removeBackup(id: string): void {
+    backups.value = backups.value.filter(backup => backup.id !== id)
+  }
+
+  return {
+    backups,
+    isLoading,
+    error,
+    activeBackups,
+    fetchBackups,
+    removeBackup,
+  }
+})
+```
+
+```typescript
+// ✅ CORRECT — composable layers view logic on top of store state
+// src/features/backups/composables/useBackupSearch.ts
+import { computed, ref } from 'vue'
+import { storeToRefs } from 'pinia'
+import { useBackupStore } from '../stores/useBackupStore'
+
+export function useBackupSearch() {
+  const backupStore = useBackupStore()
+  const { backups } = storeToRefs(backupStore)
+
+  const searchQuery = ref('')
+  const showArchived = ref(false)
+
+  const filteredBackups = computed(() =>
+    backups.value.filter(backup => {
+      const matchesSearch = backup.name
+        .toLowerCase()
+        .includes(searchQuery.value.toLowerCase())
+      const matchesStatus = showArchived.value || backup.status !== 'archived'
+      return matchesSearch && matchesStatus
+    })
+  )
+
+  return {
+    searchQuery,
+    showArchived,
+    filteredBackups,
+  }
+}
+```
+
+```typescript
+// ✅ CORRECT — state/getters via storeToRefs, actions directly
+import { storeToRefs } from 'pinia'
+import { useAuthStore } from '@/features/auth/stores/useAuthStore'
+
+const authStore = useAuthStore()
+const { isAuthenticated, userName } = storeToRefs(authStore)
+const { login, logout } = authStore
+```
+
+```typescript
+// ❌ WRONG — god-store mixing unrelated concerns
+export const useAppStore = defineStore('app', () => {
+  const user = ref<User | null>(null)
+  const backups = ref<Backup[]>([])
+  const servers = ref<Server[]>([])
+  const sidebarCollapsed = ref(false)
+  const searchQuery = ref('')
+
+  return { user, backups, servers, sidebarCollapsed, searchQuery }
+})
+```
+
+```typescript
+// ❌ WRONG — raw destructuring loses reactivity for state/getters
+const { backups, isLoading, activeBackups } = useBackupStore()
+```
+
+**Decision rule:** If one component owns it, keep it local. If a parent can pass it down, use props. If each caller needs its own reusable state, use a composable with function-level state. If a few components in one feature share it, a composable with module-level state may be enough. Use Pinia only when the state is truly cross-feature or must survive navigation.
+
+---
+
+## Pattern 8: Persist Deliberately
+
+**Why:** Persisting everything feels convenient until stale loading flags, old error messages, transient filters, or selection state survive a reload and confuse the user. Persistence is not a dumping ground for the whole store. It is an explicit durability decision.
+
+**Rule:** Persist only state that must survive a page reload: auth tokens, remembered user preferences, UI settings, or similarly durable data. Never persist loading flags, error messages, transient search queries, temporary selections, or anything that should reset naturally when the page is refreshed. Prefer `pick` to whitelist persisted fields explicitly instead of persisting the whole store by default.
+
+```typescript
+// ✅ CORRECT — persist only durable auth fields
+import { computed, ref } from 'vue'
+import { defineStore } from 'pinia'
+
+export const useAuthStore = defineStore('auth', () => {
+  const user = ref<User | null>(null)
+  const token = ref<string | null>(null)
+  const rememberMe = ref(false)
+  const isLoading = ref(false)
+  const error = ref<string | null>(null)
+
+  const isAuthenticated = computed(() => token.value !== null)
+
+  function logout(): void {
+    user.value = null
+    token.value = null
+    error.value = null
+  }
+
+  return {
+    user,
+    token,
+    rememberMe,
+    isLoading,
+    error,
+    isAuthenticated,
+    logout,
+  }
+}, {
+  persist: {
+    key: 'auth',
+    pick: ['token', 'rememberMe'],
+  },
+})
+```
+
+```typescript
+// ✅ CORRECT — preferences are durable, so persisting the whole store is reasonable
+export const usePreferencesStore = defineStore('preferences', () => {
+  const sidebarCollapsed = ref(false)
+  const theme = ref<'light' | 'dark'>('light')
+  const tablePageSize = ref(20)
+
+  function setTheme(nextTheme: 'light' | 'dark'): void {
+    theme.value = nextTheme
+    document.documentElement.setAttribute('data-theme', nextTheme)
+  }
+
+  return {
+    sidebarCollapsed,
+    theme,
+    tablePageSize,
+    setTheme,
+  }
+}, {
+  persist: {
+    pick: ['sidebarCollapsed', 'theme', 'tablePageSize'],
+  },
+})
+```
+
+```typescript
+// ❌ WRONG — persists transient state that should die on refresh
+export const useBackupStore = defineStore('backups', () => {
+  const backups = ref<Backup[]>([])
+  const isLoading = ref(false)
+  const error = ref<string | null>(null)
+  const selectedIds = ref<string[]>([])
+  const searchQuery = ref('')
+
+  return { backups, isLoading, error, selectedIds, searchQuery }
+}, {
+  persist: true,
+})
+```
+
+**Practical rule:** If you cannot clearly explain why a field should still exist after a full page reload, do not persist it.
+
+---
+
+## Pattern 9: No Duplicate Literals — Extract Constants (CRITICAL)
 
 **Why:** Hardcoded string or number literals scattered across multiple files are invisible coupling. When the value changes, you have to find every copy — miss one and you have a silent bug. Constants give the value a name, a single source of truth, and make the intent searchable.
 
@@ -441,11 +647,7 @@ setTimeout(poll, POLLING_INTERVAL_MS)
 setTimeout(healthCheck, POLLING_INTERVAL_MS)
 ```
 
-Here's Pattern 6 in the same format:
-
----
-
-## Pattern 8: Route Organization — Named Routes, Lazy Loading, Typed Meta, Reactive Params
+## Pattern 10: Route Organization — Named Routes, Lazy Loading, Typed Meta, Reactive Params
 
 **Why:** Hardcoded paths like `router.push('/backups/bk-001')` break silently when you rename routes. Eagerly imported route components bloat the initial bundle. Untyped `route.meta` gives you `unknown` everywhere. Destructured `route.params` loses reactivity and causes stale data.
 
