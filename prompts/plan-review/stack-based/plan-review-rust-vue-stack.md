@@ -1,4 +1,4 @@
-Your task is to check this plan <X> against the current codebase and if there are some broken links, issues, or weak architecture decisions which can be made better please report them to <Y>.
+Your task is to review plan <X> against the current codebase and report findings to <Y>.
 
 Rules:
 - check hexagonal architecture issues with the plan
