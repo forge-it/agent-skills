@@ -4,7 +4,7 @@ description: Guidelines for writing effective Python tests with pytest. Use when
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.3"
+  version: "0.0.5"
 ---
 
 # Python Testing Skill
@@ -179,15 +179,78 @@ def seeded_user(db_session, user_factory):
 
 Only things that are **not** fixtures belong in standalone modules: assertion helpers (`helpers.py`), shared constants (`constants.py`), and factory declarations (`factories.py`).
 
+### 8. Test Modules Contain Only Tests (CRITICAL)
+
+A test module (`test_*.py`) must **not** define module-level helper functions (including private helpers named `_helper`, `_insert_*`, `_build_*`, `_count_*`, `_get_*`, etc.). The only callable definitions in that file should be **tests**: functions whose names start with `test_`, and optional **test classes** grouping those methods.
+
+Put shared logic elsewhere:
+
+| Need | Where it belongs |
+|---|---|
+| Setup/teardown or reusable seeded state | **Fixtures** in the appropriate layer `conftest.py` |
+| DB queries, HTTP assertions, builders used across files | **`helpers.py`** next to that test category (e.g. `tests/integration/helpers.py`) |
+| `factory_boy` models | **`factories.py`** at that level |
+| Shared literals used in many tests | **`constants.py`** at that level |
+| Verbose entity/DTO setup obscuring the scenario | **Factory functions** in `helpers.py` / **`factories.py`**, or **`conftest.py` fixtures** — keep `test_*` bodies minimal (see [Minimal test bodies](#9-minimal-test-bodies-high)) |
+
+Inline small setup inside a **single** test is allowed when it is not reused—express it in the test body, not as a separate named function in the module.
+
+```python
+# Bad - helper function defined in test module (forbidden)
+def _insert_jobs(session_maker, entities):
+    ...
+
+def test_cleanup_removes_old_jobs(mariadb_sync_session_maker):
+    _insert_jobs(mariadb_sync_session_maker, [...])
+
+# Good - fixture in conftest.py or helper in tests/integration/helpers.py
+# test_job_retention_cleanup.py contains only Test* classes and test_* functions
+```
+
+### 9. Minimal test bodies (HIGH)
+
+The body of each `test_*` function should stay **short and readable**: arrange → act → assert should be obvious at a glance. Do **not** paste large entity/DTO constructors, repeated dict literals, or multi-field `Model(...)` calls inline—those obscure what behaviour is under test.
+
+Extract setup data to:
+
+| Situation | Prefer |
+|---|---|
+| Same shape reused across tests | **Factory functions** in `helpers.py` or **`factories.py`** (`factory_boy` when appropriate) |
+| Shared lifecycle or DB seeding | **`conftest.py` fixtures** that yield ready-made entities or ids |
+| One-off values that clarify the scenario only | Keep in the test, but keep **only** the distinctive fields—defaults belong in a factory |
+
+```python
+# Bad - twelve lines of Job(...) before the action under test; unreadable
+def test_retention_removes_old_completed_jobs():
+    old_job = Job(id=..., type="...", status=..., retries=0, config={}, ...)
+    ...
+
+# Good - intent visible; defaults live in helpers
+def test_retention_removes_old_completed_jobs(mariadb_sync_session_maker, svc):
+    base_time = get_current_datetime()
+    cutoff_old = base_time - timedelta(days=61)
+    insert_job_entities_sync(
+        mariadb_sync_session_maker,
+        [
+            build_completed_job("job-old", cutoff_old),
+            build_completed_job("job-recent", base_time - timedelta(days=30)),
+        ],
+    )
+    svc.run_daily_retention_cleanup()
+    assert get_job_by_id_sync(mariadb_sync_session_maker, "job-old") is None
+```
+
 ## Anti-Patterns to Avoid
 
-1. **Parametrized tests**: Using `pytest.mark.parametrize` instead of explicit test functions
-2. **Class-level fixtures**: Defining fixtures inside test classes
-3. **Scattered fixtures**: Fixtures in test files instead of `conftest.py`
-4. **Testing logging**: Mocking or asserting on logger calls
-5. **Function-level imports**: Importing inside test functions
-6. **Docstrings in tests**: Adding docstrings or comments to test functions
-7. **Testing timestamps**: Asserting exact timing instead of business outcomes
+1. **Helper functions in test modules**: Defining any non-test callable at module scope in `test_*.py` (move to `conftest.py` fixtures, `helpers.py`, or `factories.py`)
+2. **Parametrized tests**: Using `pytest.mark.parametrize` instead of explicit test functions
+3. **Class-level fixtures**: Defining fixtures inside test classes
+4. **Scattered fixtures**: Fixtures in test files instead of `conftest.py`
+5. **Testing logging**: Mocking or asserting on logger calls
+6. **Function-level imports**: Importing inside test functions
+7. **Docstrings in tests**: Adding docstrings or comments to test functions
+8. **Testing timestamps**: Asserting exact timing instead of business outcomes
+9. **Bloated test bodies**: Many lines of entity/DTO/model literals or repetitive field lists inside `test_*` — use fixtures, factory functions in `helpers.py`, or `factories.py` so the test shows *what differs* for this scenario, not every default field
 
 ## Guidelines
 
@@ -205,6 +268,8 @@ Only things that are **not** fixtures belong in standalone modules: assertion he
 - One test module per class being tested
 - One test directory per module being tested
 - Define all fixtures in `conftest.py`
+- Test modules contain **only** test classes and `test_*` functions—no module-level helper functions (see [Test Modules Contain Only Tests](#8-test-modules-contain-only-tests-critical))
+- Each `test_*` body stays **minimal**: no long entity literals—use factories/fixtures (see [Minimal test bodies](#9-minimal-test-bodies-high))
 
 ### Naming
 - Pattern: `test_<action>_<outcome>_<optional_case>`
