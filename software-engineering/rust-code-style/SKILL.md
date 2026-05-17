@@ -331,6 +331,63 @@ let schedule = Schedule::new(ScheduleConfig {
 
 **Rationale:** Explicit field initialization acts as self-documentation. When reading code, you can immediately see the intent without needing to verify that a local variable has the exact same name as the struct field. It also prevents subtle bugs when renaming variables during refactoring.
 
+### 11. Fold Single-Caller Helpers Onto Their Owner (CRITICAL)
+
+If a helper function — pure or async — has **exactly one production call site** and that call site lives on a struct (a method, an `impl` block, an associated function), fold the helper in as an associated function or method on that struct. Do not leave it as a free function in the module just because it happens to be pure or because it's currently `pub` for test access.
+
+Cohesion beats free-function-purity. Readers should not have to scroll through a module hunting for "where does this helper live and who calls it?" — the answer should be "it's on the struct that uses it, because nothing else does."
+
+```rust
+// Bad — pure helper scattered at module scope with one production caller
+pub fn pod_is_workload_exec_candidate(pod: &Pod, pvc_name: &str) -> bool {
+    if !active_pod_references_pvc(pod, pvc_name) {
+        return false;
+    }
+    pod_is_running_and_ready(pod)
+}
+
+fn pod_is_running_and_ready(pod: &Pod) -> bool { /* ... */ }
+
+pub struct WorkloadReadinessGate<'a> { /* ... */ }
+
+impl<'a> WorkloadReadinessGate<'a> {
+    async fn wait_until_ready(mut self) -> Result<WaitOutcome, RestoreTargetError> {
+        // ... uses pod_is_workload_exec_candidate, the only production caller ...
+    }
+}
+
+// Good — single-caller helpers folded onto the owning struct
+pub struct WorkloadReadinessGate<'a> { /* ... */ }
+
+impl<'a> WorkloadReadinessGate<'a> {
+    pub fn pod_is_workload_exec_candidate(pod: &Pod, pvc_name: &str) -> bool {
+        if !active_pod_references_pvc(pod, pvc_name) {
+            return false;
+        }
+        Self::pod_is_running_and_ready(pod)
+    }
+
+    fn pod_is_running_and_ready(pod: &Pod) -> bool { /* ... */ }
+
+    async fn wait_until_ready(mut self) -> Result<WaitOutcome, RestoreTargetError> {
+        // ... calls Self::pod_is_workload_exec_candidate ...
+    }
+}
+```
+
+**When to apply:**
+- The helper has exactly one production caller.
+- That caller is itself a method or associated function on a struct (or *is* a struct's `impl` block).
+- Tests don't count as additional callers — they're observers, not owners.
+
+**When *not* to apply:**
+- The helper has two or more production call sites across different owners. Leave it free, or move it to a shared module if the callers cluster around one concept.
+- There is no natural owning struct (the helper is genuinely module-level dispatch).
+
+**The visibility cost is acceptable.** Folding a `pub fn` into a `pub fn` associated on a struct usually means making the struct `pub` too so integration tests can reach the method. That is fine — if the struct already has a single owning module and is consumed by a `pub` strategy / port / service, exposing it as `pub` does not widen the *conceptual* API surface; it only widens the *naming* surface. The alternative — leaving the helper free purely to avoid renaming `helper(x)` to `Owner::helper(x)` in tests — produces module files where six free `pub fn`s drift around one struct that owns all the state and all the call sites.
+
+**Rationale:** A module with one struct and six free `pub fn`s scattered around it forces the reader to reconstruct ownership manually. Folding the single-caller helpers onto the struct makes ownership read directly from the syntax. It also prevents the "stale helper" failure mode where a refactor removes the only caller and leaves the helper as dead module-scope clutter — `cargo` won't warn about an unused `pub fn`.
+
 ## Anti-Patterns to Avoid
 
 1. **Single-letter variables**: Using `x`, `i`, `p` in closures instead of descriptive names
@@ -342,6 +399,7 @@ let schedule = Schedule::new(ScheduleConfig {
 7. **Excessive comments**: Adding comments for self-explanatory code
 8. **Struct field shorthand**: Using `field` instead of `field: field` in struct initialization
 9. **Duplicate literal values**: Defining the same string, number, or other literal in more than one place instead of extracting it into a named constant in the authoritative module and importing it everywhere
+10. **Scattered single-caller helpers**: Leaving a helper function free at module scope when it has exactly one production caller that lives on a struct — fold it onto that struct as an associated function or method
 
 ## Guidelines
 
@@ -364,6 +422,7 @@ let schedule = Schedule::new(ScheduleConfig {
 - Group imports: std, external, local
 - Place constants at module top after imports
 - Extract any literal that appears more than once into a named constant
+- Fold single-caller helpers onto their owning struct as associated fns; do not leave them free at module scope
 
 ### Error Handling
 - Use `Result` and `Option` appropriately
