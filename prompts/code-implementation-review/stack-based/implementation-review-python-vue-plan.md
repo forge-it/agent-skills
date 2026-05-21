@@ -30,6 +30,7 @@ Rules:
 - Report architecture weak decisions, ambiguities, potential bugs, race conditions, or missing edge cases.
 - Report any code that could be improved, clarified, or simplified without breaking the rules above.
 - If you need to break any of these rules for practical reasons, flag it to the operator.
+- For each issue you find, add a recommended solution to the review.
 
 Skills path: /home/cristi/Projects/agent-skills/software-engineering/
 
