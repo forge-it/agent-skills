@@ -16,4 +16,9 @@ Rules:
 - Never create new migrations on pre-prod but modify initial migration in place. If you want to create a new migration you need to ask the operator.
 - Implement plan with the best of your knowledge. Do not rely on the plan to break the rules already stated or skills. Any doubt should go to the operator.
 
+Recommendations:
+- You can use separate branch forked from main if the feature is heavy
+- You can use sub agents if it makes sense
+- Commit per plan phase
+
 <X> =
