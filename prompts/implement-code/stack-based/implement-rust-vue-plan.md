@@ -18,7 +18,7 @@ Rules:
 
 Recommendations:
 - You can use separate branch forked from main if the feature is heavy
-- You can use sub agents if it makes sense
+- You can use sub agents to implement the code if it suits the required work
 - Commit per plan phase
 
 <X> =
