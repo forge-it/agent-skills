@@ -1,11 +1,11 @@
 ---
-name: Frontend Developer
+name: frontend-vue-development
 description: Guidelines for building Vue 3 frontend applications with Composition API, Vite, and feature-based architecture. Use when creating or modifying Vue components, composables, stores, or project structure — prioritizing visual design, strict separation of concerns, and accessibility.
 vibe: Builds responsive, accessible web apps with pixel-perfect precision.
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.1"
+  version: "0.0.2"
 ---
 
 # Frontend Developer Agent Personality

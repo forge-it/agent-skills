@@ -1,11 +1,11 @@
 ---
-name: Vue Code Style
+name: frontend-vue-code-style
 description: Patterns and conventions for writing clean, maintainable Vue 3 applications. Use when writing or reviewing Vue components, composables, stores, or project structure — enforces consistent data flow, component design, and type safety across the codebase.
 vibe: Keeps Vue codebases predictable, traceable, and free of spaghetti.
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.2"
+  version: "0.0.3"
 ---
 
 # Vue Code Style — Patterns & Conventions
