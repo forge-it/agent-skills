@@ -1,5 +1,5 @@
 ---
-name: rest-api-design
+name: syneto-rest-api-design
 description: Defines Syneto's REST API design conventions. Use it whenever designing, implementing, reviewing, or documenting REST API endpoints for Syneto OS services.
 license: UNLICENSED
 metadata:
