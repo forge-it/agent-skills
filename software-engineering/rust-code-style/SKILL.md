@@ -4,7 +4,7 @@ description: Coding conventions and style rules for Rust. Apply when writing or 
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.2"
+  version: "0.0.3"
 ---
 
 # Rust Code Style Skill
@@ -388,6 +388,46 @@ impl<'a> WorkloadReadinessGate<'a> {
 
 **Rationale:** A module with one struct and six free `pub fn`s scattered around it forces the reader to reconstruct ownership manually. Folding the single-caller helpers onto the struct makes ownership read directly from the syntax. It also prevents the "stale helper" failure mode where a refactor removes the only caller and leaves the helper as dead module-scope clutter — `cargo` won't warn about an unused `pub fn`.
 
+### 12. Collapse Error-Type Twins With a Neutral Error (CRITICAL)
+
+When two call paths need the same logic but return different error types, do **not** copy the whole function once per error type. These "twins" — identical bodies differing only in which error variant they build — are the duplication that quietly explodes a file: every shared check, loader, and helper sprouts a `_for_x` / `_for_y` copy, because copying "just" satisfies the type checker.
+
+Write the logic **once**, returning a neutral error scoped to the operation, and provide `From<NeutralError>` for each caller's error type. `?` (or `.into()`) translates at the boundary, so the only real difference — the variant mapping — lives in one small `From` impl instead of N duplicated bodies.
+
+```rust
+// Bad — one full copy per caller error type
+async fn check_quota_for_trigger(&self, s: &Schedule) -> Result<(), TriggerError> {
+    /* 15 lines */ Err(TriggerError::QuotaExceeded(s.id().clone()))
+}
+async fn check_quota_for_execute(&self, s: &Schedule) -> Result<(), ExecuteError> {
+    /* same 15 lines */ Err(ExecuteError::QuotaExceeded(s.id().clone()))
+}
+
+// Good — logic once; divergence collapses into From impls
+enum AdmissionError { QuotaExceeded(ScheduleId), Database(String) }
+
+async fn check_quota(&self, s: &Schedule) -> Result<(), AdmissionError> {
+    /* 15 lines, once */ Err(AdmissionError::QuotaExceeded(s.id().clone()))
+}
+
+impl From<AdmissionError> for TriggerError { /* 1:1 variant map */ }
+impl From<AdmissionError> for ExecuteError { /* 1:1 variant map */ }
+
+// callers — same call, each picks its own From:
+self.check_quota(s).await?;                 // ? when propagating directly
+
+if let Err(error) = self.check_quota(s).await {
+    self.release_lock(s.id()).await;        // .into() when you must clean up first
+    return Err(error.into());
+}
+```
+
+**When to apply:** 2+ call sites run the same logic but return different error enums and the bodies differ only by the variant constructed — the usual cause of `_for_trigger` / `_for_execute` method explosions. The neutral error only needs the variants those shared paths actually emit (typically the intersection the public errors already share).
+
+**Check for drift before collapsing.** Twins copied long ago often diverge silently — one path gains a guard the other lacks (e.g. one verifies workspace ownership, the other forgot to). Diff the bodies first; if behavior differs, decide the single correct behavior and fix it *before* unifying — don't freeze an inconsistency into the neutral version.
+
+**Rationale:** A duplicated method per error type is the cheapest duplication to introduce and the most expensive to carry — it multiplies across every shared helper and hides latent behavioral drift between the copies. A neutral error keeps the logic single-sourced and reduces the inter-path difference to a declarative variant map.
+
 ## Anti-Patterns to Avoid
 
 1. **Single-letter variables**: Using `x`, `i`, `p` in closures instead of descriptive names
@@ -400,6 +440,7 @@ impl<'a> WorkloadReadinessGate<'a> {
 8. **Struct field shorthand**: Using `field` instead of `field: field` in struct initialization
 9. **Duplicate literal values**: Defining the same string, number, or other literal in more than one place instead of extracting it into a named constant in the authoritative module and importing it everywhere
 10. **Scattered single-caller helpers**: Leaving a helper function free at module scope when it has exactly one production caller that lives on a struct — fold it onto that struct as an associated function or method
+11. **Error-type twins**: Copying a whole function once per caller error type (`_for_trigger` / `_for_execute`) instead of writing it once against a neutral error and mapping with `From`
 
 ## Guidelines
 
@@ -428,6 +469,7 @@ impl<'a> WorkloadReadinessGate<'a> {
 - Use `Result` and `Option` appropriately
 - Prefer `?` operator for error propagation
 - Use `thiserror` for custom error types
+- Don't copy a function per caller error type; write it once against a neutral error and map to each public error with `From`. Diff suspected twins for behavioral drift before collapsing them.
 
 ### Architecture
 - Separate domain, application, and infrastructure
