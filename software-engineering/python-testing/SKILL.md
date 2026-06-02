@@ -1,10 +1,10 @@
 ---
 name: python-testing
-description: Guidelines for writing effective Python tests with pytest. Use when creating or modifying any Python test file.
+description: Guidelines for writing effective Python tests with pytest. Use whenever writing, modifying, reviewing, or debugging Python tests — including adding test coverage for a new feature or bug fix, fixing a failing test, or setting up test infrastructure.
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.5"
+  version: "0.0.6"
 ---
 
 # Python Testing Skill
@@ -19,6 +19,9 @@ Apply these guidelines when:
 - Writing or modifying Python unit tests
 - Writing or modifying Python integration tests
 - Writing or modifying Python e2e tests
+- Adding test coverage for a new feature or bug fix
+- Fixing or debugging a failing Python test
+- Reviewing Python tests
 - Setting up test infrastructure for new Python projects
 
 ## Core Principles

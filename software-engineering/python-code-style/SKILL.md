@@ -1,10 +1,10 @@
 ---
 name: python-code-style
-description: Defines code style conventions for Python. Use it when writing or reviewing Python code.
+description: Defines code style conventions for Python. Use whenever writing, reviewing, refactoring, or fixing any Python code — implementing a feature, fixing a bug, writing or modifying tests, or making any other change to a .py file.
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.9"
+  version: "0.0.10"
 ---
 
 # Python Code Style Skill
@@ -17,6 +17,9 @@ This skill provides guidelines for writing clean, maintainable, and readable Pyt
 
 Apply these guidelines when:
 - Creating new Python code
+- Implementing a feature in Python
+- Fixing a bug in Python code
+- Writing or modifying Python tests
 - Updating existing Python code
 - Reviewing Python code
 - Refactoring Python modules
