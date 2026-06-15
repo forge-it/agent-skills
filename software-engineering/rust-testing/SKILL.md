@@ -4,7 +4,7 @@ description: Guidelines for writing effective Rust tests. Use when writing or mo
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.6"
+  version: "0.0.8"
 ---
 
 # Rust Testing Skill
@@ -23,9 +23,11 @@ Apply these guidelines when:
 
 ## Core Principles
 
-### 1. Sophisticated Mocking (CRITICAL)
+### 1. Sophisticated Mocking — Unit Tests Only (CRITICAL)
 
-Use sophisticated mocking libraries like `mockall`, `wiremock`, or `httpmock` to simulate HTTP requests and external dependencies. Prefer these over manual mock implementations.
+Mocking belongs to **unit tests**. Use sophisticated mocking libraries like `mockall`, `wiremock`, or `httpmock` to simulate ports and external dependencies when testing a service or component in isolation. Prefer these over manual mock implementations.
+
+**Never mock in integration tests.** Integration tests exist precisely to exercise the *real* external system — a database, message broker, gRPC server, object store. A mock there proves nothing the unit test did not already prove, and it hides the real wiring, serialization, and translation bugs integration tests are meant to catch. If a "real" dependency is unavailable, the test belongs at the unit level (with a mock) or at the end-to-end level (against the full stack) — not as a mock wearing an integration test's name. See Section 6.
 
 ```rust
 use mockall::predicate::*;
@@ -60,9 +62,9 @@ mod get_user {
 }
 ```
 
-### 2. HTTP Mocking with wiremock (CRITICAL)
+### 2. HTTP Mocking with wiremock — Unit Tests Only (CRITICAL)
 
-Use `wiremock` for HTTP mocking in integration tests.
+Use `wiremock` (or `httpmock`) to **unit-test an outbound HTTP client adapter** in isolation: it stands up a fake endpoint so the adapter's request building and response parsing can be asserted without the real service. This is a *unit* test — the real service is absent. The **integration** test of that same adapter runs against the real external service, never a fake (see Section 6).
 
 ```rust
 use wiremock::{MockServer, Mock, ResponseTemplate};
@@ -252,7 +254,7 @@ mod create_author {
 Different layers in hexagonal architecture require different testing approaches:
 
 - **Unit tests**: Test services with mocked ports. Focus on business logic orchestration.
-- **Integration tests**: Test adapters against real external systems (databases, APIs). Focus on correct translation between domain and infrastructure.
+- **Integration tests**: Test adapters against real external systems (databases, message brokers, gRPC servers, object stores) — **never mocks or fakes**. Focus on correct translation between domain and infrastructure.
 - **End-to-end tests**: Test critical paths through the full stack. Keep these minimal and focused on happy paths.
 
 ```rust
@@ -728,7 +730,7 @@ mod salary {
 
 ### 15. The Support Module Pattern (HIGH)
 
-Each test category (`unit/`, `integration/`, `api/`) can have its own `support` module. This keeps test infrastructure scoped to where it belongs — integration tests need Docker and DB pools, unit tests may only need factories, and API tests have their own setup via `conftest.rs`.
+Each test category (`unit/`, `integration/`, `api/`) owns a `support` module that holds **all** of its helpers — test files in that category contain only tests (Section 16). This keeps test infrastructure scoped to where it belongs — integration tests need Docker and DB pools, unit tests may only need factories, and API tests have their own setup via `conftest.rs`.
 
 Within a support module, each file has a single, distinct job:
 
@@ -738,9 +740,11 @@ Within a support module, each file has a single, distinct job:
 | `builders.rs` | Service Construction | Application services, Adapters, Config | A configured service ready to use |
 | `factories.rs` | Data Shapes | Domain Structs, Business Rules | A struct in memory |
 | `fixtures.rs` | State | Factories + Infra + Repositories | A row in the actual database |
-| `mocks.rs` | Test Doubles | Traits, Ports, External interfaces | Mock structs implementing traits |
+| `mocks.rs` | Test Doubles | Traits, Ports, External interfaces | Mock structs implementing traits — **unit support only** (integration uses real infra, Section 1) |
 | `helpers.rs` | Test Utilities | Assertions, Conversions, Formatters | Convenience functions for test code |
 | `constants.rs` | Shared Values | Test defaults, Magic strings, Limits | Reusable constants across tests |
+
+`mocks.rs` is a **unit-support** file: an integration `support/` never contains mocks — integration tests run against real infrastructure (Section 1). The catalog tree below lists every file type for completeness; in an integration `support/`, omit `mocks.rs` (it belongs under `tests/unit/support/`).
 
 ```
 tests/
@@ -754,13 +758,13 @@ tests/
         ├── builders.rs  // Service construction (build_*)
         ├── factories.rs // Domain object creation (create_*)
         ├── fixtures.rs  // Persist prerequisite data (save_*)
-        ├── mocks.rs     // Mock implementations (Mock*)
+        ├── mocks.rs     // Mock implementations (Mock*) — unit support only
         ├── helpers.rs   // General test utilities
         └── constants.rs // Shared test constants
 ```
 
 ```rust
-// tests/integration/support.rs
+// support.rs declares a category's support submodules (integration omits `mocks`)
 pub mod infra;
 pub mod builders;
 pub mod factories;
@@ -842,8 +846,8 @@ pub async fn save_prerequisite_schedule(db: &TestDatabase) -> Schedule {
 ```rust
 // tests/integration/support/builders.rs
 // Builders construct fully configured application services ready for testing.
-// They wire together real or mock dependencies so tests can focus on behavior.
-use super::mocks::MockStorageBackend;
+// In integration support they wire REAL dependencies (encryption, repositories
+// backed by the TestDatabase). Mock-wired builders belong to unit support.
 
 pub fn build_encryption_service() -> EncryptionService {
     let config = EncryptionConfig {
@@ -859,16 +863,11 @@ pub fn build_secret_service(
 ) -> SecretService<impl SecretRepository> {
     SecretService::new(repository, encryption)
 }
-
-pub fn build_backup_service_with_mock_storage() -> BackupService<MockStorageBackend> {
-    let storage = MockStorageBackend::default();
-    BackupService::new(storage)
-}
 ```
 
 ```rust
-// tests/integration/support/mocks.rs
-// Mock implementations of traits and ports used across tests.
+// tests/unit/support/mocks.rs
+// Mock implementations of traits and ports used across unit tests.
 // Each mock allows controlling return values and optionally tracking calls.
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -956,7 +955,6 @@ use super::support::infra::TestDatabase;
 use super::support::builders::build_encryption_service;
 use super::support::factories::{create_test_backup, create_secret_request};
 use super::support::fixtures::save_prerequisite_schedule;
-use super::support::mocks::MockStorageBackend;
 use super::support::helpers::random_email;
 
 mod create_backup {
@@ -993,6 +991,42 @@ mod store_secret {
 }
 ```
 
+### 16. Test Files Contain Only Tests (CRITICAL)
+
+A test file holds only `use` imports and the `mod <thing> { … }` test blocks — **no free helper functions, factories, fixtures, or constants at module scope.** Every reusable helper, value factory, fixture, environment/connection setup, and shared constant lives in the category's `support/` module (Section 15) and is imported with `use super::support::…`.
+
+This is **not** conditional on the helper being shared across multiple files — it holds for a single test file too. A reader opening the file should see the behaviours under test, not a preamble of plumbing.
+
+The rule targets **module-scope items** (free `fn` / `const` / `static`). It does not constrain a test's own body: building local values inside a test (`let request = …;`) *is* the test. The line is simply: a named, file-level helper or constant belongs in `support/`.
+
+```rust
+// Bad — helpers crowd the top of the test file, burying the tests
+const CONSUME_TIMEOUT: Duration = Duration::from_secs(5);
+
+fn broker_url() -> String { /* … */ }
+async fn open_channel() -> Channel { /* … */ }
+fn create_envelope(id: &str) -> Envelope { /* … */ }
+
+mod consume {
+    use super::*;
+
+    #[tokio::test]
+    async fn should_deliver_a_published_message() { /* … */ }
+}
+
+// Good — the test file is tests-only; helpers live in support/
+use super::support::constants::CONSUME_TIMEOUT;
+use super::support::factories::create_envelope;
+use super::support::infra::{broker_url, open_channel};
+
+mod consume {
+    use super::*;
+
+    #[tokio::test]
+    async fn should_deliver_a_published_message() { /* … */ }
+}
+```
+
 ## Anti-Patterns to Avoid
 
 1. **Tests in source files**: Using `#[cfg(test)]` modules in `src/` instead of `tests/` directory
@@ -1009,25 +1043,28 @@ mod store_secret {
 12. **Testing services against real databases**: Unit tests for services should use mocked ports, not real adapters
 13. **Skipping adapter integration tests**: Adapters must be tested against real external systems to verify correct translation
 14. **Over-relying on end-to-end tests**: Keep API tests minimal and focused on critical paths; most logic should be tested at unit level
+15. **Mocking in integration tests**: Using `mockall`, `wiremock`, `httpmock`, or a hand-written fake in an integration test. Integration tests run against real infrastructure; mocking tools are unit-test tools (Sections 1, 2). If the real dependency cannot be stood up, the test is a unit test or an e2e test — not an integration test.
+16. **Helpers in test files**: Free helper functions, value factories, fixtures, or constants at module scope inside a test file. Test files are tests-only — move them to the category's `support/` module (Section 16).
 
 ## Guidelines
 
 ### Test Framework
 - Use `cargo test` for all tests
 - Use `#[tokio::test]` for async tests
-- Use `mockall` for mocking traits
-- Use `wiremock` or `httpmock` for HTTP mocking
+- Use `mockall` for mocking traits (unit tests)
+- Use `wiremock` or `httpmock` to stand up fake HTTP endpoints (unit tests for client adapters)
 - Use `ctor`/`dtor` for API test server lifecycle
 
 ### Mocking Strategy
+- Mocking is for **unit tests only** — never in integration tests (which use real infrastructure)
 - Use `mockall` for simple trait mocking with expectations
 - Create custom mock implementations for ports when you need stateful behavior
 - Mock implementations should allow controlling return values and tracking calls
-- Place shared mock implementations in `support/mocks.rs` (see Section 15)
+- Place shared mock implementations in `tests/unit/support/mocks.rs` (see Section 15)
 
 ### Test Scope by Layer
 - **Unit tests**: Test domain logic and services with mocked ports
-- **Integration tests**: Test adapters against real external systems (databases, message queues)
+- **Integration tests**: Test adapters against real external systems (databases, message queues, gRPC servers) — never mocks
 - **API tests**: Test critical end-to-end paths only; keep minimal
 - Most business logic should be tested at the unit level with mocked dependencies
 
@@ -1039,7 +1076,8 @@ mod store_secret {
 - Mirror source directory structure: `src/domain/salaries.rs` → `tests/unit/domain/salaries.rs`
 - Mirror source directory structure for adapters: `src/infrastructure/db.rs` → `tests/integration/infrastructure/db.rs`
 - Dedicated submodule per struct/type when testing multiple types in one file
-- Each test category owns its own `support/` module with `infra.rs`, `builders.rs`, `factories.rs`, `fixtures.rs`, `mocks.rs`, `helpers.rs`, and `constants.rs` (see Section 15)
+- Each test category owns its own `support/` module (`infra.rs`, `builders.rs`, `factories.rs`, `fixtures.rs`, `helpers.rs`, `constants.rs`); `mocks.rs` is unit-support only — an integration `support/` has no mocks (see Section 15)
+- Test files contain only tests — every module-scope helper, factory, fixture, and constant lives in `support/`, never at the top of a test file (see Section 16)
 - API test configuration in `tests/api/conftest.rs`
 
 ### Naming
