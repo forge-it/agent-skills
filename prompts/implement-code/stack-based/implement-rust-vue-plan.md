@@ -2,6 +2,7 @@ Your task is to implement this plan <X>.
 
 Skills to be used:
 - rust-hexagonal-architecture
+- rust-code-style
 - rust-design-idioms
 - rust-testing
 
