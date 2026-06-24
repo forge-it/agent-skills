@@ -4,7 +4,7 @@ description: Conventions for organising modules, files, and folders inside a Rus
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.1"
+  version: "0.0.2"
 ---
 
 # Project Structure Skill
@@ -74,6 +74,7 @@ Each concept folder follows this canonical structure:
 | `port.rs` | **All** traits (ports) for this concept — services, orchestrators, executors, providers | Yes, when this layer defines local traits for the concept |
 | `service.rs` | `Default*` implementation of the main service trait | Only if the concept has a main service impl |
 | `error.rs` | **All** error enums for this concept — service errors, orchestrator errors, execution errors | Only if the concept defines concept-local errors |
+| `model.rs` | **All** concept-local data types that are neither traits nor errors — the value structs/enums a port takes and returns, plus internal value objects | Only if the concept defines such data types |
 | `orchestrator.rs` | `Default*Orchestrator` implementation | No |
 | `executor.rs` | `Default*Executor` implementation | No |
 | `provider.rs` | `Default*Provider` implementation | No |
@@ -211,6 +212,26 @@ src/application/encryption/
 
 If a folder has no `service.rs` or `port.rs` (e.g. a `lock/` folder with only `sweeper.rs`), consider whether the sweeper belongs inside the concept it cleans up (e.g. the `schedule/` concept for schedule lock sweeping).
 
+### 11. Data Types Live in `model.rs`, Not `port.rs` (CRITICAL)
+
+`port.rs` holds traits only and `error.rs` holds errors only (principles 3–4). Every other concept-local data type — the value structs and enums a port takes as input or returns as output, plus internal value objects — goes in `model.rs` (singular). Do not leave data structs in `port.rs`.
+
+Never use `types.rs`, `data_structs.rs`, or pluralised names (`models.rs` / `dtos.rs`). `dto.rs` is reserved for wire-transfer shapes that serialize across the infrastructure/API boundary (HTTP/gRPC request/response); prefer `model.rs` for types that stay within a layer.
+
+```rust
+// Bad — a data struct in the traits file
+// src/application/notification/port.rs
+pub trait ContextResolver { /* ... */ }
+pub struct SubjectDisplayContext { /* data — belongs in model.rs */ }
+
+// Good — traits in port.rs, data in model.rs
+// src/application/notification/port.rs
+pub trait ContextResolver { /* ... */ }
+
+// src/application/notification/model.rs
+pub struct SubjectDisplayContext { /* ... */ }
+```
+
 ## Infrastructure Layer Adaptations
 
 The infrastructure layer follows the same core principles, with these additional allowances:
@@ -279,6 +300,7 @@ Place shared helpers in the smallest meaningful owning namespace. If only Kubern
 6. **File names matching struct prefixes**: `default_service.rs` instead of `service.rs`
 7. **Orphan concept folders**: Folders with only a sweeper or runner and no port or service
 8. **NoOp files**: Separate `noop_provider.rs` files instead of keeping stubs near the trait
+9. **Data structs in `port.rs`**: Putting value structs/enums in the traits file instead of `model.rs`
 
 ## Quick Reference
 
