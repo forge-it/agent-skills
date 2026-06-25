@@ -4,7 +4,7 @@ description: Coding conventions and style rules for Rust. Apply when writing or 
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.3"
+  version: "0.0.4"
 ---
 
 # Rust Code Style Skill
@@ -428,6 +428,38 @@ if let Err(error) = self.check_quota(s).await {
 
 **Rationale:** A duplicated method per error type is the cheapest duplication to introduce and the most expensive to carry — it multiplies across every shared helper and hides latent behavioral drift between the copies. A neutral error keeps the logic single-sourced and reduces the inter-path difference to a declarative variant map.
 
+### 13. Self-Documenting Return Types (HIGH)
+
+When a function returns multiple values, or a bare `bool`/primitive whose meaning isn't obvious from the signature, return a **named type**: a struct whose fields name each value, or an enum whose variants name each outcome. The reader should learn the contract from the signature, not by memorising what each tuple position or `true` means. The cost is one small declaration; the payoff is that every call site reads the meaning off the names.
+
+```rust
+// Bad — caller must remember the bool means "the read succeeded", and that
+// (true, []) ("nothing to probe") differs from (false, []) ("a read failed").
+async fn resolve_connectivity(&self, /* ... */) -> (bool, Vec<ConnectivitySubject>) {
+    // ...
+}
+let (connectivity_available, connectivity_subjects) = self.resolve_connectivity(/* ... */).await;
+
+// Good — the type names the contract; the signature is the documentation.
+struct ConnectivityResolution {
+    available: bool, // true = every board read succeeded; false = one failed, board omitted
+    subjects: Vec<ConnectivitySubject>,
+}
+async fn resolve_connectivity(&self, /* ... */) -> ConnectivityResolution {
+    // ...
+}
+let connectivity = self.resolve_connectivity(/* ... */).await;
+// connectivity.available / connectivity.subjects — self-explaining at every use
+```
+
+**Apply when:** the function returns 2+ values where a primitive's role isn't self-evident from position; a bare `bool` whose meaning the function name doesn't already state; or distinct combinations carry distinct meaning (`(true, [])` vs `(false, [])`) — model mutually-exclusive outcomes as an enum.
+
+**Don't apply when:** the name already says it (`fn len(&self) -> usize`, `fn is_empty(&self) -> bool`) or for idiomatic stdlib shapes (`Result<T, E>`, `Option<T>`, a map's `(key, value)`, `split_at`'s `(left, right)`).
+
+**Rationale:** A `(bool, Vec<_>)` return makes the signature lie by omission — the meaning lives in the reader's memory or a drifting comment, not the type. A named struct/enum encodes the contract where the compiler and every call site see it: the same self-documentation as explicit struct field initialization (Rule 10), applied to output.
+
+**Where the type lives is a separate question.** This rule is only about the *shape* of the return. Which module the named type belongs in — alongside its owner, or in a shared data-model module — is decided by your project's module-structure conventions, not by this rule. A concept-local data type (even an internal, single-caller one) typically belongs with the concept's other data types, not buried in the file that happens to return it.
+
 ## Anti-Patterns to Avoid
 
 1. **Single-letter variables**: Using `x`, `i`, `p` in closures instead of descriptive names
@@ -441,6 +473,7 @@ if let Err(error) = self.check_quota(s).await {
 9. **Duplicate literal values**: Defining the same string, number, or other literal in more than one place instead of extracting it into a named constant in the authoritative module and importing it everywhere
 10. **Scattered single-caller helpers**: Leaving a helper function free at module scope when it has exactly one production caller that lives on a struct — fold it onto that struct as an associated function or method
 11. **Error-type twins**: Copying a whole function once per caller error type (`_for_trigger` / `_for_execute`) instead of writing it once against a neutral error and mapping with `From`
+12. **Opaque return shapes**: Returning a tuple of primitives or a bare `bool` whose meaning the reader must memorise, instead of a named struct/enum whose fields/variants state what each value means
 
 ## Guidelines
 
@@ -450,6 +483,7 @@ if let Err(error) = self.check_quota(s).await {
 - Use `///` for public item documentation
 - Use `//!` for module-level documentation
 - Document complex types with expected structure and usage
+- Return a named struct/enum, not a tuple of primitives or a bare `bool`, when the meaning of the values is not obvious from the signature
 
 ### Naming
 - Use descriptive, intent-revealing names
