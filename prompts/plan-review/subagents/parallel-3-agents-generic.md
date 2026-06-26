@@ -9,9 +9,9 @@ Rules:
 - Do not read, merge, or edit the three reviews when they return. Three files in, three files out. The user reads them.
 
 Prompts (one per agent, in order):
-1. /home/cristi/Projects/agent-skills/prompts/plan-review/generic/plan-review-day-off-bet.md
-2. /home/cristi/Projects/agent-skills/prompts/plan-review/generic/plan-review-loss-framing.md
-3. /home/cristi/Projects/agent-skills/prompts/plan-review/generic/plan-review-money-bet.md
+1. <agent-skills>/prompts/plan-review/generic/plan-review-day-off-bet.md
+2. <agent-skills>/prompts/plan-review/generic/plan-review-loss-framing.md
+3. <agent-skills>/prompts/plan-review/generic/plan-review-money-bet.md
 
 <X> = 
 <Y> = 

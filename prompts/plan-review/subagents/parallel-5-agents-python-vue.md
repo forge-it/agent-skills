@@ -10,11 +10,11 @@ Rules:
 - If a prompt path below does not fit the project's stack, swap it before dispatching and tell the user which one you swapped and why.
 
 Prompts (one per agent, in order):
-1. /home/cristi/Projects/agent-skills/prompts/plan-review/stack-based/plan-review-python-vue-stack.md
-2. /home/cristi/Projects/agent-skills/prompts/plan-review/stack-based/plan-review-python-vue-stack-aggresive.md
-3. /home/cristi/Projects/agent-skills/prompts/plan-review/generic/plan-review-day-off-bet.md
-4. /home/cristi/Projects/agent-skills/prompts/plan-review/generic/plan-review-loss-framing.md
-5. /home/cristi/Projects/agent-skills/prompts/plan-review/generic/plan-review-money-bet.md
+1. <agent-skills>/prompts/plan-review/stack-based/plan-review-python-vue-stack.md
+2. <agent-skills>/prompts/plan-review/stack-based/plan-review-python-vue-stack-aggresive.md
+3. <agent-skills>/prompts/plan-review/generic/plan-review-day-off-bet.md
+4. <agent-skills>/prompts/plan-review/generic/plan-review-loss-framing.md
+5. <agent-skills>/prompts/plan-review/generic/plan-review-money-bet.md
 
 <X> = 
 <Y> = 

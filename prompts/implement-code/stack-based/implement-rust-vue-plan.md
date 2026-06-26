@@ -22,7 +22,7 @@ Recommendations:
 - You can use sub agents to implement the code if it suits the required work
 - Commit per plan phase
 
-Skills path: /home/cristi/Projects/agent-skills/software-engineering/
+Skills path: <agent-skills>/software-engineering/
 Useful context: CLAUDE.md
 
 <X> =
