@@ -4,7 +4,7 @@ description: Opinionated guidelines for structuring Python business applications
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.5"
+  version: "0.0.6"
 ---
 
 # Python Domain-Driven Design Skill
@@ -601,7 +601,7 @@ async with SqlAlchemyAsyncUnitOfWork() as unit_of_work:
 
 **One coordinated UoW per use case.** All repositories needed by one use case live on one UoW so they share one session, one transaction. If you find yourself opening a second UoW for a related operation, your use-case boundary is wrong — fix the boundary, do not nest UoWs.
 
-**Scaling to multiple bounded contexts.** When the project grows past a handful of concepts, split the UoW by bounded context: `LicensingUnitOfWork` exposes `products`, `addons`, `activation_keys`; `IamUnitOfWork` exposes `users`, `companies`, `profiles`. Each remains a separate transaction boundary and each is its own port-and-adapter pair. Do **not** split by use case (`CreateProductUnitOfWork`) — that is just a function with extra ceremony.
+**Scaling to multiple bounded contexts.** When the project grows past a handful of concepts, split the UoW by bounded context: `LicensingUnitOfWork` exposes `products`, `addons`, `activation_keys`; `IamUnitOfWork` exposes `users`, `companies`, `profiles`. Each remains a separate transaction boundary and each is its own port-and-adapter pair. Do **not** split by use case (`CreateProductUnitOfWork`) — that is just a function with extra ceremony. That covers how contexts are kept *separate*; for how one context *consumes* another's data without coupling to its model, see section 10 (Anti-Corruption Layer).
 
 **Optional: post-commit hooks.** Side effects that must only fire on successful commit (publishing an event, enqueuing a job) can be registered on the UoW and run after `commit()` returns. Keep this as an optional extension on the abstract UoW (`register_post_commit_hook(coro)`); do not bake it into every method.
 
@@ -920,7 +920,167 @@ class PaymentGateway:
 
 The gateway hides protocol details (HTTP verbs, headers, JSON shape) and translates external errors into application-level exceptions when needed.
 
-### 10. Routers Are Thin Translation Layers (CRITICAL)
+### 10. Consuming Another Bounded Context Goes Through An Anti-Corruption Layer (CRITICAL)
+
+A **gateway** (previous section) wraps a system *outside* the application. An **Anti-Corruption Layer (ACL)** wraps another **bounded context inside the same application** — the discipline a context uses when it needs data that a *different* context owns. The two problems share a shape (a port the consumer owns, an adapter that translates), but they are different concerns; keep them in separate vocabularies.
+
+**A bounded context is a boundary of meaning, not of data.** The same record — a `Company` — can legitimately appear in two contexts under two different models. "Is `Company` an `iam` concept or a `support` concept?" is a false choice: it is *both*, modelled differently per context. So a downstream context never reuses the upstream's model directly; it **translates** it into its own.
+
+**The relationship is Customer/Supplier with an ACL on the downstream side.** The upstream context (say `iam`) stays the source of truth and the sole writer. The downstream context (say `support`) is a read-only consumer that reshapes upstream data into its own shape. It is deliberately **not** a *Conformist* (which would adopt the upstream model wholesale) and **not** a *Shared Kernel* (which would co-own one model across both contexts — far heavier coupling, and wrong whenever the two views differ, as they do here).
+
+The ACL has exactly two parts.
+
+#### Part 1 — A port named for the *capability*, in the consumer's language
+
+The consumer defines an abstract port describing *what it needs*, named in its own ubiquitous language — **never after the supplier**. `CustomerDirectory` (a lookup of customer companies), not `IamGateway` / `IamReadPort`. Naming the port after the supplier leaks the very boundary you are drawing.
+
+Choose a noun that signals a **read-only lookup of a foreign source** — `Directory`, `Reader`, `Lookup` — deliberately **not** `Repository`. In this skill `Repository` means a UoW-backed persistence port for an aggregate the context *owns* (section 4); a foreign read is a different concept and must read as one.
+
+The port returns the consumer's own **read DTO** — a plain dataclass, not the upstream's model and not a wire schema:
+
+```python
+# application/dtos/support.py — read projections assembled from other contexts (ACL output)
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Optional
+
+
+@dataclass
+class Company:                       # referenced as support_dtos.Company — NOT iam.Company
+    id: str
+    name: str
+    vat_number: Optional[str] = None
+    country: Optional[str] = None
+    # Later: support contacts, products, maintenance status — Support's shape, not IAM's.
+```
+
+```python
+# application/services/support/customer_directory.py — the ACL port
+import abc
+from typing import Optional
+
+from myapp.application.dtos import support as support_dtos
+
+
+class CustomerDirectory(abc.ABC):
+    """Support's read-only lookup of customer companies. Named for the capability,
+    not for IAM — the supplier never appears in Support's own language."""
+
+    @abc.abstractmethod
+    async def find_company(self, company_id: str) -> Optional[support_dtos.Company]: ...
+```
+
+Naming the DTO `Company` even though `iam.Company` exists is intentional: having a `support` `Company` and an `iam` `Company` coexist is exactly what bounded contexts are for, and module-qualified imports (`support_dtos.Company`, `iam.Company`) disambiguate the one file where both appear.
+
+#### Part 2 — An adapter that translates the upstream model into the consumer's
+
+```python
+# application/services/support/customer_directory.py (continued) — the ACL adapter
+from typing import Callable, Optional
+
+from myapp.application.dtos import support as support_dtos
+from myapp.domain.models import iam                       # the ONLY iam import in the support context
+from myapp.domain.unit_of_work import AbstractUnitOfWork
+from myapp.infrastructure.unit_of_work import SqlAlchemyAsyncUnitOfWork
+
+
+class IamCustomerDirectory(CustomerDirectory):            # adapter MAY name the source
+    def __init__(
+        self,
+        iam_unit_of_work_factory: Callable[[], AbstractUnitOfWork] = SqlAlchemyAsyncUnitOfWork,
+    ):
+        self._iam_unit_of_work_factory = iam_unit_of_work_factory
+
+    async def find_company(self, company_id: str) -> Optional[support_dtos.Company]:
+        async with self._iam_unit_of_work_factory() as unit_of_work:
+            company = await unit_of_work.companies.find_by_id(company_id)
+        return self._translate(company) if company is not None else None
+
+    @staticmethod
+    def _translate(company: iam.Company) -> support_dtos.Company:   # iam.Company stays in this file
+        return support_dtos.Company(
+            id=company.id,
+            name=company.name,
+            vat_number=company.vat_number,
+            country=company.country,
+        )
+
+
+class FakeCustomerDirectory(CustomerDirectory):           # for unit-testing the consumer
+    def __init__(self, companies: Optional[list[support_dtos.Company]] = None):
+        self._companies = {company.id: company for company in (companies or [])}
+
+    async def find_company(self, company_id: str) -> Optional[support_dtos.Company]:
+        return self._companies.get(company_id)
+```
+
+The adapter is the **single place in the consumer context allowed to import the upstream context's modules** (`from myapp.domain.models import iam`). Everywhere else under `support/` sees only `support` types. It reads the upstream however that context exposes reads — its repositories through its UoW (as here), or its gateway — and returns the consumer's own DTO. The `FakeCustomerDirectory` parallels the fake repositories from section 4: it lets the consumer be tested with no upstream database.
+
+#### The read projection is an application DTO — not a domain model, not a schema
+
+This is the rule the layered structure most often gets wrong. The data the ACL returns is a **projection assembled from a foreign context** — not an aggregate this context owns. So it is an **application DTO** (a plain dataclass in `application/dtos/<context>.py`), *not* a `domain/models/` entity and *not* a presentation `Schema`.
+
+`domain/models/<context>/` is reserved for genuine aggregates this context *owns* — ones with identity, behaviour, persistence, and a repository (e.g. a future `SupportUser` that `support` actually writes). Foreign read data has none of that here; it is read-through, owned upstream. Putting it in `domain/models/` claims an ownership the context does not have.
+
+The translation therefore happens in **two distinct steps that must not collapse into one**:
+
+| Step | Question it answers | Output | Where it lives |
+|------|---------------------|--------|----------------|
+| **ACL translation** | turn the upstream model into *this context's* model — ownership | a **DTO** | application (the ACL adapter) |
+| **Presentation translation** | render the DTO as the wire format | a **Schema** | presentation (schema + mapper) |
+
+Three rules keep the terminology and placement unambiguous:
+
+- **"Schema" is presentation-only.** The ACL output is a DTO, never a `...Schema`.
+- **Read DTOs are application-owned.** They live in `application/dtos/<context>.py`, beside the other application DTOs — not in `domain/models/`.
+- **No foreign type in presentation.** The consumer's schema/mapper takes the consumer's *DTO*; the upstream type (`iam.Company`) never reaches `presentation/`. (Concretely: do not give a `support` schema a `from_orm(iam.Company)` classmethod — the upstream import stays quarantined in the ACL adapter.)
+
+Keeping the ACL output a DTO also keeps context translation independent of the wire format: the same DTO can feed any schema or API version, and the ACL never needs to know how the response is serialised.
+
+#### The consuming service depends on the port, not the upstream
+
+```python
+# application/services/support/companies.py
+from typing import Optional
+
+from myapp.application.dtos import support as support_dtos
+from myapp.application.services.support.customer_directory import (
+    CustomerDirectory,
+    IamCustomerDirectory,
+)
+
+
+class SupportCompanyService:
+    def __init__(self, customer_directory: Optional[CustomerDirectory] = None):
+        self._customer_directory = customer_directory or IamCustomerDirectory()
+
+    async def get_company(self, company_id: str) -> Optional[support_dtos.Company]:
+        # When the support view is assembled from several sources, this method
+        # composes them — e.g. a ProductsReader (another ACL port) merged into
+        # the same support_dtos.Company. Each foreign source is its own port.
+        return await self._customer_directory.find_company(company_id)
+```
+
+The service depends on the **capability port**, so it is unit-testable with a `FakeCustomerDirectory(companies=[...])` and never touches the upstream's database. The router maps the returned **DTO** to a wire schema with an ordinary `presentation/mappers/support.py` function — `iam.Company` never appears in `presentation/`. End-to-end:
+
+```
+presentation/routers/support/companies.py
+  → SupportCompanyService                 # depends on ACL ports only
+      → CustomerDirectory (ACL port)      # iam.Company → support_dtos.Company   [adapter imports iam.*]
+  → company_to_schema(dto)                # presentation renders the DTO → wire schema
+```
+
+#### Native vs foreign: the ACL is the line
+
+- **Foreign (translate via an ACL):** data another context owns and writes. Reached through a capability port; returned as application read DTOs.
+- **Native (own directly, no ACL):** aggregates this context owns — modelled in `domain/models/<context>/`, given a repository and a UoW, the normal pattern from sections 2–6. The ACL boundary is exactly the line between the two: when `support` later owns `SupportUser`, that aggregate uses the repository/UoW pattern, while customer companies stay behind the ACL.
+
+#### When NOT to reach for an ACL
+
+An ACL is for a *sustained downstream-consumer* relationship where the models differ. Do not impose it on an occasional peer-to-peer cross-reference in a small codebase (a single direct import of one type is fine), and do not retroactively rewrite existing direct cross-context access into ACLs. Introduce it for the specific downstream relationship that needs it. The cost is one extra DTO per consumed concept — the deliberate price of keeping `Schema` presentation-only and the ACL wire-agnostic, paid on purpose at a context boundary.
+
+### 11. Routers Are Thin Translation Layers (CRITICAL)
 
 Routers in `presentation/routers/` (e.g. `presentation/routers/v1/` if you version) only translate HTTP to and from the application layer. They deserialise the request, run validators, enqueue a command or call a service, and serialise the response.
 
@@ -982,7 +1142,7 @@ async def activate_product(product_id: str, body: ProductActivationSchema):
 
 **Routers do not contain business rules.** If you find yourself writing `if product.status == ...` inside a router, that rule belongs in a domain validation.
 
-### 11. Presentation Schemas Are Separate From Domain Models (CRITICAL)
+### 12. Presentation Schemas Are Separate From Domain Models (CRITICAL)
 
 HTTP request and response schemas live in `presentation/schemas/`. They are Pydantic models tuned for the wire format (camelCase aliases, optional fields, validation messages). They are *not* domain models.
 
@@ -1034,7 +1194,7 @@ def product_to_details_schema(product: Product) -> ProductDetailsSchema:
     )
 ```
 
-### 12. Bootstrap Lives In `main.py` (HIGH)
+### 13. Bootstrap Lives In `main.py` (HIGH)
 
 The entry point composes the application: it initialises logging, registers ORM mappers, runs migrations, sets up the message broker, registers routers and exception handlers, and starts the web server. It is the only place that imports concrete implementations and wires them in.
 
@@ -1113,9 +1273,12 @@ src/myapp/
 │
 ├── application/                           # Use-case orchestration
 │   ├── services/
-│   │   └── licensing/
-│   │       ├── products.py                # ProductCreationService, ProductRetrievalService, ...
-│   │       └── addons.py
+│   │   ├── licensing/
+│   │   │   ├── products.py                # ProductCreationService, ProductRetrievalService, ...
+│   │   │   └── addons.py
+│   │   └── support/                       # a downstream context consuming iam via an ACL
+│   │       ├── companies.py               # SupportCompanyService (depends on ACL ports)
+│   │       └── customer_directory.py      # CustomerDirectory (ACL port) + IamCustomerDirectory + fake
 │   ├── commands/
 │   │   └── licensing/
 │   │       ├── products.py                # @message_handler-decorated functions
@@ -1127,7 +1290,8 @@ src/myapp/
 │   │   ├── base.py                        # BaseValidator
 │   │   └── licensing.py                   # ProductCreateValidator, ...
 │   ├── dtos/
-│   │   └── licensing.py                   # Pagination results, activation context
+│   │   ├── licensing.py                   # Pagination results, activation context
+│   │   └── support.py                     # Read DTOs projected from other contexts (ACL output)
 │   ├── mappers/
 │   │   └── licensing.py                   # Domain ↔ application-DTO mappers
 │   └── events/
@@ -1326,6 +1490,12 @@ Unit tests for a module at `src/myapp/application/services/licensing/products.py
 22. **`shared/` and `common/` folders** — they hide poor concept ownership behind a vague name.
 23. **Single-letter and abbreviated identifiers** — `p` for `product`, `usr` for `user`, `q` for `query`. Always use the full word; readability beats keystrokes.
 24. **Implicit dependency injection through globals** — module-level singletons that services reach for at call time. Inject through `__init__`; keep the wiring explicit.
+25. **Naming a cross-context read port after the supplier** — `IamGateway`, `IamReadPort`. Name the ACL port for the *capability* in the consumer's language (`CustomerDirectory`); the supplier name leaks the boundary.
+26. **Importing another bounded context's models outside the single ACL adapter** — `from ...domain.models import iam` scattered across the consumer context. The foreign import must be quarantined to one adapter file.
+27. **Modelling a foreign read projection as a `domain/models/` entity** — it is owned and written upstream, so it is an *application* read DTO (`application/dtos/<context>.py`), not a domain aggregate of the consuming context.
+28. **A foreign type reaching presentation** — a consumer schema with a `from_orm(iam.Company)` classmethod, or a mapper taking `iam.*`. Presentation maps from the consumer's *DTO*; the upstream type stays in the ACL adapter.
+29. **Calling a foreign reader a `Repository`, or giving the consumer its own repository/UoW for data another context owns** — `Repository` is for owned aggregates. Foreign reads go through a capability `Directory`/`Reader`.
+30. **A downstream context opening the upstream context's UoW directly inside its services** — that couples the consumer to the supplier's persistence. Depend on the ACL port; let the adapter own the upstream UoW.
 
 ## Quick Reference
 
@@ -1353,6 +1523,21 @@ Suppose you are adding `Invoice` to an application that already has `Product` an
 18. **Wire in `main.py`** — include the new router on `app.include_router(...)`.
 19. **Tests** — unit-test the service with `FakeUnitOfWork`; integration-test `SqlAlchemyInvoiceRepository` and the real UoW against a docker-compose database; e2e-test the API.
 
+### Consuming Another Bounded Context (Walkthrough)
+
+Suppose a new read-only `support` context needs customer companies that the `iam` context owns and writes. Do **not** reuse `iam`'s models or repositories directly — go through an Anti-Corruption Layer (section 10).
+
+1. **Read DTO** — `application/dtos/support.py`: define `Company` (referenced as `support_dtos.Company`) as a plain dataclass shaped for *Support's* needs, not IAM's. This is application-owned, not a `domain/models/` entity.
+2. **Capability port** — `application/services/support/customer_directory.py`: an abstract `CustomerDirectory` with `find_company(company_id) -> Optional[support_dtos.Company]`. Named for the capability, in Support's language.
+3. **ACL adapter** — same file: `IamCustomerDirectory(CustomerDirectory)` opens the `iam` UoW, reads via its repositories, and translates `iam.Company → support_dtos.Company` in a private method. This is the **only** file in `support/` that imports `iam.*`.
+4. **Fake adapter** — same file: `FakeCustomerDirectory(companies=[...])` for unit tests, mirroring the fake-repository pattern.
+5. **Consuming service** — `application/services/support/companies.py`: `SupportCompanyService` takes the `CustomerDirectory` port via `__init__` (default the real adapter), assembles and returns the DTO. Compose additional ACL ports here when the view spans several contexts.
+6. **Presentation** — `presentation/schemas/support.py` + `presentation/mappers/support.py`: schema and a mapper that take `support_dtos.Company` — never `iam.Company`.
+7. **Router** — `presentation/routers/support/companies.py`: thin handler calling the service and mapping the DTO to the schema.
+8. **Tests** — unit-test `SupportCompanyService` with `FakeCustomerDirectory`; no IAM database involved.
+
+When `support` later owns a genuine aggregate (e.g. `SupportUser`), that one follows the *Adding A New Concept* walkthrough above instead — domain model, repository, UoW. The ACL is only for the foreign data.
+
 ### Where Does It Go? (Cheat Sheet)
 
 | You are writing ... | It belongs in ... |
@@ -1368,6 +1553,9 @@ Suppose you are adding `Invoice` to an application that already has `Product` an
 | A rule that needs a repo or gateway | `application/validations/<concept>.py` |
 | A composer of validations for one use case | `application/validators/<concept>.py` |
 | An async message handler | `application/commands/<concept>.py` |
+| A capability port for reading another bounded context (ACL) | `application/services/<consumer>/<capability>.py` |
+| The ACL adapter that translates a foreign context's model | Same file as the ACL port (the only importer of the upstream context) |
+| A read DTO projected from another context | `application/dtos/<consumer>.py` |
 | A wire-format request/response model | `presentation/schemas/<concept>.py` |
 | A schema ↔ domain mapper | `presentation/mappers/<concept>.py` |
 | A `Table(...)` declaration | `infrastructure/orm/tables.py` |
@@ -1401,6 +1589,10 @@ Suppose you are adding `Invoice` to an application that already has `Product` an
 | Unit of Work adapter (SQLAlchemy) | `SqlAlchemy<Sync/Async>UnitOfWork` | `SqlAlchemyAsyncUnitOfWork` |
 | Unit of Work adapter (fake) | `FakeUnitOfWork` | `FakeUnitOfWork` |
 | Gateway | `<ExternalSystem>Gateway` | `PaymentGateway` |
+| ACL capability port (abstract) | `<Capability>` (consumer's language) | `CustomerDirectory`, `ProductsReader` |
+| ACL adapter | `<Source><Capability>` | `IamCustomerDirectory`, `LicensingProductsReader` |
+| ACL fake | `Fake<Capability>` | `FakeCustomerDirectory` |
+| Cross-context read DTO | `<Concept>` (no `Schema` suffix) | `support_dtos.Company` |
 | Request schema | `<Concept><Action>Schema` | `ProductCreateSchema` |
 | Response schema | `<Concept><Detail>Schema` | `ProductDetailsSchema` |
 
@@ -1408,7 +1600,7 @@ Suppose you are adding `Invoice` to an application that already has `Product` an
 
 ### Layer Responsibilities (Recap)
 - **Presentation** — FastAPI routers, exception handlers, HTTP dependency declarations, wire-format Pydantic schemas, schema ↔ domain mappers.
-- **Application** — use-case services that own the UoW lifecycle, command handlers, application validations and validators, application DTOs, mappers.
+- **Application** — use-case services that own the UoW lifecycle, command handlers, application validations and validators, application DTOs (including read DTOs projected from other contexts), mappers, and anti-corruption-layer ports and adapters for consuming other bounded contexts.
 - **Domain** — aggregates and value objects (dataclasses), abstract repository ports, abstract Unit-of-Work port, commands (Pydantic), domain events, domain exceptions, pure validations, pure domain services.
 - **Infrastructure** — ORM tables, imperative mapper registration, concrete SQLAlchemy repositories *and* in-memory fakes, concrete SQLAlchemy UoW *and* fake UoW, session factories, configuration, gateways, background jobs, migrations, startup routines, logging.
 
