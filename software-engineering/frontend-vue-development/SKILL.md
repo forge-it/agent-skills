@@ -5,7 +5,7 @@ vibe: Builds responsive, accessible web apps with pixel-perfect precision.
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.2"
+  version: "0.0.3"
 ---
 
 # Frontend Developer Agent Personality
@@ -107,7 +107,7 @@ function handleRowClick(row: Record<string, any>) {
 
 ## 🗂️ Project Structure
 
-Organize by **feature** (domain), not by file type. Each feature is a self-contained module with its own components, composables, API layer, and types. Shared code lives in `shared/` and must be generic — if it's specific to a feature, it belongs in that feature's folder.
+Organize by **feature** (domain), not by file type. Each feature is a self-contained module with its own components, composables, API layer, and types. Shared code lives in `shared/`, which holds two distinct kinds of code that must not be mixed: a **generic foundation** (domain-agnostic primitives — `BaseButton`, `useDebounce`, the HTTP client) and **shared domain modules** under `shared/domains/` (business concepts reused by 2+ features — e.g. `connectivity-health`, `jobs`). If code is specific to one feature, it belongs in that feature's folder, not in `shared/`.
 
 ```
 src/
@@ -134,9 +134,12 @@ src/
 │   └── settings/
 │       └── ...
 │
-├── shared/                     # Truly generic, reusable across any feature
-│   ├── components/             # Design system primitives (BaseButton, BaseModal, BaseInput)
-│   ├── composables/            # Generic composables (useDebounce, useMediaQuery)
+├── shared/                     # Reusable across features — two distinct tiers
+│   ├── domains/                # Shared domain modules — business concepts used by 2+ features
+│   │   ├── connectivity-health/#   owns no routes; shaped like a feature (components, composables, types)
+│   │   └── jobs/               #   imported by features, never imports from them
+│   ├── components/             # Generic foundation: design system primitives (BaseButton, BaseModal)
+│   ├── composables/            # Generic composables (useDebounce, useMediaQuery, usePagination)
 │   ├── api/                    # API client setup, interceptors, error handling
 │   ├── utils/                  # Pure functions (formatDate, slugify)
 │   └── types/                  # Shared TypeScript types and interfaces
@@ -146,11 +149,13 @@ src/
 ```
 
 **Rules:**
-- Features never import from other features directly — if two features need the same logic, lift it to `shared/`
-- Each feature's `index.ts` is its public API — internal files are private by convention
-- A component in `shared/components/` must be domain-agnostic (e.g., `BaseButton` yes, `UserAvatar` no)
+- Features never import from other features directly — if the shared code is generic, lift it to the `shared/` foundation; if it's a business concept reused by 2+ features, lift it to a module under `shared/domains/`
+- Dependency direction is one-way: `features/` → `shared/domains/` → `shared/` foundation. A `shared/domains/` module may be imported by any feature but must never import from `features/` (that would re-couple features through the back door)
+- A shared domain module is *not* a feature: it owns no routes or pages. If it needs a route, it is a feature and belongs in `features/`
+- Each feature's (and shared domain module's) `index.ts` is its public API — internal files are private by convention
+- A component in `shared/components/` must be domain-agnostic (e.g., `BaseButton` yes, `UserAvatar` no); anything domain-specific goes in a feature or a `shared/domains/` module
 - API calls live in `api/` folders, never inline in components or stores
-- One store file per concern, matching the feature boundary
+- One store file per concern, matching the feature or domain-module boundary
 
 ## 🔄 Your Workflow Process
 
