@@ -4,7 +4,7 @@ description: Guidelines for structuring Rust business applications around a cent
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.2"
+  version: "0.0.3"
 ---
 
 # Hexagonal Architecture Skill
@@ -12,6 +12,19 @@ metadata:
 ## Purpose
 
 This skill provides guidelines for implementing hexagonal architecture (ports and adapters) in Rust applications. It focuses on organizing business applications around a central domain, with adapters managing external dependencies. This architecture enables testability, maintainability, and flexibility in swapping implementations.
+
+## Architectural Model: Ports & Adapters (Not Layered DDD)
+
+This skill follows **Cockburn's Ports & Adapters (hexagonal)** model — deliberately *not* Evans' classic layered DDD. Commit to this model; do not mix the two vocabularies in one Rust service.
+
+- **No Presentation/UI layer, and no standalone "API layer."** Hexagonal is a **core** (domain + application) wrapped in a single ring of **adapters**. The hexagon shape exists precisely to avoid a top-to-bottom layer stack.
+- **Three implementation layers: `domain`, `application`, `infrastructure`.** Every piece of outside-world code — HTTP API, database, message queues, a UI — lives in `infrastructure` as an adapter, never as its own peer layer.
+- **Adapters come in two directions:**
+  - **Inbound (driving)** — call *into* the core: HTTP/REST handlers, gRPC, CLI, message consumers, schedulers. *Your "API layer" is an inbound adapter.*
+  - **Outbound (driven)** — called *by* the core through ports: database repositories, external API clients, email, metrics.
+- **Why "adapter" and not "layer":** the dependency rule (principle 6). Every adapter, inbound or outbound, depends *inward* on the core; the core depends on neither. Calling the API an inbound adapter is what encodes "the handler may import the service; the service may never import the handler."
+
+If you are coming from the layered model, translate: **"presentation / API layer" → "inbound adapter"**, **"data-access layer" → "outbound adapter"**. Python services in this codebase use Evans' layered model instead — see the `python-ddd` skill.
 
 ## When to Apply
 
@@ -421,6 +434,8 @@ impl From<CreateAuthorError> for ApiError {
 
 Use modern Rust module convention with `module_name.rs` files. Never use `mod.rs` files.
 
+For per-concept file and folder naming *within* a layer — in particular, that **all** traits for a concept go in a single `port.rs` (singular — never `ports.rs` or a role-named `repository.rs`) — `rust-project-structure` is the authority. This section only sketches the layer skeleton.
+
 ```
 src/
 ├── lib.rs
@@ -430,13 +445,13 @@ src/
 │   └── author/
 │       ├── model.rs          # Author, AuthorId, AuthorName
 │       ├── error.rs          # CreateAuthorError, FindAuthorError
-│       └── repository.rs     # AuthorRepository trait (port)
+│       └── port.rs           # AuthorRepository trait
 ├── application.rs            # mod application { ... }
 ├── application/
 │   └── author.rs             # mod author { ... }
 │   └── author/
 │       ├── service.rs        # AuthorService trait, DefaultAuthorService
-│       └── ports.rs          # AuthorMetrics, AuthorNotifier traits
+│       └── port.rs           # AuthorMetrics, AuthorNotifier traits
 ├── infrastructure.rs         # mod infrastructure { ... }
 ├── infrastructure/
 │   ├── http.rs               # mod http { ... }
@@ -469,7 +484,7 @@ For smaller projects, a flatter structure may suffice:
 src/
 ├── lib.rs
 ├── domain.rs                 # All domain types
-├── ports.rs                  # All port traits
+├── port.rs                   # All port traits
 ├── services.rs               # All services
 ├── adapters.rs               # mod adapters { ... }
 ├── adapters/
@@ -530,7 +545,7 @@ Begin with large domains. Incorrect boundary assumptions are easier to correct w
 ### Layer Responsibilities
 - **Domain**: Entities, value objects, domain errors, repository traits (ports)
 - **Application**: Services, use case orchestration, application-level ports
-- **Infrastructure**: HTTP handlers, database adapters, external API clients, metrics adapters
+- **Infrastructure**: All adapters — *inbound/driving* (HTTP handlers, gRPC, CLI, message consumers) and *outbound/driven* (database adapters, external API clients, metrics). No presentation/API peer layer; the API is an inbound adapter.
 
 ### Port Design
 - Define ports as traits in domain or application layer
