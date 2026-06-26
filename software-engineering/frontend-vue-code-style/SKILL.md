@@ -5,7 +5,7 @@ vibe: Keeps Vue codebases predictable, traceable, and free of spaghetti.
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.3"
+  version: "0.0.4"
 ---
 
 # Vue Code Style — Patterns & Conventions
@@ -742,3 +742,28 @@ const { id } = route.params  // plain string snapshot, goes stale on navigation
 if (to.meta.requiresAuth) {  // 'unknown', no autocomplete, no compile-time check
 }
 ```
+
+---
+
+## Pattern 11: Script Block Organization
+
+**Why:** `<script setup>` dropped the fixed ordering the Options API enforced, so every component arranges its refs, computeds, and functions differently and readers can't predict where anything lives.
+
+**Rule:** Order `<script setup>` top-to-bottom as **contract before internals, declaration before use**: imports → `defineProps`/`defineEmits`/`defineModel` → composable & store calls → local state (`ref`/`reactive`) → `computed` → `watch` → functions → lifecycle hooks.
+
+```vue
+<!-- ✅ CORRECT -->
+<script setup lang="ts">
+import { computed, ref, watch } from 'vue'
+import { useBackupSearch } from './composables/useBackupSearch'
+
+const props = defineProps<{ backups: Backup[] }>()
+const { searchQuery, filteredBackups } = useBackupSearch(() => props.backups)
+const expandedId = ref<string | null>(null)
+const hasResults = computed(() => filteredBackups.value.length > 0)
+watch(searchQuery, () => { expandedId.value = null })
+function toggleExpanded(backupId: string): void { /* ... */ }
+</script>
+```
+
+**Subordinate to Patterns 2 and 4.** Ordering is layout, not cleanliness — a well-ordered god-component is still a god-component. Fix composition first, then order what remains. Skip for trivial scripts; there's no ESLint rule for this, so it's a human convention, not a hard gate.
