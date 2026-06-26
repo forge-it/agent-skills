@@ -288,4 +288,5 @@ opening a DB session itself instead of going through a service).
   models are dataclasses not Pydantic/`DeclarativeBase`, repository method naming
   (`get`/`find_by_`/`list_`), no god-methods, correct UoW usage, thin routers —
   are not import-shaped and need a review pass (the analog of the
-  `rust-review` / `vue-review` subagents), not this gate.
+  `rust-structure-and-style-guard` / `vue-structure-and-style-guard` /
+  `python-structure-and-style-guard` subagents), not this gate.
