@@ -5,7 +5,7 @@ vibe: Keeps Vue codebases predictable, traceable, and free of spaghetti.
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.4"
+  version: "0.0.5"
 ---
 
 # Vue Code Style — Patterns & Conventions
@@ -767,3 +767,52 @@ function toggleExpanded(backupId: string): void { /* ... */ }
 ```
 
 **Subordinate to Patterns 2 and 4.** Ordering is layout, not cleanliness — a well-ordered god-component is still a god-component. Fix composition first, then order what remains. Skip for trivial scripts; there's no ESLint rule for this, so it's a human convention, not a hard gate.
+
+---
+
+## Pattern 12: No `any` — Reach for a Real Type (CRITICAL)
+
+**Why:** `any` switches off type-checking for everything it touches, and it spreads silently — one `any` and the compiler stops catching typos, missing fields, and renames downstream. In **tests** it is worse than in app code: a mock typed `any` makes a test pass against a shape that no longer matches reality, so the test keeps reporting green while testing nothing. A lying test is worse than no test.
+
+**Rule:** Never write `any` — in app code or in tests. When you genuinely need to step outside the type system, use the narrowest, most explicit escape hatch instead, preferring earlier options:
+
+1. A real type / interface (almost always possible)
+2. `unknown` + a narrowing check
+3. `Partial<T>` for a partial mock
+4. A typed mock factory that returns `T`
+5. `as unknown as T` for a deliberate, greppable cast
+6. `// @ts-expect-error` on the single line that feeds intentionally-invalid input
+
+Testing is where `any` is most tempting; these cover the real cases without it:
+
+| You reach for `any` because… | Use instead |
+| --- | --- |
+| Building a partial mock object | `Partial<User>`, or a typed factory `(overrides?: Partial<User>): User` |
+| Forcing an incompatible shape | `as unknown as User` — explicit and searchable |
+| Passing **invalid** input to test error handling | `// @ts-expect-error` on that one line (self-documenting; fails if the error disappears) |
+| An untyped third-party test helper | `unknown` + narrow, or declare a minimal local type |
+
+```typescript
+// ✅ CORRECT — typed mock factory, no `any`
+function makeUser(overrides: Partial<User> = {}): User {
+  return { id: 'u-1', name: 'Ada', email: 'ada@example.com', ...overrides }
+}
+
+const user = makeUser({ name: 'Grace' })          // fully typed; a renamed field breaks the test loudly
+
+// ✅ CORRECT — deliberate invalid input, scoped to one line
+// @ts-expect-error — name is required; verifying the guard rejects it
+expect(() => renderProfile({ email: 'x@y.z' })).toThrow()
+```
+
+```typescript
+// ❌ WRONG — `any` mock; the test passes against a shape that no longer exists
+const user: any = { nmae: 'Ada' }                 // typo + missing email, both invisible
+renderProfile(user)
+expect(screen.getByText('Ada')).toBeTruthy()       // green, but exercised nothing real
+
+// ❌ WRONG — `any` to silence one incompatible field, disables checking for the whole object
+const response = await fetchUser() as any
+```
+
+**Enforcement:** this is enforced by `@typescript-eslint/no-explicit-any` (`error`) in both app and test files — see [[frontend-vue-eslint-setup]]. The escape hatches above (`as unknown as T`, `@ts-expect-error`) are deliberately *not* `any`, so they pass the rule while staying explicit and local.
