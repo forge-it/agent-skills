@@ -89,8 +89,7 @@ and test code read configured endpoints; they never embed port literals.
 ## Worked Example: IronBox
 
 IronBox allocates all local host-published ports from the inclusive range
-`8700–8800`. This is the range recorded in
-`docs/decisions/02-local-port-allocation.md` in the ironbox repository.
+`8700–8800`, recorded as an ADR under `docs/decisions/`.
 
 ### What is in scope for the range
 
@@ -179,8 +178,7 @@ as `02-local-port-allocation.md`. The ADR must contain at minimum:
    ports; code that needs local fixture endpoints must read from
    `.env`/`.env.template`, not from hardcoded port literals.
 
-A lightweight follow-up enforcement step (noted as a TODO in the IronBox
-ADR) is a CI check that verifies Docker Compose host mappings,
+A lightweight follow-up enforcement step is a CI check that verifies Docker Compose host mappings,
 `.env.template` endpoints, development-server defaults, and documentation
 all stay aligned with the ADR's table. This check is optional at day one
 but prevents the table from drifting.
