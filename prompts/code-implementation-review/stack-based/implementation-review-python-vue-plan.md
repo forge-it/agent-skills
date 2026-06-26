@@ -32,7 +32,7 @@ Rules:
 - If you need to break any of these rules for practical reasons, flag it to the operator.
 - For each issue you find, add a recommended solution to the review.
 
-Skills path: /home/cristi/Projects/agent-skills/software-engineering/
+Skills path: <agent-skills>/software-engineering/
 
 <X> = 
 <Y> = 

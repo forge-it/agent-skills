@@ -8,7 +8,7 @@ The two domains are fixed:
 - **backend** — rust code, typically under `core/`.
 - **frontend** — vue code, typically under `web/`.
 
-Both domains use the same worker prompt: `/home/cristi/Projects/agent-skills/prompts/implement-code/stack-based/implement-rust-vue-task.md`. The domain is fixed by which review file the finding came from.
+Both domains use the same worker prompt: `<agent-skills>/prompts/implement-code/stack-based/implement-rust-vue-task.md`. The domain is fixed by which review file the finding came from.
 
 ## Parallelism model
 
@@ -31,7 +31,7 @@ Each subagent receives, and nothing else:
 1. The single finding text it must fix (verbatim).
 2. The path of the review file the finding came from.
 3. The plan path the review file belongs to (so the subagent can avoid contradicting that plan).
-4. The contents of `/home/cristi/Projects/agent-skills/prompts/implement-code/stack-based/implement-rust-vue-task.md`, passed verbatim.
+4. The contents of `<agent-skills>/prompts/implement-code/stack-based/implement-rust-vue-task.md`, passed verbatim.
 
 No summary of prior conversation. No batching. No merging of findings. No hints about other findings, other tracks, or other plans.
 
