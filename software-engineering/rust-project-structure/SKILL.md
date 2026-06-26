@@ -4,7 +4,7 @@ description: Conventions for organising modules, files, and folders inside a Rus
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.2"
+  version: "0.0.3"
 ---
 
 # Project Structure Skill
@@ -216,7 +216,7 @@ If a folder has no `service.rs` or `port.rs` (e.g. a `lock/` folder with only `s
 
 `port.rs` holds traits only and `error.rs` holds errors only (principles 3–4). Every other concept-local data type — the value structs and enums a port takes as input or returns as output, plus internal value objects — goes in `model.rs` (singular). Do not leave data structs in `port.rs`.
 
-Never use `types.rs`, `data_structs.rs`, or pluralised names (`models.rs` / `dtos.rs`). `dto.rs` is reserved for wire-transfer shapes that serialize across the infrastructure/API boundary (HTTP/gRPC request/response); prefer `model.rs` for types that stay within a layer.
+Never use `types.rs`, `data_structs.rs`, or pluralised names (`models.rs` / `dtos.rs`). `dto.rs` is reserved for wire-transfer shapes that serialize across the infrastructure/API boundary (HTTP/gRPC request/response); prefer `model.rs` for types that stay within a layer. The one exception is primitive types shared across sibling sub-capabilities, which live in a `primitives.rs` at the capability parent (see principle 12).
 
 ```rust
 // Bad — a data struct in the traits file
@@ -232,6 +232,26 @@ pub trait ContextResolver { /* ... */ }
 pub struct SubjectDisplayContext { /* ... */ }
 ```
 
+### 12. Consolidate Sibling Modules That Share a Behaviour Contract (MEDIUM)
+
+When several peer modules drive the same family of artefacts, share the same primitive types, **and** follow the same lifecycle policy (retry/backoff, attempt limits, reporting), collapse them under one capability-named parent. Each peer becomes a technology-named subfolder; the shared primitive types live in a sibling `primitives.rs`. The parent name carries the capability, so the subfolders drop the redundant suffix.
+
+```
+# Bad — three sibling modules that all do "cleanup", each duplicating the primitives
+src/application/
+├── cleanup_sweeper.rs        # SweepReport, backoff policy
+├── kubernetes_cleanup/       # k8s orphan queues
+└── database_cleanup/         # db orphan queue
+
+# Good — one capability parent, technology subfolders, primitives in one place
+src/application/cleanup/
+├── primitives.rs             # shared SweepReport, backoff policy
+├── kubernetes/
+└── database/
+```
+
+Propagate the rename symmetrically through every layer that mirrors the module path (e.g. `infrastructure/runtime/cleanup/{kubernetes,database}`, `tests/.../cleanup/{kubernetes,database}`). Function and struct names whose words happen to overlap the old path describe what they do, not where they live — leave them unchanged.
+
 ## Infrastructure Layer Adaptations
 
 The infrastructure layer follows the same core principles, with these additional allowances:
@@ -241,6 +261,8 @@ The infrastructure layer follows the same core principles, with these additional
 Infrastructure may use **adapter-family** or **technical-capability** folders at the top level when that is the cleanest primary axis. Examples: `api/`, `database/`, `gateway/`, `runtime/`, `bootstrap/`, `session/`, `crypto/`, `config/`, `event/`.
 
 Inside an adapter family, organize the next level by concept whenever practical (e.g. `api/order/`, `database/order/`, `gateway/source/`).
+
+Two of these have fixed meanings: use `session/` for token/session lifecycle infrastructure, and `crypto/` for low-level cryptographic primitives such as hashing and encryption.
 
 ```
 src/infrastructure/
@@ -290,6 +312,19 @@ When a capability currently has a single provider-specific implementation, namin
 
 Place shared helpers in the smallest meaningful owning namespace. If only Kubernetes source adapters use a helper, keep it under `gateway/source/kubernetes/`. If multiple destination adapters use an I/O helper, `gateway/destination/io.rs` is better than `gateway/destination/shared/`.
 
+### Split by Variant vs. Consolidate
+
+When one port has several provider variants, choose the file layout by how many there are and how much they diverge:
+
+- **Few and uniform** → keep all variants in one file (e.g. `connectivity.rs`). Splitting adds noise rather than clarity.
+- **Many or divergent** → one file per variant in a folder (e.g. `connectivity/postgres.rs`, `connectivity/redis.rs`), with a dispatcher in `provider.rs` that selects and calls the right one.
+
+Pick a threshold and apply it consistently — a useful default is to flip from one-file to per-variant files once variants exceed ~5. Asymmetry between two adapter families is fine when their variant counts justify it; note the reason where it is not obvious.
+
+### Adaptations Do Not Relax the File-Role Rule
+
+None of the allowances above override principle 6. A file that contains a provider, provisioner, service, executor, or orchestrator is still named after that role — unless it is intentionally a focused concept-specific helper.
+
 ## Anti-Patterns to Avoid
 
 1. **Role-based folders**: Grouping by `services/`, `handlers/`, `repositories/` instead of business concepts
@@ -301,6 +336,7 @@ Place shared helpers in the smallest meaningful owning namespace. If only Kubern
 7. **Orphan concept folders**: Folders with only a sweeper or runner and no port or service
 8. **NoOp files**: Separate `noop_provider.rs` files instead of keeping stubs near the trait
 9. **Data structs in `port.rs`**: Putting value structs/enums in the traits file instead of `model.rs`
+10. **Parallel sibling modules**: Several peer modules doing the same thing with duplicated primitive types and lifecycle policy, instead of one capability parent with technology subfolders and a shared `primitives.rs`
 
 ## Quick Reference
 
