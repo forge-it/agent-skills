@@ -89,8 +89,7 @@ Choosing late has compounding costs:
 
 ## Worked Example — ironbox
 
-ironbox follows the **hand-written mirror** strategy, documented in
-ADR-R03 (ironbox `docs/decisions/03-frontend-api-type-mirroring.md`).
+ironbox follows the **hand-written mirror** strategy.
 
 ### The mechanism
 
@@ -104,7 +103,7 @@ endpoint carries a comment naming the frontend file it mirrors:
 //
 // Wire DTOs for the workspace-overview API surface.
 // The overview response and the browser-facing SSE event bodies, snake_case
-// per ADR-R03 (the frontend mirrors these field-for-field).
+// (the frontend mirrors these field-for-field).
 
 #[derive(Serialize, ToSchema)]
 pub struct WorkspaceOverviewResponse {
@@ -153,7 +152,7 @@ types declare.
 
 ### How drift is mitigated without codegen
 
-Three constraints hold the risk to an acceptable level in ironbox's context:
+Three constraints hold the risk to an acceptable level:
 
 - **Co-release.** `.github/workflows/release.yml` builds and publishes `core`
   and `web` in the same workflow. A backend field change and its frontend mirror
@@ -179,7 +178,7 @@ temporary one.
 
 ### Revisit triggers
 
-ironbox's ADR names explicit conditions under which to move to codegen:
+Move to codegen when any of these conditions hold:
 - the shared/API type surface grows beyond what a single reviewer can keep in
   sync by inspection;
 - a contract gains a second independent consumer;
@@ -223,7 +222,7 @@ existing `src/features/*/types/` directories in one pass.
   change.
 - **Assuming co-release always holds.** The hand-written mirror strategy is
   explicitly conditional on co-release and a small team. Document the
-  assumptions (as ADR-R03 does) so they are visible when they change.
+  assumptions in the ADR so they are visible when they change.
 - **Adding field-name transformations in the HTTP client.** A camelCase
   conversion layer between the wire format and the TypeScript type hides mismatches
   that a field-for-field comparison would catch.
@@ -231,7 +230,7 @@ existing `src/features/*/types/` directories in one pass.
 ## Relationship to Other Skills and Patterns
 
 - **[docs_artifact_layout_pattern](../documentation/docs_artifact_layout_pattern.md)** —
-  describes where ADR-R03 lives (`docs/decisions/`) and the layout conventions
+  describes where this ADR lives (`docs/decisions/`) and the layout conventions
   for recording this decision at the time it is made.
 - **`rest-api-design` / `syneto-rest-api-design`** — defines the REST API
   contract that the frontend is mirroring. The contract is the source; this
