@@ -72,7 +72,7 @@ spans two categories, break it into two recipes and have the outer one call both
 ## Environment-file conventions
 
 Each component has its own `.env` file that is **never committed** (`.gitignore`
-it). The pattern used in ironbox, and the one to replicate:
+it). The conventions to replicate:
 
 | File | Purpose | Committed? |
 |---|---|---|
@@ -379,8 +379,8 @@ job; the justfile only names which NPM/cargo script to invoke.
 
 When the full stack has an ordering dependency (e.g., the worker must not start
 until the broker and gRPC server are reachable), encode it in `dev-up` directly.
-The ironbox pattern: start `core` and `web` in background, then poll a TCP port
-with `/dev/tcp` until core answers, then start the worker. Adjust the port to
+A common pattern: start the backend and frontend in the background, then poll a TCP port
+with `/dev/tcp` until the backend answers, then start the worker. Adjust the port to
 match your project's gRPC or health-check port.
 
 Do not poll HTTP in dev-up — `/dev/tcp` is a lighter probe and works before

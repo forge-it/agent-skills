@@ -53,8 +53,9 @@ These three skills install the local check; this skill makes it a build-breaker.
 
 ## Workflow template
 
-The template below is grounded in ironbox's `ci.yml`. Adapt job names, package
-names (`-p ironbox-core`), and working-directory prefixes to match your project.
+The template below is a reference for a Rust + Vue monorepo. Adapt job names,
+package names (`-p <your-crate>`), and working-directory prefixes to match your
+project.
 
 ```yaml
 name: CI
@@ -247,11 +248,13 @@ The jobs above are the **static-analysis and unit-test tier** — they run on ev
 push with no external services required.
 
 Integration tests that require a live database, message broker, or object-store
-are a separate concern. In ironbox these run in a dedicated release-pipeline job
-(`core-test` in `release.yml`) that spins up the full Docker Compose stack, waits
-for health checks, then runs `cargo test -p ironbox-core --features ci`. The
+are a separate concern. They typically run in a dedicated job that spins up the
+full Docker Compose stack, waits for health checks, then runs the integration
+suite behind a feature flag (e.g. `cargo test -p <your-crate> --features ci`). The
 `--features ci` flag gates integration tests so `cargo test` without the flag runs
-unit tests only — the local and CI experiences stay symmetrical.
+unit tests only — the local and CI experiences stay symmetrical. See the
+`parallel_test_isolation_pattern` for the Docker stack and per-test isolation
+behind this job.
 
 If your project has integration tests:
 
