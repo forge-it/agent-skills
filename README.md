@@ -33,6 +33,37 @@ Each skill includes:
 | [rust-hexagonal-architecture](software-engineering/rust-hexagonal-architecture/SKILL.md) | Hexagonal architecture (ports and adapters) for Rust |
 | [rust-testing](software-engineering/rust-testing/SKILL.md) | Rust testing best practices using cargo test |
 
+> **Note:** the table above lists the original core skills only. The repository also contains setup skills, structure-and-style guard skills, Python DDD, and Vue skills not yet enumerated here.
+
+### Greenfield Project Setup
+
+Start a new project with [`greenfield-project-setup`](software-engineering/greenfield-project-setup/SKILL.md) — a thin orchestrator that brings up a python+vue, rust+vue, or combination monorepo correctly from commit 1. It detects the stack, walks an ordered phase sequence, delegates each phase to the skill or pattern that owns it, and runs a verification gate after each so a missing invariant fails at setup rather than months later.
+
+It sequences these **one-shot setup skills** (each installs an invariant from commit 1):
+[`rust-workspace-setup`](software-engineering/rust-workspace-setup/SKILL.md) ·
+[`justfile-setup`](software-engineering/justfile-setup/SKILL.md) ·
+[`ci-setup`](software-engineering/ci-setup/SKILL.md) ·
+[`agent-hooks-setup`](software-engineering/agent-hooks-setup/SKILL.md)
+— alongside the existing `rust-architecture-test-setup`, `python-import-linter-setup`, `frontend-vue-eslint-setup`, and `rust-project-setup`.
+
+## Patterns
+
+Language-agnostic backend / full-stack architecture patterns — each a concrete worked example (drawn from a real codebase) plus a cross-language mapping. Distinct from the language-specific skills above, which state rules; patterns show structures.
+
+| Category | Pattern | What it captures |
+|----------|---------|------------------|
+| project_structure | [composition_pattern](patterns/project_structure/composition_pattern.md) | Composition Root: one place wires the object graph, pure construction |
+| lifecycle | [bootstrap_pattern](patterns/lifecycle/bootstrap_pattern.md) | Startup side effects: idempotent seeding, fail-fast eager init |
+| lifecycle | [runtime_pattern](patterns/lifecycle/runtime_pattern.md) | Background worker supervision + bounded graceful drain |
+| scalability | [worker_pattern](patterns/scalability/worker_pattern.md) | Broker-backed worker as its own hexagonal app (scalable from day 1) |
+| testing | [parallel_test_isolation_pattern](patterns/testing/parallel_test_isolation_pattern.md) | Parallel integration tests via per-test isolation |
+| decisions | [local_port_allocation_pattern](patterns/decisions/local_port_allocation_pattern.md) | Non-overlapping port ranges (ADR) for parallel envs/worktrees |
+| decisions | [frontend_api_type_mirroring_pattern](patterns/decisions/frontend_api_type_mirroring_pattern.md) | Keep frontend types in sync with the API contract (ADR) |
+| documentation | [claude_md_pattern](patterns/documentation/claude_md_pattern.md) | CLAUDE.md navigation hierarchy + templates |
+| documentation | [docs_artifact_layout_pattern](patterns/documentation/docs_artifact_layout_pattern.md) | Root + per-component `docs/` layout |
+| documentation | [repo_root_files_pattern](patterns/documentation/repo_root_files_pattern.md) | Canonical root + per-component files (README, env, etc.) |
+| automation | [dependency_audit_pattern](patterns/automation/dependency_audit_pattern.md) | Cross-stack dependency/security audit command |
+
 ## Project Structure
 
 ```
