@@ -1,107 +1,127 @@
 ---
 name: general-workflow
-description: Defines how to collaborate on software tasks. Use it on every request that involves writing, changing, or debugging code.
+description: "Defines a practical workflow for software tasks: inspect context, decide when to proceed directly versus consult the user, protect existing work, make assumptions explicit, keep changes scoped, verify, and report. Use it on requests that involve writing, changing, or debugging code; investigating failures; choosing implementation approaches; or coordinating safe work in a codebase."
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.5"
+  version: "0.0.6"
 ---
 
 # General Workflow Skill
 
 ## Purpose
 
-This skill provides guidelines for the general workflow when assisting with software development. It focuses on consultation before implementation and avoiding assumptions.
+Use this skill to keep software work pragmatic, scoped, and collaborative.
 
-## When to Apply
-
-Apply these guidelines when:
-- Starting any code changes
-- Problem-solving or debugging
-- Implementing fixes or workarounds
-- Making any decisions that affect the codebase
+Default to this workflow: inspect, make the smallest safe change, verify, and report. Escalate to the user when the next decision is ambiguous, risky, irreversible, or belongs to product or architecture ownership.
 
 ## Core Principles
 
-### 1. Consultation Before Implementation (CRITICAL)
+### 1. Inspect Before Acting (CRITICAL)
 
-Before implementing any fix, workaround, or solution to a problem, you MUST consult with the user first to discuss the approach. Present the problem clearly, suggest potential solutions, and wait for approval before proceeding.
+Read the relevant code, tests, configuration, and current Git state before changing files. Let the existing system shape the solution.
 
-```
-# Bad workflow
-User: "The login is broken"
-AI: *immediately starts changing code*
+Use targeted commands first:
 
-# Good workflow
-User: "The login is broken"
-AI: "I've identified the issue: the session token isn't being refreshed.
-     I see two potential solutions:
-     1. Extend the token TTL from 1 hour to 24 hours
-     2. Implement automatic token refresh before expiration
-     
-     Option 1 is simpler but less secure. Option 2 is more robust.
-     Which approach would you prefer?"
-User: "Let's go with option 2"
-AI: *implements the approved solution*
+```bash
+git status --short
+rg "pattern"
+rg --files
 ```
 
-### 2. No Assumptions (CRITICAL)
+Avoid broad recursive listings. When listing or searching project files, exclude high-noise generated directories such as `.git/`, `target/`, `node_modules/`, `__pycache__/`, `dist/`, `build/`, and `.venv/`. Do not blanket-exclude lockfiles such as `poetry.lock` or `uv.lock`; they often identify the project tooling.
 
-Never assume the best solution. Always present options and let the user decide the direction. Even if one solution seems obviously better, present alternatives for consideration.
+### 2. Proceed Directly for Low-Risk Work (HIGH)
 
+Implement without asking first when the request is clear and the change is narrow, reversible, and consistent with existing patterns.
+
+Proceed directly for examples like:
+
+- focused bug fixes
+- failing test repairs
+- small refactors that preserve behavior
+- documentation or typo corrections
+- adding tests for existing behavior
+- mechanical updates requested explicitly by the user
+
+State material assumptions in the final report when they influenced the implementation.
+
+### 3. Consult When the Decision Belongs to the User (CRITICAL)
+
+Pause and ask before implementing when the next choice changes ownership-level decisions or carries meaningful risk.
+
+Ask first for examples like:
+
+- public API, CLI, schema, wire-format, or migration changes
+- product behavior, UX, pricing, policy, or compatibility decisions
+- security posture, authentication, authorization, or privacy-sensitive changes
+- new dependencies, major version upgrades, or licensing implications
+- deployment, infrastructure, cost-bearing, or production-impacting changes
+- destructive Git or filesystem operations
+- broad rewrites where several viable approaches have different trade-offs
+
+When asking, present the smallest useful set of options with trade-offs and recommend one if the evidence supports it.
+
+### 4. Make Conservative Assumptions Explicit (HIGH)
+
+Do not block on every missing detail. Make conservative assumptions when they are low-risk and easy to correct. Ask only when a wrong assumption would cause waste, break a contract, damage data, or commit the user to a direction they did not choose.
+
+Prefer this pattern:
+
+```text
+I will keep the endpoint shape unchanged and fix the null handling locally. If the intended behavior is to change the response contract, that needs a separate decision.
 ```
-# Bad - assuming the solution
-"I'll fix this by adding a retry mechanism."
 
-# Good - presenting options
-"This failure could be addressed in several ways:
-1. Add a retry mechanism with exponential backoff
-2. Implement a circuit breaker pattern
-3. Add better error handling and user feedback
-4. Cache the response to reduce API calls
+### 5. Protect Existing Work (CRITICAL)
 
-Each has trade-offs. What's your preference?"
-```
+Assume uncommitted changes may belong to the user. Do not revert, overwrite, stage, or reformat unrelated files. If unrelated changes are present, work around them. If they block the requested task, explain the conflict and ask how to proceed.
+
+### 6. Verify Before Reporting Done (HIGH)
+
+Run the smallest relevant verification command after changing files: a focused test, typecheck, linter, formatter check, build, or smoke test. If verification cannot be run, report exactly what was skipped and why.
 
 ## Anti-Patterns to Avoid
 
-1. **Immediate implementation**: Starting to code before discussing the approach
-2. **Single-solution thinking**: Presenting only one option without alternatives
-3. **Assuming context**: Making decisions based on assumed requirements
-4. **Silent changes**: Making modifications without explaining what and why
+1. **Uninspected edits**: changing files before reading the relevant code and state
+2. **Over-consulting**: asking for approval on narrow, obvious, reversible work
+3. **Silent risky decisions**: changing contracts, architecture, data, dependencies, or deployment behavior without user input
+4. **Assumption hiding**: relying on a meaningful assumption without saying so
+5. **Scope creep**: broad refactors or formatting churn unrelated to the request
+6. **User-work damage**: overwriting, reverting, or staging unrelated changes
+7. **Unverified claims**: saying work is done without checking the result or explaining why checks were skipped
 
 ## Guidelines
 
-### Before Any Change
-- Understand the problem fully
-- Identify multiple potential solutions
-- Present options with trade-offs
-- Wait for user approval
+### Before Changing Files
+
+- Inspect the relevant code path and tests
+- Check `git status --short`
+- Identify the smallest change that satisfies the request
+- Decide whether the next decision is low-risk enough to proceed or needs user input
 
 ### Communication
+
 - Be clear about what you found
-- Explain the implications of each option
-- Ask clarifying questions when needed
-- Confirm understanding before proceeding
+- Give short progress updates during longer work
+- Ask focused questions only when the answer materially affects the implementation
+- Explain trade-offs when asking the user to choose
+- Report assumptions, changed files, and verification results
 
 ### Decision Making
-- Never decide on behalf of the user
-- Present pros and cons objectively
-- Respect user preferences even if you disagree
-- Document the chosen approach
 
-### Codebase Exploration
-- When listing or exploring project files, always exclude `.git/`, `target/`, `node_modules/`, `__pycache__`, `dist`, `poetry.lock`, `uv.lock` directories. They contain thousands of internal objects that waste context tokens and provide no useful information.
-- Prefer targeted searches (specific files, patterns, grep) over broad recursive directory listings.
+- Prefer the codebase's existing patterns over new abstractions
+- Keep changes proportional to the request
+- Recommend an option when the evidence is clear
+- Respect explicit user direction unless it conflicts with safety, policy, or repository constraints
 
 ### Process Flow
+
 ```
 1. Receive request/problem
-2. Investigate and understand
-3. Identify possible solutions
-4. Present options with trade-offs
-5. Wait for user decision
-6. Confirm the chosen approach
-7. Implement the approved solution
-8. Verify and report results
+2. Inspect relevant files, tests, configuration, and Git state
+3. Identify the smallest safe approach
+4. Proceed directly for low-risk work, or ask when the decision belongs to the user
+5. Implement the scoped change
+6. Verify with the smallest relevant check
+7. Report what changed, what was verified, and any remaining risk
 ```
