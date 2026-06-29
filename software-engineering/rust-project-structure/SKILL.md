@@ -4,7 +4,7 @@ description: Conventions for organising modules, files, and folders inside a Rus
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.3"
+  version: "0.0.4"
 ---
 
 # Project Structure Skill
@@ -30,6 +30,27 @@ Do not apply when:
 - The project already follows a different, well-established convention that the team has agreed on
 
 ## Core Principles
+
+### 0. Modern Module Files: Never `mod.rs` by Default (CRITICAL)
+
+`mod.rs` is legacy Rust module layout and must not be created or preserved by default. Use the modern sibling-file layout: `module_name.rs` next to `module_name/`, with submodules declared from `module_name.rs`.
+
+Only use or keep `mod.rs` when the operator has made an explicit decision for that exact module. Treat any existing or proposed `mod.rs` as a structural issue that requires either conversion to `module_name.rs` or an operator decision before proceeding.
+
+```
+# Bad — legacy module layout
+src/application/order/
+├── mod.rs
+├── service.rs
+└── port.rs
+
+# Good — modern sibling-file layout
+src/application/
+├── order.rs
+└── order/
+    ├── service.rs
+    └── port.rs
+```
 
 ### 1. Concept-Based Folders (CRITICAL)
 
@@ -327,26 +348,28 @@ None of the allowances above override principle 6. A file that contains a provid
 
 ## Anti-Patterns to Avoid
 
-1. **Role-based folders**: Grouping by `services/`, `handlers/`, `repositories/` instead of business concepts
-2. **Stuttering module names**: `order/order_handler.rs` instead of `order/handler.rs`
-3. **Scattered traits**: Splitting traits for a single concept across multiple files
-4. **Scattered errors**: Creating `service_error.rs`, `executor_error.rs` instead of a single `error.rs`
-5. **Weak bucket folders**: `shared/`, `common/`, `utils/` collecting unrelated concerns
-6. **File names matching struct prefixes**: `default_service.rs` instead of `service.rs`
-7. **Orphan concept folders**: Folders with only a sweeper or runner and no port or service
-8. **NoOp files**: Separate `noop_provider.rs` files instead of keeping stubs near the trait
-9. **Data structs in `port.rs`**: Putting value structs/enums in the traits file instead of `model.rs`
-10. **Parallel sibling modules**: Several peer modules doing the same thing with duplicated primitive types and lifecycle policy, instead of one capability parent with technology subfolders and a shared `primitives.rs`
+1. **`mod.rs` files without an operator decision**: Creating or preserving legacy Rust module layout instead of `module_name.rs`
+2. **Role-based folders**: Grouping by `services/`, `handlers/`, `repositories/` instead of business concepts
+3. **Stuttering module names**: `order/order_handler.rs` instead of `order/handler.rs`
+4. **Scattered traits**: Splitting traits for a single concept across multiple files
+5. **Scattered errors**: Creating `service_error.rs`, `executor_error.rs` instead of a single `error.rs`
+6. **Weak bucket folders**: `shared/`, `common/`, `utils/` collecting unrelated concerns
+7. **File names matching struct prefixes**: `default_service.rs` instead of `service.rs`
+8. **Orphan concept folders**: Folders with only a sweeper or runner and no port or service
+9. **NoOp files**: Separate `noop_provider.rs` files instead of keeping stubs near the trait
+10. **Data structs in `port.rs`**: Putting value structs/enums in the traits file instead of `model.rs`
+11. **Parallel sibling modules**: Several peer modules doing the same thing with duplicated primitive types and lifecycle policy, instead of one capability parent with technology subfolders and a shared `primitives.rs`
 
 ## Quick Reference
 
 ### Adding a New Concept
 
-1. Create a folder named after the business concept under the appropriate layer
-2. Add `port.rs` with all traits for this concept (if defining traits)
-3. Add `error.rs` with all error enums (if defining errors)
-4. Add `service.rs` with the `Default*` implementation
-5. Add additional role files (`orchestrator.rs`, `executor.rs`) only as needed
+1. Create `concept.rs` next to `concept/`; do not create `concept/mod.rs` unless the operator explicitly decided that exact module
+2. Create a folder named after the business concept under the appropriate layer
+3. Add `port.rs` with all traits for this concept (if defining traits)
+4. Add `error.rs` with all error enums (if defining errors)
+5. Add `service.rs` with the `Default*` implementation
+6. Add additional role files (`orchestrator.rs`, `executor.rs`) only as needed
 
 ### Adding a Component to an Existing Concept
 
