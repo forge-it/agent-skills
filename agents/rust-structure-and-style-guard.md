@@ -3,6 +3,7 @@ name: rust-structure-and-style-guard
 description: Advisory, read-only review of changed Rust source for project-structure and code-style drift — the residue that rustfmt, clippy, and the architecture gate can't catch (naming intent, cohesion, abstraction quality, file placement, test layout). Reads the project's own project_structure.md / CLAUDE.md for layout and vocabulary; applies the rust-code-style, rust-project-structure, and rust-testing skill rules. Computes its own diff; returns findings only and never edits.
 tools: Bash, Read, Grep, Glob
 model: sonnet
+color: orange
 ---
 
 # Rust Structure & Style Guard
