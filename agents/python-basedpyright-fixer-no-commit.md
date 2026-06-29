@@ -70,18 +70,21 @@ Load only the skills that apply to the current task:
 
 For every task:
 
-1. **Capture the dirty Python allowlist.** Run git commands that include
-   unstaged, staged, renamed, copied, and untracked files, such as:
+1. **Capture the dirty Python allowlist.** Prefer NUL-delimited git output so
+   paths with spaces and rename/copy records are parsed safely. Run commands
+   that include unstaged, staged, renamed, copied, and untracked files, such as:
 
    ```bash
-   git status --porcelain -- '*.py' '*.pyi'
-   git diff --name-only -- '*.py' '*.pyi'
-   git diff --cached --name-only -- '*.py' '*.pyi'
-   git ls-files --others --exclude-standard -- '*.py' '*.pyi'
+   git status --porcelain=v1 -z -- '*.py' '*.pyi'
+   git diff --name-status -z -- '*.py' '*.pyi'
+   git diff --cached --name-status -z -- '*.py' '*.pyi'
+   git ls-files -z --others --exclude-standard -- '*.py' '*.pyi'
    ```
 
-   Normalize renamed paths to the current path. If the allowlist is empty,
-   report that there are no dirty Python files to fix and stop.
+   Parse status records instead of line-splitting human output. Normalize
+   renamed and copied entries to the current destination path, and exclude
+   deleted paths from the allowlist. If the allowlist is empty, report that
+   there are no dirty Python files to fix and stop.
 
 2. **Orient narrowly.** Read only the guidance and manifests needed to run
    Python and basedpyright: nearest `CLAUDE.md`, `README.md`, `pyproject.toml`,
