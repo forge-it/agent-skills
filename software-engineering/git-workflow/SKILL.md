@@ -1,52 +1,22 @@
 ---
 name: git-workflow
-description: Guidelines for working with Git version control. Use whenever creating branches, writing commit messages, or pushing changes.
-license: UNLICENSED
+description: Defines safe Git workflow conventions for agents. Use whenever creating or naming branches, inspecting or staging changes, writing commit messages, creating commits, pushing branches, force-pushing, or otherwise working with Git state.
 metadata:
-  author: Cristian
   version: "0.0.4"
 ---
 
 # Git Workflow Skill
 
-## Purpose
+## Non-Negotiable Rules
 
-This skill provides guidelines for working with Git version control. It focuses on branch naming, commit message quality, and safe push practices.
+- Create commits only when explicitly prompted.
+- Push only after explicit permission for that push operation.
+- Never add `Co-Authored-By:`, `Made-By:`, or any other trailer that attributes an AI tool to a commit.
+- Preserve user changes. Do not stage, revert, or rewrite unrelated work.
+- Do not use `git add .` or `git add -A` blindly. Stage only the intended paths or hunks.
+- Never use `git push --force`. Use `git push --force-with-lease` only after discussing the risk and receiving command-specific permission.
 
-## When to Apply
-
-Apply these guidelines when:
-- Creating new branches
-- Writing commit messages
-- Preparing to push changes
-- Working with version control
-
-## Core Principles
-
-### 1. Diff-Based Commits (CRITICAL)
-
-Before creating a commit message, always examine the actual `git diff` to see specific changes. Never make assumptions based on file names or branch names alone. Digest the information and extract the essence of what was implemented.
-
-```bash
-# Always run this first
-git diff
-
-# Then create a commit message based on what you actually see
-```
-
-### 2. Never Push Without Permission (CRITICAL)
-
-**NEVER use `git push` without explicit permission.** Always ask for explicit permission before every single `git push` operation.
-
-### 3. No AI Co-Author Trailers (CRITICAL)
-
-**NEVER add `Co-Authored-By:` or `Made-By:` or any other trailer that attributes an AI tool to a commit.** This applies to all AI assistants including Claude, Cursor, GitHub Copilot, ChatGPT, and any other AI. Commit history must reflect only the human author(s).
-
-### 4. Commit Only When Prompted (CRITICAL)
-
-Only create commits when explicitly prompted to do so. Never commit automatically.
-
-### 5. Branch Naming (HIGH)
+## Branch Naming
 
 Create branches using the pattern: `<TICKET-NUMBER>-<what-problem-is-fixed>`
 
@@ -69,7 +39,26 @@ git checkout -b new-feature
 git checkout -b johns-branch
 ```
 
-### 6. Commit Message Format (HIGH)
+Keep ticket IDs in the project's normal casing. Write the descriptive slug in lowercase with hyphens.
+
+## Commit Workflow
+
+Before proposing or creating a commit, inspect the actual Git state:
+
+```bash
+git status --short
+git diff
+git diff --cached
+```
+
+Use the diff that will actually be committed:
+
+- If changes are already staged, base the commit message on `git diff --cached`.
+- If no changes are staged and the user asked you to commit, stage only the intended files or hunks, then re-check `git diff --cached`.
+- If staged and unstaged changes both exist, keep the commit message scoped to staged changes and call out unstaged changes separately.
+- Never infer the commit message from file names, branch names, or prior discussion alone.
+
+## Commit Message Format
 
 Structure commits as: `"<TICKET-NUMBER>: What are the main changes and why"`
 
@@ -98,7 +87,7 @@ git commit -m "updates"
 git commit -m "WIP"
 ```
 
-### 7. Message Proportionality (HIGH)
+## Message Proportionality
 
 Make commit messages proportional to changes:
 - Small changes (typos, minor fixes) = short, concise messages
@@ -118,49 +107,29 @@ git commit -m "FEAT-456: Implement user authentication system
 - Add rate limiting for auth endpoints"
 ```
 
-## Anti-Patterns to Avoid
+## Process Flow
 
-1. **Blind commits**: Committing without reviewing `git diff`
-2. **Auto-pushing**: Pushing without explicit permission
-3. **Auto-committing**: Committing without being prompted
-4. **Generic messages**: Using "fix", "update", "changes" without context
-5. **Missing prefix**: Commits without ticket number or conventional prefix
-6. **Disproportionate messages**: Long messages for tiny changes or vice versa
-7. **AI co-author trailers**: Never add `Co-Authored-By:` trailers attributing AI tools (Claude, Cursor, Copilot, ChatGPT, or any other AI assistant) to commits. Commit messages must reflect only the human author(s).
-
-## Guidelines
-
-### Branch Naming
-- With tickets: `<TICKET-NUMBER>-<what-problem-is-fixed>`
-- Without tickets: `<prefix>/<what-problem-is-fixed>`
-- Use lowercase with hyphens
-- Be descriptive about the problem being solved
-
-### Commit Messages
-- With tickets: `<TICKET-NUMBER>: What are the main changes and why`
-- Without tickets: `<prefix>: What are the main changes and why`
-- Prefixes: `fix:`, `feat:`, `chore:`, `wip:`
-- Always check `git diff` before writing the message
-- Ask for ticket number if not found in branch name (for projects that use tickets)
-- Match message length to change scope
-
-### Process Flow
 ```
-1. git diff                    # Review actual changes
-2. Digest the changes          # Understand what was done
-3. Create proportional message # Match scope to message
-4. Wait for commit prompt      # Don't commit automatically
-5. git commit                  # Commit when prompted
-6. Ask permission              # Before any push
-7. git push                    # Only after permission
+1. git status --short          # Inspect working tree state
+2. git diff                    # Review unstaged changes
+3. git diff --cached           # Review staged changes
+4. Stage intended changes      # Only after a commit prompt
+5. Re-check git diff --cached  # Confirm exactly what will be committed
+6. Write the message           # Match scope to staged changes
+7. git commit                  # Commit only when prompted
 ```
 
-### Commit Timing
-- Only commit when explicitly asked
-- Never batch multiple unrelated changes
-- Keep commits focused and atomic
+Keep commits focused and atomic. Do not batch unrelated changes into one commit.
 
-### Push Safety
-- Always ask before pushing
-- Never use `git push --force` without discussion
-- Verify the correct remote and branch
+## Push Safety
+
+Before asking for push permission, inspect the target:
+
+```bash
+git status -sb
+git remote -v
+git branch --show-current
+git branch -vv
+```
+
+State the remote, local branch, upstream branch, and exact push command. Push only after the user explicitly approves that command.
