@@ -1,6 +1,6 @@
 ---
 name: rust-architecture-test-setup
-description: One-time setup of a `tests/structure/` cargo-test gate for a Rust hexagonal-architecture project, so the layering invariants (dependencies point inward — domain → application → infrastructure) and the project-structure conventions (`port.rs` holds traits only, file names don't stutter, the domain stays framework-free) are enforced by `cargo test` — and therefore CI — instead of by review. Use when bootstrapping a new Rust hexagonal project's architecture enforcement, or adding it to an existing one. Assumes a layered hexagonal codebase (domain/application/infrastructure under `src/`).
+description: One-time setup of a `tests/structure/` cargo-test gate for a Rust hexagonal-architecture project, so the layering invariants (dependencies point inward — domain → application → infrastructure) and the project-structure conventions (`port.rs` holds traits only, file names don't stutter, `mod.rs` stays out of `src/` and `tests/` except `tests/common/`, the domain stays framework-free) are enforced by `cargo test` — and therefore CI — instead of by review. Use when bootstrapping a new Rust hexagonal project's architecture enforcement, or adding it to an existing one. Assumes a layered hexagonal codebase (domain/application/infrastructure under `src/`).
 vibe: Turns the architecture doc into a build that fails when someone crosses a layer.
 license: UNLICENSED
 metadata:
@@ -19,9 +19,9 @@ inverts. Encoded as a `cargo test` that fails on the violation, the same mistake
 blocks the merge.
 
 It needs **no extra toolchain and no crate split** — it is a plain integration test
-that scans the source files under `src/`. (The stronger, compile-time alternative —
-one crate per layer — is described at the end; this skill is the pragmatic
-single-crate gate.)
+that scans the source files under `src/` and the test files under `tests/`. (The
+stronger, compile-time alternative — one crate per layer — is described at the end;
+this skill is the pragmatic single-crate gate.)
 
 ## When to use
 
@@ -37,7 +37,7 @@ Run this once. After `tests/structure/` exists, you do not re-run the skill.
 
 ## What it enforces
 
-Four rules, drawn from the two architecture skills:
+Five rules, drawn from the two architecture skills:
 
 1. **Dependencies point inward** — a file under `domain/` must not reference
    `application` or `infrastructure`; a file under `application/` must not reference
@@ -48,6 +48,8 @@ Four rules, drawn from the two architecture skills:
    `error.rs`. (`rust-project-structure`, "Data Types Live in `model.rs`".)
 4. **File names don't stutter** — `backup/executor.rs`, never
    `backup/backup_executor.rs`. (`rust-project-structure`, "Short Module Names".)
+5. **No legacy `mod.rs` layout** — `mod.rs` is forbidden under `src/` and `tests/`,
+   except for the shared test helper entry point `tests/common/mod.rs`.
 
 It assumes the canonical hexagonal layers `domain/`, `application/`, `infrastructure/`
 under `src/`. Adapt the layer set in `constants.rs` (see
@@ -71,7 +73,7 @@ tests/
 ├── structure.rs                 # entry: declares the module tree
 └── structure/
     ├── layering.rs              # tests-only: dependency-direction rules
-    ├── naming.rs                # tests-only: file-name stutter rule
+    ├── naming.rs                # tests-only: file-name stutter + mod.rs rules
     ├── ports.rs                 # tests-only: port.rs-traits-only rule
     └── support/
         ├── constants.rs         # layer names, forbidden lists, magic strings
@@ -114,8 +116,9 @@ pub mod violation;
 
 ```rust
 //! Shared values for the structure invariants: the layer names, the inward-only
-//! dependency rules, the infrastructure crates the domain must never import, and
-//! the magic strings the checks match against.
+//! dependency rules, the infrastructure crates the domain must never import, the
+//! legacy module-layout exceptions, and the magic strings the checks match
+//! against.
 
 /// The architectural layers, by their directory name under `src/`.
 pub const DOMAIN_LAYER: &str = "domain";
@@ -154,6 +157,16 @@ pub const INFRASTRUCTURE_CRATES: &[&str] = &[
 /// File name that, by convention, holds a concept's trait definitions (ports).
 pub const PORT_FILE_NAME: &str = "port.rs";
 
+/// Legacy Rust module-layout file name. It is forbidden except at explicitly
+/// allowed paths.
+pub const MOD_FILE_NAME: &str = "mod.rs";
+
+/// Roots scanned by the legacy `mod.rs` layout rule.
+pub const MOD_FILE_SEARCH_ROOTS: &[&str] = &["src", "tests"];
+
+/// Exact crate-relative paths where `mod.rs` remains allowed.
+pub const MOD_FILE_ALLOWED_PATHS: &[&str] = &["tests/common/mod.rs"];
+
 /// Marker identifying NoOp stub types, which may live next to their trait.
 pub const NOOP_STUB_MARKER: &str = "NoOp";
 
@@ -168,8 +181,9 @@ pub const USE_KEYWORD: &str = "use";
 
 ```rust
 //! Source-reading primitives for the structure tests: the source tree (locate
-//! `src/`, walk it, read files, relativize paths) and single-line classifiers.
-//! Resolved from `CARGO_MANIFEST_DIR`, so the working directory does not matter.
+//! `src/` and other checked roots, walk them, read files, relativize paths) and
+//! single-line classifiers. Resolved from `CARGO_MANIFEST_DIR`, so the working
+//! directory does not matter.
 
 use std::path::{Path, PathBuf};
 
@@ -194,6 +208,15 @@ impl SourceTree {
         self.rust_files_under(&self.crate_root.join("src").join(layer))
     }
 
+    pub(crate) fn rust_files_in_roots(&self, roots: &[&str]) -> Vec<PathBuf> {
+        let mut files = Vec::new();
+        for root in roots {
+            files.extend(self.rust_files_under(&self.crate_root.join(root)));
+        }
+        files.sort();
+        files
+    }
+
     pub(crate) fn read(&self, path: &Path) -> String {
         std::fs::read_to_string(path)
             .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()))
@@ -204,6 +227,15 @@ impl SourceTree {
             .unwrap_or(path)
             .display()
             .to_string()
+    }
+
+    pub(crate) fn relative_unix(&self, path: &Path) -> String {
+        path.strip_prefix(&self.crate_root)
+            .unwrap_or(path)
+            .components()
+            .map(|component| component.as_os_str().to_string_lossy().into_owned())
+            .collect::<Vec<_>>()
+            .join("/")
     }
 
     fn rust_files_under(&self, directory: &Path) -> Vec<PathBuf> {
@@ -328,7 +360,8 @@ impl fmt::Display for Violation {
 //! scanning function.
 
 use super::constants::{
-    CRATE_PATH_PREFIX, DOMAIN_LAYER, NOOP_STUB_MARKER, PORT_FILE_NAME, USE_KEYWORD,
+    CRATE_PATH_PREFIX, DOMAIN_LAYER, MOD_FILE_ALLOWED_PATHS, MOD_FILE_NAME,
+    MOD_FILE_SEARCH_ROOTS, NOOP_STUB_MARKER, PORT_FILE_NAME, USE_KEYWORD,
 };
 use super::source::{SourceLine, SourceTree};
 use super::violation::Violation;
@@ -430,6 +463,33 @@ impl Rule {
                             &format!("file name repeats parent `{parent}/` -> drop the `{parent}_` prefix"),
                         ));
                     }
+                }
+                violations
+            }),
+        }
+    }
+
+    /// `mod.rs` is the legacy Rust module layout. It is forbidden under `src/`
+    /// and `tests/` except for explicitly allowed shared test-helper entry
+    /// points such as `tests/common/mod.rs`.
+    pub fn mod_files_are_limited_to_allowed_paths() -> Self {
+        Self {
+            description: "mod.rs files are forbidden except in allowed paths".to_string(),
+            check: Box::new(|source_tree| {
+                let mut violations = Vec::new();
+                let allowed_paths = MOD_FILE_ALLOWED_PATHS.join(", ");
+                for file in source_tree.rust_files_in_roots(MOD_FILE_SEARCH_ROOTS) {
+                    if file.file_name().and_then(|name| name.to_str()) != Some(MOD_FILE_NAME) {
+                        continue;
+                    }
+                    let relative_file = source_tree.relative_unix(&file);
+                    if MOD_FILE_ALLOWED_PATHS.contains(&relative_file.as_str()) {
+                        continue;
+                    }
+                    violations.push(Violation::in_file(
+                        &relative_file,
+                        &format!("`mod.rs` is only allowed at {allowed_paths}"),
+                    ));
                 }
                 violations
             }),
@@ -540,6 +600,15 @@ mod file_names {
         Rule::file_names_do_not_repeat_parent().enforce();
     }
 }
+
+mod module_files {
+    use super::*;
+
+    #[test]
+    fn should_allow_mod_rs_only_in_tests_common() {
+        Rule::mod_files_are_limited_to_allowed_paths().enforce();
+    }
+}
 ```
 
 ### `tests/structure/ports.rs`
@@ -588,6 +657,15 @@ cargo test --test structure   # expect: domain_layer::should_not_depend_on_outwa
 rm src/domain/__probe.rs
 ```
 
+For the `mod.rs` rule, probe a throwaway module-layout file:
+
+```bash
+mkdir -p src/__probe
+printf '' > src/__probe/mod.rs
+cargo test --test structure   # expect: module_files::should_allow_mod_rs_only_in_tests_common fails
+rm -r src/__probe
+```
+
 On a **new** project the suite then passes clean. On an **existing** project it now
 prints exactly where the codebase diverges — this is your conformance report.
 
@@ -619,12 +697,13 @@ prints exactly where the codebase diverges — this is your conformance report.
 
 ## How it works (the scan)
 
-The mechanism, in one sentence: **each rule reads the files under `src/` and checks
-*where a file lives* against *what it references*.**
+The mechanism, in one sentence: **each rule reads files under the roots it owns
+(`src/`, and for `mod.rs`, `tests/`) and checks *where a file lives* against *what
+it references* or *how it is named*.**
 
-- `SourceTree` (in `source.rs`) locates `src/` via `CARGO_MANIFEST_DIR` (so the test is
-  independent of the working directory), walks it for `.rs` files, reads them, and
-  renders paths relative to the crate root.
+- `SourceTree` (in `source.rs`) locates the crate via `CARGO_MANIFEST_DIR` (so the
+  test is independent of the working directory), walks `src/` or any configured
+  roots for `.rs` files, reads them, and renders paths relative to the crate root.
 - `SourceLine` classifies a single line: `is_comment()` (skip `//` lines so a comment
   mentioning another layer isn't a false hit) and `module_level_item()` (a column-0
   `struct`/`enum`/`union`/`impl` — trait members are indented, so a hit means a
@@ -662,6 +741,9 @@ The mechanism, in one sentence: **each rule reads the files under `src/` and che
   actually depends on. It can only ever flag a real `use`, so a generous list is safe.
 - **NoOp exception** — `NOOP_STUB_MARKER` lets NoOp stubs live in `port.rs` per the
   structure skill. Rename or drop it if your project doesn't use that idiom.
+- **`mod.rs` exception** — `MOD_FILE_ALLOWED_PATHS` owns the exact crate-relative
+  paths where legacy module layout remains allowed. The default exception is only
+  `tests/common/mod.rs`.
 - **New rules** — add a `Rule::*` constructor + a one-line test. The `SourceTree`/
   `SourceLine` primitives cover most "scan files / inspect lines" checks.
 
