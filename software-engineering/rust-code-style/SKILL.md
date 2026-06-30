@@ -4,7 +4,7 @@ description: Coding conventions and style rules for Rust. Apply when writing or 
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.4"
+  version: "0.0.6"
 ---
 
 # Rust Code Style Skill
@@ -206,6 +206,39 @@ use tokio::sync::RwLock;
 use crate::domain::User;
 use crate::infrastructure::Repository;
 ```
+
+**Cap inline `crate::…` paths at 3 path components.** Counting from `crate`, an inline path at a call site may have at most three segments — `crate::module::Item` or shorter. Deeper paths force the reader to parse the *location* before they can read the *action*; bring the inner part into scope with `use` first.
+
+```rust
+// OK — 2 components (crate + module/type), readable
+crate::Config::new()
+
+// OK — 3 components (crate + module + item)
+crate::application::serde
+crate::domain::User::create()
+
+// Bad — 4+ components; unreadable, must `use` first
+crate::application::ResourceNotificationIntentConfig::from_env_or_default(...)
+crate::a::b::c::d::Type::method(...)
+```
+
+After importing, the call site stays readable:
+
+```rust
+// Type-level import — top-down, the action leads
+use crate::application::ResourceNotificationIntentConfig;
+ResourceNotificationIntentConfig::from_env_or_default(...)
+
+// Module-level import — qualified by one module, still ≤3 components
+use crate::application;
+application::ResourceNotificationIntentConfig::from_env_or_default(...)
+```
+
+This rule applies to expressions, type annotations, `impl` headers, and trait bounds — anywhere an inline path appears at a call site. The same 3-component cap applies to chains starting from `super::` once they would exceed three segments.
+
+**Does not apply to:** `mod foo;` declarations; compiler-forced fully-qualified paths (e.g. `<T as Trait>::method`, disambiguating trait-method calls inside `where` clauses); and paths inside strings (error messages, doc tests, log statements). Those are not *call sites* of a type.
+
+**Rationale:** at ≤3 components the inline path is a *navigation hint* (you remember `crate::application::Config`). At 4+ it's a *lookup tax* — competing with the call itself for the reader's attention.
 
 ## Architecture Patterns
 
@@ -474,6 +507,7 @@ let connectivity = self.resolve_connectivity(/* ... */).await;
 10. **Scattered single-caller helpers**: Leaving a helper function free at module scope when it has exactly one production caller that lives on a struct — fold it onto that struct as an associated function or method
 11. **Error-type twins**: Copying a whole function once per caller error type (`_for_trigger` / `_for_execute`) instead of writing it once against a neutral error and mapping with `From`
 12. **Opaque return shapes**: Returning a tuple of primitives or a bare `bool` whose meaning the reader must memorise, instead of a named struct/enum whose fields/variants state what each value means
+13. **Inline `crate::…` paths beyond 3 components**: Writing `crate::a::b::c::Type::method(…)` (4+ path components) in expressions, type annotations, or `impl` headers instead of `use crate::a::b::c::Type;` (or a shorter inner import) and shortening the call to a readable ≤3-component form
 
 ## Guidelines
 
@@ -495,6 +529,7 @@ let connectivity = self.resolve_connectivity(/* ... */).await;
 - Keep comments to a minimum
 - Use modern module convention (no `mod.rs`)
 - Group imports: std, external, local
+- Never write inline `crate::module::…` paths at call sites — bring long paths into scope with `use` (Rule 8)
 - Place constants at module top after imports
 - Extract any literal that appears more than once into a named constant
 - Fold single-caller helpers onto their owning struct as associated fns; do not leave them free at module scope
