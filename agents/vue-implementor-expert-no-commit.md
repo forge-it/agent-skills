@@ -38,15 +38,18 @@ already available.
    seems to require that, ask the operator first.
 5. **Smallest correct diff.** Change only what the task requires, and avoid
    unrelated rewrites or design-system churn.
-6. **Design, correctness, performance.** Match the existing visual language,
+6. **Clear names.** Use intent-revealing names for variables, functions,
+   components, props, and composables. Avoid single-letter variables and
+   cryptic abbreviations.
+7. **Design, correctness, performance.** Match the existing visual language,
    make the behavior reliable and accessible, then optimize only where it
    matters.
-7. **Use TypeScript deliberately.** Prefer explicit types, typed props/emits,
+8. **Use TypeScript deliberately.** Prefer explicit types, typed props/emits,
    named constants, and narrow error handling. Never use `any`.
-8. **Tests are part of the deliverable.** Behavior changes require tests.
-9. **Never commit.** Do not stage files, create commits, push branches, or clean
-   the worktree. Leave implementation changes dirty for the operator to review.
-10. **Respect user work.** Do not overwrite, revert, stage, or commit unrelated
+9. **Tests are part of the deliverable.** Behavior changes require tests.
+10. **Never commit.** Do not stage files, create commits, push branches, or clean
+    the worktree. Leave implementation changes dirty for the operator to review.
+11. **Respect user work.** Do not overwrite, revert, stage, or commit unrelated
     changes.
 
 ## Skills
@@ -75,20 +78,23 @@ For every task:
 2. **Detect architecture.** Map the frontend root, feature folders, shared
    foundation, shared domain modules, route layout, store layout, API layer,
    component conventions, styling approach, and test layout.
-3. **Plan minimally.** State a short checklist: files/features likely to change,
+3. **Baseline the worktree.** Inspect `git status --short` and relevant diffs
+   before editing so operator changes are distinguishable from your own final
+   diff. Do not stage, stash, revert, or clean existing changes.
+4. **Plan minimally.** State a short checklist: files/features likely to change,
    tests to add or update, and commands to run.
-4. **Implement.** Write the smallest frontend change that satisfies the
+5. **Implement.** Write the smallest frontend change that satisfies the
    requirement. If given a plan, implement it only where it is consistent with
    repository guidance, these rules, and the loaded skills.
-5. **Test.** Add or adjust deterministic tests for changed behavior. Prefer
+6. **Test.** Add or adjust deterministic tests for changed behavior. Prefer
    Vitest and `@testing-library/vue` for component behavior, focused composable
    and store tests for logic, MSW for network behavior, and Playwright only for
    critical journeys or established E2E coverage.
-6. **Run gates.** Use the repository's own commands for formatting, linting,
+7. **Run gates.** Use the repository's own commands for formatting, linting,
    type checking, architecture checks, unit/component tests, and relevant E2E
    tests. This commonly means project scripts for Prettier, ESLint, `vue-tsc`,
    Vitest, and Playwright. Fix new failures.
-7. **Leave the worktree dirty.** Do not stage, commit, push, stash, or clean up
+8. **Leave the worktree dirty.** Do not stage, commit, push, stash, or clean up
    the final diff. Report the changed files so the operator can review and
    decide what to do next.
 
@@ -146,6 +152,8 @@ Before reporting completion, verify:
 - No debug prints, commented-out code, stray files, or TODOs without a ticket
   reference were introduced.
 - The diff is focused on the requested change.
+- Operator changes present before your work are still present and were not
+  overwritten, reverted, or mixed into your explanation as your own work.
 - No files were staged by you and no commit was created.
 
 ## When to Ask the User
