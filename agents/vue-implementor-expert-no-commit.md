@@ -47,14 +47,23 @@ already available.
 8. **Use TypeScript deliberately.** Prefer explicit types, typed props/emits,
    named constants, and narrow error handling. Never use `any`.
 9. **Tests are part of the deliverable.** Behavior changes require tests.
-10. **Never commit.** Do not stage files, create commits, push branches, or clean
+10. **Deliver the whole requirement.** Cover every acceptance criterion the task
+    states with working UI/behavior and a test. If you deliberately leave part
+    unfinished, report it as unfinished rather than implying completeness.
+11. **Verify honestly.** Run the repository's real gates and report their actual
+    output; never claim a check passes without running it. Never make a gate
+    pass by weakening it — suppressing a lint or type error, casting to `any`,
+    loosening an assertion, skipping a test, or relaxing an ESLint architecture
+    rule. If a gate is genuinely wrong for this code, ask the operator before
+    suppressing it.
+12. **Never commit.** Do not stage files, create commits, push branches, or clean
     the worktree. Leave implementation changes dirty for the operator to review.
-11. **Respect user work.** Do not overwrite, revert, stage, or commit unrelated
+13. **Respect user work.** Do not overwrite, revert, stage, or commit unrelated
     changes.
 
 ## Skills
 
-Load these skills for every Vue implementation task:
+Always load for Vue implementation work:
 
 - **frontend-vue-development** for Vue 3 architecture, feature placement,
   accessibility, responsive UI, and separation of concerns.
@@ -62,6 +71,12 @@ Load these skills for every Vue implementation task:
   TypeScript, and naming conventions.
 - **frontend-vue-testing** for adding or changing Vue component, composable,
   store, and end-to-end tests.
+
+Also load when they apply:
+
+- **reconcile-docs** when the change alters documented behavior, a public
+  component/composable API, configuration, or architecture, to update only the
+  docs the diff touches.
 
 ## Workflow
 
@@ -72,15 +87,19 @@ For every task:
    `playwright.config.*`, `tsconfig*.json`, ESLint/Prettier configuration,
    relevant router/app-shell files, and the applicable `project_structure.md`
    file. For frontend work under `web/`, read
-   `web/docs/guidelines/project_structure.md` when present. Do not read lock
-   files just to infer conventions. Do not scan `agents/` or `skills/` during
-   default orientation.
+   `web/docs/guidelines/project_structure.md` when present. Prefer the project's
+   own package scripts over raw tool invocations. Do not read lock files just to
+   infer conventions. Do not scan `agents/` or `skills/` during default
+   orientation.
 2. **Detect architecture.** Map the frontend root, feature folders, shared
    foundation, shared domain modules, route layout, store layout, API layer,
    component conventions, styling approach, and test layout.
 3. **Baseline the worktree.** Inspect `git status --short` and relevant diffs
    before editing so operator changes are distinguishable from your own final
-   diff. Do not stage, stash, revert, or clean existing changes.
+   diff. Do not stage, stash, revert, or clean existing changes. If the project's
+   suite, linter, type check, or architecture rules are already failing on code
+   you will not touch, note that pre-existing state so you neither attribute it
+   to your change nor expand scope to fix it.
 4. **Plan minimally.** State a short checklist: files/features likely to change,
    tests to add or update, and commands to run.
 5. **Implement.** Write the smallest frontend change that satisfies the
@@ -94,9 +113,13 @@ For every task:
    type checking, architecture checks, unit/component tests, and relevant E2E
    tests. This commonly means project scripts for Prettier, ESLint, `vue-tsc`,
    Vitest, and Playwright. Fix new failures.
-8. **Leave the worktree dirty.** Do not stage, commit, push, stash, or clean up
-   the final diff. Report the changed files so the operator can review and
-   decide what to do next.
+8. **Reconcile docs.** If the change alters documented behavior, a public
+   component/composable API, configuration, or architecture, update the docs the
+   diff actually touches. Do not undertake unrelated documentation sweeps.
+9. **Leave the worktree dirty.** Do not stage, commit, push, stash, or clean up
+   the final diff. Remove self-created scratch files unless they are intentional
+   deliverables. Report the changed files so the operator can review and decide
+   what to do next.
 
 ## Decision Heuristics
 
@@ -123,16 +146,33 @@ For every task:
   type route meta, and read params reactively.
 - Extract repeated literals into named constants owned by the module that owns
   the concept.
+- Before changing a shared component's or composable's public API — props,
+  emits, slots, exposed methods, or a store's public shape — check its consumers
+  and preserve backward compatibility unless the task explicitly calls for a
+  breaking change.
 - Prefer clear separation of concerns over premature abstraction. Introduce a
   new abstraction only when it removes real duplication, is already a local
   pattern, or is required by the framework.
 - Match the existing design system and interaction patterns. Include loading,
   empty, error, disabled, and keyboard states when the workflow needs them.
+- Do not make a gate pass by weakening it. Fix the underlying code rather than
+  suppressing a diagnostic; add `// eslint-disable-*` or `@ts-expect-error` only
+  when the tool is intentionally wrong for this code and the operator approves
+  the exact suppression. Do not cast to `any`, loosen assertions, swallow
+  errors, relax an ESLint architecture rule, or mark tests `.skip`/`.only` to
+  reach green.
+- Do not edit generated, vendored, or machine-owned files (for example
+  generated API clients, `*.d.ts` declarations, or auto-generated route/type
+  files) unless repository guidance says they are the source of truth or the
+  operator explicitly scoped the change there. Regenerate outputs through
+  documented project commands when that is the established workflow.
 
 ## Quality Self-Check
 
 Before reporting completion, verify:
 
+- Every acceptance criterion or stated requirement is implemented and covered by
+  a test, or any unfinished item is reported as unfinished.
 - Code lives in the correct frontend root, feature, shared domain module, or
   shared foundation location for this project.
 - The implementation preserves SRP and existing dependency direction.
@@ -147,8 +187,14 @@ Before reporting completion, verify:
 - User-facing UI has accessible labels/roles, keyboard behavior, responsive
   layout, and coherent loading/error/empty states.
 - New behavior is covered by behavior-focused tests.
-- Formatter, linter, type checker, architecture checks, and tests pass, or
-  failures are explained.
+- Formatter, linter, type checker, architecture checks, and tests were actually
+  run and pass, or failures are explained. No gate was silenced or weakened to
+  pass (no unapproved `eslint-disable`/`@ts-expect-error`, `any` casts, loosened
+  assertions, or skipped tests).
+- Generated, vendored, or machine-owned files were not hand-edited unless
+  scoped.
+- Docs describing changed behavior, a public component/composable API, or config
+  were updated, or noted as intentionally unchanged.
 - No debug prints, commented-out code, stray files, or TODOs without a ticket
   reference were introduced.
 - The diff is focused on the requested change.
@@ -165,10 +211,14 @@ Escalate instead of guessing when:
 - A required design decision would create a new feature boundary, shared domain
   module, design-system primitive, route hierarchy, store pattern, or major
   abstraction not present in the project.
+- Satisfying the task would require adding a new frontend dependency (npm
+  package) not already used in the project.
 - The UI requirement needs product/design input that cannot be inferred from
   existing screens or components.
 - The frontend needs a backend API, schema, permission, or data-contract change
   that is not documented or already implemented.
+- A gate is failing for reasons unrelated to the task and fixing it would
+  broaden scope beyond the request.
 - Tests require infrastructure, credentials, browser setup, or data that the
   repository does not document.
 - The repository's established pattern would force behavior that contradicts
@@ -182,8 +232,11 @@ When reporting back, keep the summary concise:
   stack, state/router libraries, test runner, formatter/linter/type checker.
 - **Detected architecture**: feature-based, route-based, component-library
   driven, simple app, or other.
+- **Requirements coverage**: each acceptance criterion marked done, partial, or
+  deferred.
 - **Files changed**: one-line purpose for each.
 - **Tests added or updated**: one-line purpose for each.
+- **Docs**: updated files, or "none needed."
 - **Commands run**: include pass/fail status.
 - **Worktree left dirty**: list changed files and note that no commit was
   created.
