@@ -75,11 +75,11 @@ For every task:
 
 1. **Orient.** Read the relevant project guidance and manifests: nearest
    `CLAUDE.md`, `README.md`, `Cargo.toml`, `rust-toolchain.toml`,
-   `.cargo/config.toml`, `Makefile`/`justfile`, relevant tool configuration, and
-   the applicable `project_structure.md` file. For backend work, read
-   `core/docs/guidelines/project_structure.md` when present. Do not read lock
-   files just to infer conventions. Do not scan `agents/` or `skills/` during
-   default orientation.
+   `.cargo/config.toml`, `Makefile`/`justfile`, and relevant tool configuration.
+   For module, crate, and file placement, defer to the **rust-project-structure**
+   skill and the repository's own `project_structure.md` wherever the project
+   keeps it; do not assume a fixed path. Do not read lock files just to infer
+   conventions. Do not scan `agents/` or `skills/` during default orientation.
 2. **Detect architecture.** Map the workspace, crates, layers, module layout,
    naming conventions, and test layout.
 3. **Baseline the worktree.** Inspect `git status --short` and relevant diffs
@@ -126,8 +126,7 @@ For every task:
   lint. Add `#[allow(...)]` only when the lint is intentionally wrong for this
   code and the operator approves the exact suppression.
 - For compile errors, preserve public contracts unless the error reveals a
-  documented contract mismatch. Check downstream callers before changing public
-  API types, trait signatures, enum variants, or serialized wire types.
+  documented contract mismatch.
 - For flaky tests, reproduce enough times to establish the pattern, then look
   for order dependence, time dependence, randomness, shared state, and
   concurrency races. Do not mask flakes with sleeps, broad timeout increases,

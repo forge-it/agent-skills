@@ -32,11 +32,13 @@ to impose a preferred style.
    unrelated refactors.
 6. **Use the type system.** Prefer explicit domain types, enums, and structured
    errors over stringly typed state, ambiguous booleans, or positional tuples.
-7. **Tests are part of the deliverable.** Behavior changes require tests.
-8. **Never commit.** Do not stage files, create commits, push branches, or clean
+7. **Clear names.** Use intent-revealing names. Avoid single-letter variables and
+   cryptic abbreviations, including in closures and iterators.
+8. **Tests are part of the deliverable.** Behavior changes require tests.
+9. **Never commit.** Do not stage files, create commits, push branches, or clean
    the worktree. Leave implementation changes dirty for the operator to review.
-9. **Respect user work.** Do not overwrite, revert, stage, or commit unrelated
-   changes.
+10. **Respect user work.** Do not overwrite, revert, stage, or commit unrelated
+    changes.
 
 ## Skills
 
@@ -45,6 +47,8 @@ Load only the skills that apply to the current task:
 - **rust-code-style** for Rust source changes.
 - **rust-design-idioms** when modeling invariants, ownership, errors, or domain
   types.
+- **rust-design-principles** for SOLID, KISS, and judicious design-pattern
+  decisions when designing new features or abstractions.
 - **rust-testing** for adding or changing Rust tests.
 - **rust-project-structure** for module, crate, and file placement.
 - **rust-hexagonal-architecture** when the repository uses, or appears to use,
@@ -56,27 +60,30 @@ Load only the skills that apply to the current task:
 For every task:
 
 1. **Orient.** Read the relevant project guidance and manifests: nearest
-   `CLAUDE.md`, `README.md`, `Cargo.toml`, `rust-toolchain.toml`, `.cargo/config.toml`,
-   `Makefile`/`justfile`, relevant tool configuration, and the applicable
-   `project_structure.md` file. For backend work, read
-   `core/docs/guidelines/project_structure.md` when present. Do not read lock
-   files just to infer conventions. Do not scan `agents/` or `skills/` during
-   default orientation.
+   `CLAUDE.md`, `README.md`, `Cargo.toml`, `rust-toolchain.toml`,
+   `.cargo/config.toml`, `Makefile`/`justfile`, and relevant tool configuration.
+   For module, crate, and file placement, defer to the **rust-project-structure**
+   skill and the repository's own `project_structure.md` wherever the project
+   keeps it; do not assume a fixed path. Do not read lock files just to infer
+   conventions. Do not scan `agents/` or `skills/` during default orientation.
 2. **Detect architecture.** Map the workspace, crates, layers, module layout,
    naming conventions, and test layout.
-3. **Plan minimally.** State a short checklist: files/layers likely to change,
+3. **Baseline the worktree.** Inspect `git status --short` and relevant diffs
+   before editing so operator changes are distinguishable from your own final
+   diff. Do not stage, stash, revert, or clean existing changes.
+4. **Plan minimally.** State a short checklist: files/layers likely to change,
    tests to add or update, and commands to run.
-4. **Implement.** Write the smallest code change that satisfies the requirement.
+5. **Implement.** Write the smallest code change that satisfies the requirement.
    If given a plan, implement it only where it is consistent with repository
    guidance, these rules, and the loaded skills.
-5. **Test.** Add or adjust deterministic tests. Mock only at architectural
+6. **Test.** Add or adjust deterministic tests. Mock only at architectural
    boundaries such as repositories, HTTP clients, queues, filesystems, or other
    external adapters.
-6. **Run gates.** Use the repository's own commands for formatting, linting,
+7. **Run gates.** Use the repository's own commands for formatting, linting,
    type checking, architecture checks, and tests. For Rust this usually means
    `cargo fmt`, `cargo clippy`, and `cargo test` or the project's wrapped
    commands. Fix new failures.
-7. **Leave the worktree dirty.** Do not stage, commit, push, stash, or clean up
+8. **Leave the worktree dirty.** Do not stage, commit, push, stash, or clean up
    the final diff. Report the changed files so the operator can review and
    decide what to do next.
 
@@ -90,6 +97,10 @@ For every task:
   infrastructure responsible for external systems.
 - Follow local module conventions. When the project uses them, place traits in
   `port.rs`, data types in `model.rs`, and errors in `error.rs`.
+- Before changing or extending a public API — exported types, function or trait
+  signatures, enum variants, or serialized wire formats — check downstream
+  callers and preserve backward compatibility unless the task explicitly calls
+  for a breaking change.
 - Keep new concepts aligned with the project's documented folder vocabulary and
   one-concept-per-folder rules.
 - Prefer clear separation of concerns over premature abstraction. Introduce a
@@ -113,6 +124,8 @@ Before reporting completion, verify:
 - No debug prints, commented-out code, stray files, or TODOs without a ticket
   reference were introduced.
 - The diff is focused on the requested change.
+- Operator changes present before your work are still present and were not
+  overwritten, reverted, or mixed into your explanation as your own work.
 - No files were staged by you and no commit was created.
 
 ## When to Ask the User
@@ -123,6 +136,10 @@ Escalate instead of guessing when:
 - The task appears to require breaking SRP or documented project structure.
 - A required design decision would create a new crate, layer, major trait, or
   major abstraction not present in the project.
+- Satisfying the task would require adding a new external dependency (crate) not
+  already used in the workspace.
+- The task appears to require `unsafe` code, FFI, or other memory-unsafe
+  operations.
 - A new database migration appears necessary.
 - Tests require infrastructure, credentials, or data that the repository does
   not document.
