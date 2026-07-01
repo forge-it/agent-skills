@@ -4,7 +4,7 @@ description: Coding conventions and style rules for Rust. Apply when writing or 
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.6"
+  version: "0.0.7"
 ---
 
 # Rust Code Style Skill
@@ -493,6 +493,31 @@ let connectivity = self.resolve_connectivity(/* ... */).await;
 
 **Where the type lives is a separate question.** This rule is only about the *shape* of the return. Which module the named type belongs in — alongside its owner, or in a shared data-model module — is decided by your project's module-structure conventions, not by this rule. A concept-local data type (even an internal, single-caller one) typically belongs with the concept's other data types, not buried in the file that happens to return it.
 
+### 14. Unsafe Code (CRITICAL)
+
+Avoid `unsafe`. Safe Rust is the default; reach for `unsafe` only when there is no safe alternative — an FFI boundary, a low-level primitive the standard library cannot express, or a proven, measured hot path. Never use `unsafe` for convenience, to silence the borrow checker, or to skip a safe API that already exists.
+
+When `unsafe` is genuinely unavoidable:
+
+- Keep the `unsafe` block as small as possible — wrap only the operations that actually require it, never the surrounding safe logic.
+- Encapsulate it behind a safe abstraction so callers never touch `unsafe` and cannot violate its invariants.
+- Document every `unsafe` block with a `// SAFETY:` comment, and every public `unsafe fn` with a `# Safety` doc section, stating the invariant the caller or the code must uphold and why it holds here.
+
+```rust
+// Bad - unsafe used to bypass safe indexing, with no justification
+let value = unsafe { *slice.get_unchecked(index) };
+
+// Good - a safe API expresses the same intent
+let value = slice[index]; // or slice.get(index) when the index may be absent
+
+// Good - unsafe genuinely required, minimal scope, invariant documented
+// SAFETY: `raw_pointer` came from `Box::into_raw` above and is neither aliased
+// nor freed elsewhere, so reconstructing the Box here is sound.
+let recovered = unsafe { Box::from_raw(raw_pointer) };
+```
+
+If a task appears to require introducing `unsafe`, prefer a safe alternative first; when none exists, keep the unsafe surface minimal, encapsulated, and documented.
+
 ## Anti-Patterns to Avoid
 
 1. **Single-letter variables**: Using `x`, `i`, `p` in closures instead of descriptive names
@@ -508,6 +533,7 @@ let connectivity = self.resolve_connectivity(/* ... */).await;
 11. **Error-type twins**: Copying a whole function once per caller error type (`_for_trigger` / `_for_execute`) instead of writing it once against a neutral error and mapping with `From`
 12. **Opaque return shapes**: Returning a tuple of primitives or a bare `bool` whose meaning the reader must memorise, instead of a named struct/enum whose fields/variants state what each value means
 13. **Inline `crate::…` paths beyond 3 components**: Writing `crate::a::b::c::Type::method(…)` (4+ path components) in expressions, type annotations, or `impl` headers instead of `use crate::a::b::c::Type;` (or a shorter inner import) and shortening the call to a readable ≤3-component form
+14. **Gratuitous `unsafe`**: Reaching for `unsafe` for convenience, to silence the borrow checker, or to bypass an existing safe API — instead of reserving it for FFI or low-level needs, keeping its scope minimal, encapsulating it behind a safe interface, and documenting a `// SAFETY:` invariant
 
 ## Guidelines
 
@@ -545,3 +571,9 @@ let connectivity = self.resolve_connectivity(/* ... */).await;
 - Dependencies point inward
 - Define ports as traits in domain/application
 - Implement adapters in infrastructure
+
+### Unsafe Code
+- Avoid `unsafe`; prefer safe APIs and safe abstractions
+- Reserve `unsafe` for FFI, proven hot paths, or primitives safe Rust cannot express
+- Keep `unsafe` blocks minimal and encapsulate them behind safe interfaces
+- Document every `unsafe` block with `// SAFETY:` and every public `unsafe fn` with a `# Safety` doc section
