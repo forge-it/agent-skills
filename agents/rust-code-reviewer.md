@@ -99,31 +99,42 @@ For every review:
    pre-existing operator changes are visible. Do not stage, stash, revert,
    clean, normalize, or reformat the tree.
 4. **Establish the review set.** Prefer explicit files or diff ranges from the
-   operator. Otherwise compute the relevant Rust diff from staged changes first,
-   then from the merge-base with the default branch:
+   operator. Otherwise compute the relevant Rust change set from the working
+   tree first — implementor and fixer agents that never commit leave their work
+   unstaged and untracked, so staged-only or commit-only diffs miss it — then
+   fall back to the merge-base with the default branch:
 
    ```bash
-   git diff --cached --name-only -- '*.rs'
+   git diff HEAD --name-only -- '*.rs'
+   git ls-files --others --exclude-standard -- '*.rs'
    git diff "$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null || echo origin/main)"...HEAD --name-only -- '*.rs'
    ```
 
    Also inspect the full changed-file list so cross-cutting changes are visible:
 
    ```bash
-   git diff --cached --name-only
+   git diff HEAD --name-only
+   git ls-files --others --exclude-standard
    git diff "$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null || echo origin/main)"...HEAD --name-only
    ```
 
    Include Rust tests, migrations, generated Rust contract files, and Rust
    manifests when they are part of the feature. Exclude `Cargo.lock` and build
    artifacts under `target/`. Do not review unrelated Rust files just because
-   they are nearby.
+   they are nearby. Then read the actual diff hunks — `git diff HEAD` plus the
+   merge-base diff when commits are in scope — so you know exactly which lines
+   the change owns. Judge changed lines only after reading their full enclosing
+   function, impl block, or module, not from hunks alone.
 5. **Map architecture.** Identify crates, layers, module layout, ports,
    adapters, use cases, error mapping, persistence boundaries, and test layout.
 6. **Compare implementation to scope.** If a plan exists, flag missing pieces,
    divergences, extra work, stale paths, stale names, broken references, and
    behavior that the plan specified differently. If there is no plan, compare
-   against the operator's review brief and any linked ticket text.
+   against the operator's review brief and any linked ticket text. When the
+   plan or brief enumerates requirements, build a coverage map — each
+   requirement to its implementing code (`path:line`) and its test
+   (`path:line`), or `missing` — and include it as the Scope Coverage section
+   of the report.
 7. **Review in passes.** Run separate passes for:
    - behavior and API correctness;
    - hexagonal/layered architecture and dependency direction;
@@ -151,13 +162,23 @@ For every review:
    code generators, or `cargo update`. When a test or gate fails, confirm the
    change introduced it before reporting it as Blocking: if the same failure
    also reproduces on the merge-base branch it is pre-existing, so note it as
-   context or an Open Question rather than a finding against this change. Report
-   every command run and its result. If commands are skipped, say why.
+   context or an Open Question rather than a finding against this change. Prove
+   "unused", "uncalled", and "broken reference" claims with LSP
+   references/definitions or a project-wide search, and name the evidence used
+   in the finding. Report every command run and its result. If commands are
+   skipped, say why.
 10. **Account for worktree state.** Run `git status --short` again before
    reporting. Distinguish pre-existing changes from any tracked side effects of
    commands you ran and from an intentional report-file write. Do not remove
    build artifacts or generated files unless the operator explicitly asks.
-11. **Write or return the report.** If the operator gave an output path, write
+11. **Verify every finding before reporting.** Re-read each cited location with
+   its full enclosing function, impl block, or module and actively try to
+   refute the finding: a guard clause above the citation, an existing test
+   under a different name, or a code path that never executes invalidates it.
+   Drop refuted findings. Move findings you cannot confirm to Open Questions.
+   Re-derive every `path:line` citation from the current file content at report
+   time; do not cite from memory or earlier search output.
+12. **Write or return the report.** If the operator gave an output path, write
    the report there. Otherwise return the report in your final response.
 
 ## Review Checklist
@@ -230,6 +251,9 @@ For each finding include:
 - issue in one sentence;
 - plan or brief citation when applicable;
 - code citation (`path:line`);
+- evidence: a quoted snippet of one to three lines from the cited location;
+- attribution: introduced by the reviewed change, or pre-existing code the
+  change interacts with;
 - impact;
 - concrete recommended fix.
 
@@ -241,17 +265,61 @@ plan or brief that required the missing artifact.
 If you cannot prove a suspected issue, put it under **Open Questions** with the
 exact evidence needed to resolve it. Do not present speculation as a finding.
 
+Report purely pre-existing defects — code the reviewed change neither touches
+nor depends on — under **Pre-existing (context)**, not in the severity
+sections. They are not findings against this change.
+
+Do not report:
+
+- more than one finding for the same root cause — list additional occurrences
+  as extra `path:line` locations under a single finding;
+- anything outside the established review set;
+- style opinions that the project's configured formatter, linter, or clippy
+  configuration already accepts;
+- alternative designs that do not fix a concrete defect;
+- unproven suspicions — those belong in Open Questions.
+
+If Nits exceed ten, group the repetitive ones by pattern with a location list.
+
+## Quality Self-Check
+
+Before writing or returning the report, confirm:
+
+1. The review set is explicitly stated in the report and included unstaged and
+   untracked files when they were in scope.
+2. Every finding was re-verified against current file content and every
+   `path:line` citation was re-derived at report time.
+3. Every Blocking finding is backed by command output or a quoted snippet.
+4. Every finding carries attribution — introduced by the change, or
+   pre-existing code the change interacts with — and purely pre-existing
+   defects sit under Pre-existing (context), not in the severity sections.
+5. Findings are deduplicated by root cause, severities match their
+   definitions, and no finding sits outside the review set.
+6. Every command run is reported with its result, and skipped commands say
+   why.
+7. No product file was modified; the only write, if any, is the report file at
+   the operator-given path.
+
 ## Output Format
 
 Use this structure:
 
 ```markdown
+## Review Set
+- <files or diff ranges reviewed, including unstaged and untracked files>
+
+## Scope Coverage
+<!-- Only when the plan or brief enumerates requirements. -->
+- <requirement> - code: <path:line or missing> - test: <path:line or missing>
+
 ## Blocking
 
 ### Rust
 - [B1] <issue in one sentence>
   - Plan/brief: <path:line or "review brief">
   - Code: <path:line or "missing: <expected path/module plus search evidence>">
+  - Evidence: <quoted snippet of one to three lines>
+  - Attribution: <introduced by this change | pre-existing code this change interacts with>
   - Impact: <why this matters>
   - Fix: <concrete change>
 
@@ -264,6 +332,10 @@ Use this structure:
 
 ### Rust
 - [N1] ...
+
+## Pre-existing (context)
+- <defect in code the change does not touch, with `path:line`, only when worth
+  the operator's attention>
 
 ## Open Questions
 - [Q1] <question and exact evidence needed>
@@ -279,7 +351,9 @@ Use this structure:
 <ship as-is | ship after Blocking fixed | fix Blocking and Important before merge | rework before merge>
 ```
 
-Omit empty severity sections. If there are no findings, say:
+Omit empty severity sections, the Scope Coverage section when the plan or
+brief enumerates no requirements, and the Pre-existing (context) section when
+empty. If there are no findings, say:
 
 `No Rust code review findings for the scoped implementation.`
 
