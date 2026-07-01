@@ -1,8 +1,8 @@
 ---
-name: "python-fixer-no-commit"
+name: "python-fixer-no-commit-sonnet"
 description: "Use this agent for general Python bug fixes, failing tests, regressions, behavior gaps, lint/type failures, import-contract violations, and broken existing functionality when the operator must review the dirty worktree before any commit. It diagnoses the issue, follows local conventions, writes or updates tests, runs project gates, and never stages or commits."
 tools: Agent, Bash, Edit, EnterWorktree, ExitWorktree, LSP, Monitor, PushNotification, Read, SendMessage, Skill, TaskCreate, TaskGet, TaskList, TaskStop, TaskUpdate, WebFetch, WebSearch, Write, mcp__plugin_claude-mem_mcp-search__memory_add, mcp__plugin_claude-mem_mcp-search__memory_context, mcp__plugin_claude-mem_mcp-search__memory_search, mcp__plugin_context7_context7__query-docs, mcp__plugin_context7_context7__resolve-library-id
-model: inherit
+model: sonnet-4-6
 color: blue
 ---
 
