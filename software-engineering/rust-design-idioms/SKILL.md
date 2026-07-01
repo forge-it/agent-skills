@@ -4,7 +4,7 @@ description: Rust-specific design idioms for encoding invariants in the type sys
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.3"
+  version: "0.0.4"
 ---
 
 # Design Idioms Skill
@@ -458,24 +458,14 @@ fn parse_date(input: &str) -> Result<Date, DateError> {
 }
 ```
 
-### 12. No thiserror or anyhow (CRITICAL)
+### 12. Manual Error Types by Default (CRITICAL)
 
-Never use `thiserror` or `anyhow` crates. Implement the `std::error::Error` trait manually. This ensures full control over error types, avoids hidden magic, and keeps dependencies minimal.
+Implement the `std::error::Error` trait manually by default. Manual implementation gives full control over error types, avoids hidden macro magic, and keeps dependencies minimal — prefer it in greenfield code and wherever the project has not already standardized on an error crate.
+
+If the project already depends on `thiserror` or `anyhow` (check `Cargo.toml`), follow the project and use them: consistency within a codebase beats the manual-implementation preference. Do not add `thiserror` or `anyhow` as a *new* dependency just to avoid writing the trait by hand.
 
 ```rust
-// Bad - using thiserror
-#[derive(thiserror::Error, Debug)]
-pub enum MyError {
-    #[error("invalid input: {0}")]
-    InvalidInput(String),
-}
-
-// Bad - using anyhow
-fn process() -> anyhow::Result<()> {
-    // ...
-}
-
-// Good - manual implementation
+// Default (greenfield, or no error crate already in use) - manual implementation
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MyError {
     InvalidInput(String),
@@ -496,6 +486,15 @@ impl std::fmt::Display for MyError {
 }
 
 impl std::error::Error for MyError {}
+
+// Acceptable when the project ALREADY depends on thiserror
+#[derive(Debug, thiserror::Error)]
+pub enum MyError {
+    #[error("invalid input: {0}")]
+    InvalidInput(String),
+    #[error("resource with id {id} not found")]
+    NotFound { id: u64 },
+}
 ```
 
 ### 13. Compose Errors with Wrapper Enums (HIGH)
@@ -674,7 +673,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 5. **Missing trait implementations**: Forcing users to wrap your newtypes due to missing derives
 6. **Unconsidered Deref**: Implementing Deref without considering the expanded public interface
 7. **Bypassed constructors**: Using struct literal syntax to create instances without validation
-8. **Using thiserror or anyhow**: Relying on external crates instead of implementing Error manually
+8. **Introducing a new error crate**: Adding `thiserror` or `anyhow` as a *new* dependency instead of implementing `Error` manually — matching a project that already depends on them is fine
 9. **Dynamic error types in libraries**: Using `Box<dyn Error>` in public APIs instead of structured enums
 10. **Umbrella error enums**: Creating module-wide errors where most variants are impossible for most functions
 11. **String-based errors**: Using `String` or `&str` as error types instead of structured enums
@@ -705,7 +704,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 - Implement From/TryFrom for conversions
 
 ### Error Handling
-- Never use `thiserror` or `anyhow` - implement `std::error::Error` manually
+- Implement `std::error::Error` manually by default; use `thiserror`/`anyhow` only when the project already depends on them
 - Design error types as enums capturing all possible failure states
 - Scope errors to specific operations, not entire modules
 - Implement `From` for composing errors and enabling the `?` operator
