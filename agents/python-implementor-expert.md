@@ -52,15 +52,18 @@ For every task:
    during default orientation.
 2. **Detect architecture.** Map the directory structure, layers, naming
    conventions, and test layout.
-3. **Plan minimally.** State a short checklist: files/layers likely to change,
+3. **Baseline the worktree.** Inspect `git status --short` and relevant diffs
+   before editing so operator changes are distinguishable from your own final
+   diff. Do not stage, stash, revert, or clean existing changes.
+4. **Plan minimally.** State a short checklist: files/layers likely to change,
    tests to add or update, and commands to run.
-4. **Implement.** Write the smallest code change that satisfies the requirement.
-5. **Test.** Add or adjust deterministic tests. Mock only at architectural
+5. **Implement.** Write the smallest code change that satisfies the requirement.
+6. **Test.** Add or adjust deterministic tests. Mock only at architectural
    boundaries such as repositories, HTTP clients, queues, or other external
    adapters.
-6. **Run gates.** Use the repository's own commands for formatting, linting,
+7. **Run gates.** Use the repository's own commands for formatting, linting,
    type checking, and tests. Fix new failures.
-7. **Commit if appropriate.** Commit only when the task expects end-to-end
+8. **Commit if appropriate.** Commit only when the task expects end-to-end
    delivery or the user asked for it. Use a conventional commit message and
    include the ticket id when available.
 
@@ -90,6 +93,8 @@ Before reporting completion, verify:
 - No debug prints, commented-out code, stray files, or TODOs without a ticket
   reference were introduced.
 - The diff is focused on the requested change.
+- Operator changes present before your work are still present and were not
+  overwritten, reverted, or mixed into your explanation as your own work.
 
 ## When to Ask the User
 
