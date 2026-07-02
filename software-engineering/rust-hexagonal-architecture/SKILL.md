@@ -371,12 +371,12 @@ async fn main() -> anyhow::Result<()> {
 
 ```rust
 // main.rs imports — all proprietary, no third-party framework types
+use hexarch::application::author::DefaultAuthorService;
 use hexarch::config::Config;
-use hexarch::domain::author::service::DefaultAuthorService;
-use hexarch::inbound::http::{HttpServer, HttpServerConfig};
-use hexarch::outbound::email_client::EmailNotifier;
-use hexarch::outbound::prometheus::PrometheusMetrics;
-use hexarch::outbound::sqlite::SqliteAuthorRepository;
+use hexarch::infrastructure::api::server::{HttpServer, HttpServerConfig};
+use hexarch::infrastructure::email::EmailNotifier;
+use hexarch::infrastructure::metrics::prometheus::PrometheusMetrics;
+use hexarch::infrastructure::persistence::sqlite::SqliteAuthorRepository;
 ```
 
 ### 8. Error Types Bridge Layers (HIGH)
@@ -456,6 +456,7 @@ src/
 ├── infrastructure/
 │   ├── api.rs                # mod api { ... }
 │   ├── api/
+│   │   ├── server.rs         # HttpServer, HttpServerConfig
 │   │   ├── router.rs
 │   │   ├── author.rs         # mod author { ... }
 │   │   └── author/
@@ -467,9 +468,10 @@ src/
 │   │   ├── sqlite.rs         # mod sqlite { ... }
 │   │   └── sqlite/
 │   │       └── author.rs     # SqliteAuthorRepository
-│   └── metrics.rs            # mod metrics { ... }
-│   └── metrics/
-│       └── prometheus.rs     # PrometheusMetrics adapter
+│   ├── metrics.rs            # mod metrics { ... }
+│   ├── metrics/
+│   │   └── prometheus.rs     # PrometheusMetrics adapter
+│   └── email.rs              # EmailNotifier (SMTP adapter)
 └── bin/
     └── server/
         └── main.rs           # Bootstrap and wiring
