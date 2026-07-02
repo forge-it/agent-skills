@@ -94,7 +94,7 @@ Each concept folder follows this canonical structure:
 |------|----------|-----------|
 | `port.rs` | **All** traits (ports) for this concept — services, orchestrators, executors, providers | Yes, when this layer defines local traits for the concept |
 | `service.rs` | `Default*` implementation of the main service trait | Only if the concept has a main service impl |
-| `error.rs` | **All** error enums for this concept — service errors, orchestrator errors, execution errors | Only if the concept defines concept-local errors |
+| `error.rs` | **All** error enums for this concept — service errors, orchestrator errors, execution errors — plus any error-translation code this layer owns for the concept (`From` impls, mapping functions) | Only if the concept defines concept-local errors or this layer translates the concept's errors |
 | `model.rs` | **All** concept-local data types that are neither traits nor errors — the value structs/enums a port takes and returns, plus internal value objects | Only if the concept defines such data types |
 | `orchestrator.rs` | `Default*Orchestrator` implementation | No |
 | `executor.rs` | `Default*Executor` implementation | No |
@@ -154,6 +154,34 @@ pub enum ExecuteOrderError {
     NotFound { id: OrderId },
     AlreadyExecuted { id: OrderId },
     Unknown(String),
+}
+```
+
+`error.rs` also owns **error translation**. A layer that defines no error enums of its own but converts another layer's errors — an infrastructure adapter mapping `sqlx::Error` into an application error, an API module mapping an application error into an `ApiError` — puts those `From` impls and mapping functions in the concept's `error.rs` within that layer. Classifying what a foreign error means for the concept is a single responsibility; give it a single home.
+
+Three rules follow:
+
+- An inline `map_err` closure inside one adapter is fine while the mapping is used only in that file.
+- The moment two files in the same concept folder need the same translation (same source error, same target type, same policy), extract it into the concept's `error.rs` in that layer. Never leave identical private mapping functions duplicated across sibling adapter files.
+- Never create `mapper.rs` (or `conversion.rs`, `convert.rs`) for error translation. "Mapper" is a weak role-bucket name that attracts unrelated mapping code — row-to-model mapping belongs next to the row struct inside the adapter file, not in a shared mapper. `error.rs` names the responsibility precisely.
+
+Do not move technology-error translation inward next to the enum definition: a `From<sqlx::Error>` impl in `application/order/error.rs` would leak the database crate into the application layer.
+
+```rust
+// Good — shared translation policy in the concept's error.rs of the layer that owns it
+// src/infrastructure/database/order/error.rs
+
+use crate::application::order::error::OrderReadError;
+use crate::infrastructure::database::sqlstate::is_undefined_table;
+
+/// Classifies what a database error means for order reads.
+/// Shared by every order read adapter in this folder.
+pub(super) fn map_read_error(error: sqlx::Error) -> OrderReadError {
+    if is_undefined_table(&error) {
+        OrderReadError::ProjectionUnavailable
+    } else {
+        OrderReadError::Database(error.to_string())
+    }
 }
 ```
 
@@ -235,7 +263,7 @@ If a folder has no `service.rs` or `port.rs` (e.g. a `lock/` folder with only `s
 
 ### 11. Data Types Live in `model.rs`, Not `port.rs` (CRITICAL)
 
-`port.rs` holds traits only and `error.rs` holds errors only (principles 3–4). Every other concept-local data type — the value structs and enums a port takes as input or returns as output, plus internal value objects — goes in `model.rs` (singular). Do not leave data structs in `port.rs`.
+`port.rs` holds traits only and `error.rs` holds error enums and error translation only (principles 3–4). Every other concept-local data type — the value structs and enums a port takes as input or returns as output, plus internal value objects — goes in `model.rs` (singular). Do not leave data structs in `port.rs`.
 
 Never use `types.rs`, `data_structs.rs`, or pluralised names (`models.rs` / `dtos.rs`). `dto.rs` is reserved for wire-transfer shapes that serialize across the infrastructure/API boundary (HTTP/gRPC request/response); prefer `model.rs` for types that stay within a layer. The one exception is primitive types shared across sibling sub-capabilities, which live in a `primitives.rs` at the capability parent (see principle 12).
 
@@ -359,6 +387,7 @@ None of the allowances above override principle 6. A file that contains a provid
 9. **NoOp files**: Separate `noop_provider.rs` files instead of keeping stubs near the trait
 10. **Data structs in `port.rs`**: Putting value structs/enums in the traits file instead of `model.rs`
 11. **Parallel sibling modules**: Several peer modules doing the same thing with duplicated primitive types and lifecycle policy, instead of one capability parent with technology subfolders and a shared `primitives.rs`
+12. **Scattered or bucketed error translation**: Identical error-mapping functions copy-pasted across sibling adapter files, or collected in a weak `mapper.rs`, instead of one function in the concept's `error.rs`
 
 ## Quick Reference
 
@@ -384,3 +413,4 @@ None of the allowances above override principle 6. A file that contains a provid
 2. Organize by concept inside the adapter family
 3. Use technology-specific struct names (`PostgresOrderRepository`, not `DefaultOrderRepository`)
 4. No need for a `port.rs` — the trait lives in domain or application
+5. Map technology errors inline in the adapter while only that file needs the mapping; once sibling adapters share the same translation, move it to the concept's `error.rs` — never a `mapper.rs`
