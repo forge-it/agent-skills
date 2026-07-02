@@ -4,7 +4,7 @@ description: Guidelines for structuring Rust business applications around a cent
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.3"
+  version: "0.0.4"
 ---
 
 # Hexagonal Architecture Skill
@@ -450,19 +450,18 @@ src/
 ├── application/
 │   └── author.rs             # mod author { ... }
 │   └── author/
-│       ├── service.rs        # AuthorService trait, DefaultAuthorService
-│       └── port.rs           # AuthorMetrics, AuthorNotifier traits
+│       ├── service.rs        # DefaultAuthorService
+│       └── port.rs           # AuthorService, AuthorMetrics, AuthorNotifier traits
 ├── infrastructure.rs         # mod infrastructure { ... }
 ├── infrastructure/
-│   ├── http.rs               # mod http { ... }
-│   ├── http/
+│   ├── api.rs                # mod api { ... }
+│   ├── api/
 │   │   ├── router.rs
-│   │   ├── handlers.rs       # mod handlers { ... }
-│   │   ├── handlers/
-│   │   │   └── author.rs     # HTTP handlers
-│   │   ├── models.rs         # mod models { ... }
-│   │   └── models/
-│   │       └── author.rs     # HTTP request/response types
+│   │   ├── author.rs         # mod author { ... }
+│   │   └── author/
+│   │       ├── handler.rs    # HTTP handlers for the author concept
+│   │       ├── request.rs    # CreateAuthorRequest, UpdateAuthorRequest
+│   │       └── response.rs   # AuthorResponse
 │   ├── persistence.rs        # mod persistence { ... }
 │   ├── persistence/
 │   │   ├── sqlite.rs         # mod sqlite { ... }
@@ -489,7 +488,7 @@ src/
 ├── adapters.rs               # mod adapters { ... }
 ├── adapters/
 │   ├── sqlite.rs
-│   └── http.rs
+│   └── api.rs
 └── main.rs
 ```
 

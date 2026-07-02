@@ -4,7 +4,7 @@ description: Conventions for organising modules, files, and folders inside a Rus
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.4"
+  version: "0.0.6"
 ---
 
 # Project Structure Skill
@@ -52,6 +52,8 @@ src/application/
     └── port.rs
 ```
 
+What goes *inside* the sibling module file is fixed by principle 14: module docs, private `mod` declarations, and glob re-exports — nothing else.
+
 ### 1. Concept-Based Folders (CRITICAL)
 
 Every top-level folder inside a layer represents a **business concept** or a clearly named shared capability (e.g. `order/`, `payment/`, `notification/`, `encryption/`). Never create folders named after a component role (e.g. ~~`orchestrator/`~~, ~~`executor/`~~, ~~`scheduler/`~~, ~~`handler/`~~).
@@ -95,7 +97,9 @@ Each concept folder follows this canonical structure:
 | `port.rs` | **All** traits (ports) for this concept — services, orchestrators, executors, providers | Yes, when this layer defines local traits for the concept |
 | `service.rs` | `Default*` implementation of the main service trait | Only if the concept has a main service impl |
 | `error.rs` | **All** error enums for this concept — service errors, orchestrator errors, execution errors — plus any error-translation code this layer owns for the concept (`From` impls, mapping functions) | Only if the concept defines concept-local errors or this layer translates the concept's errors |
-| `model.rs` | **All** concept-local data types that are neither traits nor errors — the value structs/enums a port takes and returns, plus internal value objects | Only if the concept defines such data types |
+| `model.rs` | The concept's **dataflow values** — the value structs/enums a port takes as input or returns as output, plus internal value objects. Not construction-time config (see `config.rs`) | Only if the concept defines such data types |
+| `config.rs` | Construction-time tunables/policy structs for the concept's components — injected once through a constructor, never carried by a port method | Only if the concept defines such tunables |
+| `dto.rs` | Wire-transfer shapes serialized across the infrastructure/API boundary (HTTP/gRPC), when one file holds all of a concept's wire types; prefer per-direction `request.rs`/`response.rs` | No — never in domain or application |
 | `orchestrator.rs` | `Default*Orchestrator` implementation | No |
 | `executor.rs` | `Default*Executor` implementation | No |
 | `provider.rs` | `Default*Provider` implementation | No |
@@ -103,6 +107,8 @@ Each concept folder follows this canonical structure:
 | `sweeper.rs` | Periodic cleanup runner with a `tick()` method | No |
 | `manager.rs` | Periodic enforcement runner with a `tick()` method | No |
 | Other files | Concept-specific helpers (e.g. `progress.rs`, `validation.rs`) | No |
+
+Module-level `const` items go in the file that owns their meaning: a tunable's default value in `config.rs` beside the struct it parameterizes, a constant tied to a dataflow value (a wire discriminator, a display label) in `model.rs` next to its type, and a constant used by a single file in that file. Never create a `constants.rs` bucket.
 
 ### 3. One Trait File Per Concept (CRITICAL)
 
@@ -171,7 +177,7 @@ Do not move technology-error translation inward next to the enum definition: a `
 // Good — shared translation policy in the concept's error.rs of the layer that owns it
 // src/infrastructure/database/order/error.rs
 
-use crate::application::order::error::OrderReadError;
+use crate::application::order::OrderReadError;
 use crate::infrastructure::database::sqlstate::is_undefined_table;
 
 /// Classifies what a database error means for order reads.
@@ -240,7 +246,7 @@ src/infrastructure/api/order/
 
 ### 8. NoOp Stubs Live Close to the Trait (MEDIUM)
 
-Keep NoOp/stub implementations close to the port they implement — either in the same file as the trait or in the matching implementation file. Do not hide a provider stub in `service.rs` and do not create separate `noop_*.rs` files.
+A NoOp/stub implementation goes in `port.rs` next to the trait it stubs; if the concept already has the matching role file (e.g. `provider.rs` for a `NoOpOrderProvider`), it may go there instead. Do not hide a provider stub in `service.rs` and do not create separate `noop_*.rs` files.
 
 ### 9. Cross-Cutting Components Need a Capability Name (MEDIUM)
 
@@ -263,7 +269,7 @@ If a folder has no `service.rs` or `port.rs` (e.g. a `lock/` folder with only `s
 
 ### 11. Data Types Live in `model.rs`, Not `port.rs` (CRITICAL)
 
-`port.rs` holds traits only and `error.rs` holds error enums and error translation only (principles 3–4). Every other concept-local data type — the value structs and enums a port takes as input or returns as output, plus internal value objects — goes in `model.rs` (singular). Do not leave data structs in `port.rs`.
+`port.rs` holds traits only and `error.rs` holds error enums and error translation only (principles 3–4). Every concept-local **dataflow value** — the value structs and enums a port takes as input or returns as output, plus internal value objects — goes in `model.rs` (singular). Do not leave data structs in `port.rs`. Construction-time tunables are not dataflow and go in `config.rs` instead (principle 13).
 
 Never use `types.rs`, `data_structs.rs`, or pluralised names (`models.rs` / `dtos.rs`). `dto.rs` is reserved for wire-transfer shapes that serialize across the infrastructure/API boundary (HTTP/gRPC request/response); prefer `model.rs` for types that stay within a layer. The one exception is primitive types shared across sibling sub-capabilities, which live in a `primitives.rs` at the capability parent (see principle 12).
 
@@ -301,6 +307,75 @@ src/application/cleanup/
 
 Propagate the rename symmetrically through every layer that mirrors the module path (e.g. `infrastructure/runtime/cleanup/{kubernetes,database}`, `tests/.../cleanup/{kubernetes,database}`). Function and struct names whose words happen to overlap the old path describe what they do, not where they live — leave them unchanged.
 
+### 13. Construction-Time Config Lives in `config.rs`, Not `model.rs` (HIGH)
+
+`model.rs` holds dataflow values — types that move through port methods at request time. A tunables/policy struct (backoff windows, attempt caps, tick intervals, retention windows) has a different lifecycle: it is built once at startup, injected through a component's constructor, and its consumer is the composition root — not port callers. That is a separate responsibility; give it a separate home: the concept's `config.rs`.
+
+The litmus test: **a type that appears in any port method signature goes in `model.rs`; a type that never appears in a port signature and is built once at startup — via `new()`, a builder, or a factory function — and injected into a component goes in `config.rs`.** When both hold, the port side wins: a type that crosses a port at request time is dataflow even if it is also constructor-injected. Apply the test, not the name — a settings type that a port fetches or updates at request time stays in `model.rs` even if it is called "config".
+
+Defining the struct in the application (or domain) layer is correct and this rule does not change it: the layer that consumes the policy defines its shape; infrastructure reads the environment and constructs the value, so the dependency still points inward. Never use `settings.rs`, `tunables.rs`, or `options.rs` for this file.
+
+A config aggregate that no single concept owns — a parameter object grouping several concepts' tunables so the wiring factory's signature stays stable — is wiring, not application logic: it belongs to the composition root's input bundles (see the composition-root pattern), never inside a concept folder or a layer's module file. If application code consumes a config struct directly, it is concept config — define it in that concept's `config.rs`, and split an aggregate that spans several concepts instead of sharing one struct between application code and wiring.
+
+```rust
+// Bad — construction-time tunables buried among dataflow values
+// src/application/order/model.rs
+pub struct CreateOrderRequest { /* port input — belongs here */ }
+pub struct OrderSweeperConfig { /* constructor input — does not */ }
+
+// Good — dataflow in model.rs, injected policy in config.rs
+// src/application/order/config.rs
+
+/// Tunables for the order outbox sweeper: retry backoff, attempt cap,
+/// tick interval. Built by infrastructure from the environment and
+/// injected by the composition root.
+pub struct OrderSweeperConfig {
+    pub backoff_seconds: u64,
+    pub max_attempts: u32,
+    pub sweep_interval_seconds: u64,
+}
+```
+
+### 14. The Concept Module File Is a Facade: Private `mod` + Glob Re-Exports (HIGH)
+
+The sibling module file that fronts a concept folder (`order.rs` next to `order/`) contains exactly three kinds of lines: module docs (`//!`), a private `mod` declaration per file in the folder, and one glob re-export per file. No `pub mod` for files, no curated per-item re-export lists, no inline items, no logic.
+
+```rust
+// src/application/order.rs — the whole file
+//! Order management: creation, execution, notification.
+
+mod config;
+mod error;
+mod model;
+mod port;
+mod service;
+
+pub use config::*;
+pub use error::*;
+pub use model::*;
+pub use port::*;
+pub use service::*;
+```
+
+This makes the concept path the **single canonical import path**: `use crate::application::order::OrderService;` compiles; `use crate::application::order::port::OrderService;` does not — the private `mod` blocks it. Two problems disappear at once:
+
+- **File placement stays correctable.** Which file a type lives in (`port.rs` vs `model.rs` vs `config.rs`) never appears in a consumer's import, so moving a type between files — fixing a placement mistake — touches nothing outside the concept folder.
+- **No import drift.** When both a deep path and a re-export compile, a codebase splits between them and no tool can enforce the choice. When only one path compiles, the compiler is the enforcement.
+
+Item visibility is the export list — a glob never widens visibility:
+
+| Marker on the item | Effect through the glob |
+|---|---|
+| `pub` | On the concept surface: other layers, `tests/`, downstream crates |
+| `pub(crate)` | Reachable via the concept path inside the crate; invisible to `tests/` and downstream crates |
+| private / `pub(super)` | Concept-internal; not re-exported |
+
+Two files exporting the same `pub` name collide at compile time — rename one; concept-scoped type names (principles 5 and 7) make this rare.
+
+Scope: **files are hidden behind the facade; folders remain addressable namespaces.** A nested sub-capability folder (principle 1) is declared `pub mod` — `backup.rs` declares `pub mod replica;` so `backup::replica::…` keeps its namespace — and the sub-capability's own module file follows this same facade rule for its files. Layer module files (`application.rs`) and adapter-family files (`infrastructure/database.rs`) declare their child modules with `pub mod` and add **no per-item re-exports**: a layer-level re-export would reintroduce the second import path the facade just eliminated.
+
+Crate scope: this principle is for **application crates** — services, binaries, and workspace members consumed only inside the repository, where the compiler sees every consumer and a collision is an instant build error. In a **published library crate**, the module hierarchy is legitimately part of the public API (`std::collections::hash_map`, `tokio::sync::mpsc`): keep meaningful `pub mod` namespaces and curate the root surface with explicit re-exports instead. A glob facade is a semver hazard there — every new `pub` item silently joins the public API, and an added name can collide with a downstream glob import without your own build ever failing.
+
 ## Infrastructure Layer Adaptations
 
 The infrastructure layer follows the same core principles, with these additional allowances:
@@ -309,7 +384,7 @@ The infrastructure layer follows the same core principles, with these additional
 
 Infrastructure may use **adapter-family** or **technical-capability** folders at the top level when that is the cleanest primary axis. Examples: `api/`, `database/`, `gateway/`, `runtime/`, `bootstrap/`, `session/`, `crypto/`, `config/`, `event/`.
 
-Inside an adapter family, organize the next level by concept whenever practical (e.g. `api/order/`, `database/order/`, `gateway/source/`).
+Inside an adapter family, the next level is organized **by concept, never by role**: `api/order/`, `database/order/`, `gateway/source/` — never `api/handler/` or `api/model/` folders holding one file per concept (that transposes the concept × role matrix onto the wrong axis; principle 1 applies inside families too). Family-wide helpers with no concept owner (a `router.rs`, `pagination.rs`, the family's `error.rs`) sit directly in the family folder.
 
 Two of these have fixed meanings: use `session/` for token/session lifecycle infrastructure, and `crypto/` for low-level cryptographic primitives such as hashing and encryption.
 
@@ -385,27 +460,32 @@ None of the allowances above override principle 6. A file that contains a provid
 7. **File names matching struct prefixes**: `default_service.rs` instead of `service.rs`
 8. **Orphan concept folders**: Folders with only a sweeper or runner and no port or service
 9. **NoOp files**: Separate `noop_provider.rs` files instead of keeping stubs near the trait
-10. **Data structs in `port.rs`**: Putting value structs/enums in the traits file instead of `model.rs`
+10. **Data structs in `port.rs`**: Putting value structs/enums in the traits file instead of `model.rs` (dataflow values) or `config.rs` (construction-time tunables)
 11. **Parallel sibling modules**: Several peer modules doing the same thing with duplicated primitive types and lifecycle policy, instead of one capability parent with technology subfolders and a shared `primitives.rs`
 12. **Scattered or bucketed error translation**: Identical error-mapping functions copy-pasted across sibling adapter files, or collected in a weak `mapper.rs`, instead of one function in the concept's `error.rs`
+13. **Config structs in `model.rs`**: Construction-time tunables mixed into the dataflow-values file instead of the concept's `config.rs`
+14. **Public submodule files or deep imports**: `pub mod port;` on a concept's files, curated per-item re-export lists, or a consumer importing `order::model::X` — in an application crate the concept module file is a glob facade and the concept path is the only import path (a published library legitimately keeps `pub mod` namespaces and a curated surface — see principle 14's crate scope)
 
 ## Quick Reference
 
 ### Adding a New Concept
 
-1. Create `concept.rs` next to `concept/`; do not create `concept/mod.rs` unless the operator explicitly decided that exact module
+1. Create `concept.rs` next to `concept/`; do not create `concept/mod.rs` unless the operator explicitly decided that exact module. It holds only module docs, private `mod` declarations, and `pub use <file>::*;` globs (principle 14)
 2. Create a folder named after the business concept under the appropriate layer
 3. Add `port.rs` with all traits for this concept (if defining traits)
 4. Add `error.rs` with all error enums (if defining errors)
-5. Add `service.rs` with the `Default*` implementation
-6. Add additional role files (`orchestrator.rs`, `executor.rs`) only as needed
+5. Add `model.rs` for port dataflow values and `config.rs` for construction-time tunables, only as needed
+6. Add `service.rs` with the `Default*` implementation
+7. Add additional role files (`orchestrator.rs`, `executor.rs`) only as needed
 
 ### Adding a Component to an Existing Concept
 
 1. If the component introduces new traits, add them to the existing `port.rs`
 2. If the component introduces new errors, add them to the existing `error.rs`
-3. Create a new file named after the role (e.g. `executor.rs`)
-4. Name the struct with the concept prefix and role suffix (`OrderExecutor` trait, `DefaultOrderExecutor` struct)
+3. If the component introduces construction-time tunables (backoff, intervals, attempt caps), add them to the concept's `config.rs`
+4. Create a new file named after the role (e.g. `executor.rs`)
+5. Register it in the concept module file: `mod executor;` plus `pub use executor::*;` (principle 14)
+6. Name the struct with the concept prefix and role suffix (`OrderExecutor` trait, `DefaultOrderExecutor` struct)
 
 ### Adding an Infrastructure Adapter
 

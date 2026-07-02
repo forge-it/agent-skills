@@ -1,11 +1,11 @@
 ---
 name: rust-architecture-test-setup
-description: One-time setup of a `tests/structure/` cargo-test gate for a Rust hexagonal-architecture project, so the layering invariants (dependencies point inward — domain → application → infrastructure) and the project-structure conventions (`port.rs` holds traits only, file names don't stutter, `mod.rs` stays out of `src/` and `tests/` except `tests/common/`, the domain stays framework-free) are enforced by `cargo test` — and therefore CI — instead of by review. Use when bootstrapping a new Rust hexagonal project's architecture enforcement, or adding it to an existing one. Assumes a layered hexagonal codebase (domain/application/infrastructure under `src/`).
+description: One-time setup of a `tests/structure/` cargo-test gate for a Rust hexagonal-architecture project, so the layering invariants (dependencies point inward — domain → application → infrastructure) and the project-structure conventions (`port.rs` holds traits only, file names don't stutter, `mod.rs` stays out of `src/` and `tests/` except `tests/common/`, concept module files stay glob facades in application crates, the domain stays framework-free) are enforced by `cargo test` — and therefore CI — instead of by review. Use when bootstrapping a new Rust hexagonal project's architecture enforcement, or adding it to an existing one. Assumes a layered hexagonal codebase (domain/application/infrastructure under `src/`).
 vibe: Turns the architecture doc into a build that fails when someone crosses a layer.
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.1"
+  version: "0.0.2"
 ---
 
 # Rust Architecture Test Setup
@@ -37,19 +37,26 @@ Run this once. After `tests/structure/` exists, you do not re-run the skill.
 
 ## What it enforces
 
-Five rules, drawn from the two architecture skills:
+Six rules, drawn from the two architecture skills:
 
 1. **Dependencies point inward** — a file under `domain/` must not reference
    `application` or `infrastructure`; a file under `application/` must not reference
    `infrastructure`. (`rust-hexagonal-architecture`, "Dependencies Point Inward".)
 2. **The domain is framework-free** — no file under `domain/` may `use` an
    infrastructure crate (`sqlx`, `axum`, …).
-3. **`port.rs` holds traits only** — value types belong in `model.rs`, errors in
-   `error.rs`. (`rust-project-structure`, "Data Types Live in `model.rs`".)
+3. **`port.rs` holds traits only** — dataflow values belong in `model.rs`,
+   construction-time tunables in `config.rs`, errors in `error.rs`.
+   (`rust-project-structure`, "Data Types Live in `model.rs`".)
 4. **File names don't stutter** — `backup/executor.rs`, never
    `backup/backup_executor.rs`. (`rust-project-structure`, "Short Module Names".)
 5. **No legacy `mod.rs` layout** — `mod.rs` is forbidden under `src/` and `tests/`,
    except for the shared test helper entry point `tests/common/mod.rs`.
+6. **Concept module files are facades** — a `<name>.rs` fronting a sibling `<name>/`
+   folder holds only module docs, `mod` declarations, `pub mod` for subfolders, and
+   `pub use <file>::*;` globs. Layer files (`src/<layer>.rs`) and adapter-family files
+   directly under `infrastructure/` are exempt. Gated by `ENFORCE_CONCEPT_FACADE` —
+   application crates only, never published libraries. (`rust-project-structure`,
+   "The Concept Module File Is a Facade".)
 
 It assumes the canonical hexagonal layers `domain/`, `application/`, `infrastructure/`
 under `src/`. Adapt the layer set in `constants.rs` (see
@@ -72,6 +79,7 @@ it.
 tests/
 ├── structure.rs                 # entry: declares the module tree
 └── structure/
+    ├── facade.rs                # tests-only: concept-module-file facade rule
     ├── layering.rs              # tests-only: dependency-direction rules
     ├── naming.rs                # tests-only: file-name stutter + mod.rs rules
     ├── ports.rs                 # tests-only: port.rs-traits-only rule
@@ -93,6 +101,7 @@ helper, constant, and type lives under `support/` (Sections 15–16).
 mod structure {
     pub mod support;
 
+    mod facade;
     mod layering;
     mod naming;
     mod ports;
@@ -170,6 +179,15 @@ pub const MOD_FILE_ALLOWED_PATHS: &[&str] = &["tests/common/mod.rs"];
 /// Marker identifying NoOp stub types, which may live next to their trait.
 pub const NOOP_STUB_MARKER: &str = "NoOp";
 
+/// Gates the concept-facade rule: a `<name>.rs` fronting a sibling `<name>/`
+/// folder must hold only module docs, `mod` declarations, `pub mod` for
+/// subfolders, and `pub use <file>::*;` globs. Enable for application crates —
+/// services, binaries, and workspace members consumed only inside the
+/// repository (set `publish = false` in their Cargo.toml). Disable for a crate
+/// published to a registry: there the module hierarchy is legitimately public
+/// API and a glob facade is a semver hazard.
+pub const ENFORCE_CONCEPT_FACADE: bool = true;
+
 /// Path prefix that references another module by its crate-absolute path.
 pub const CRATE_PATH_PREFIX: &str = "crate::";
 
@@ -186,6 +204,8 @@ pub const USE_KEYWORD: &str = "use";
 //! directory does not matter.
 
 use std::path::{Path, PathBuf};
+
+use super::constants::INFRASTRUCTURE_LAYER;
 
 /// The crate's source tree: locates `src/`, walks it for `.rs` files, reads
 /// them, and renders paths relative to the crate root.
@@ -236,6 +256,27 @@ impl SourceTree {
             .map(|component| component.as_os_str().to_string_lossy().into_owned())
             .collect::<Vec<_>>()
             .join("/")
+    }
+
+    /// The sibling folder this module file fronts (`order/` for `order.rs`),
+    /// if one exists on disk.
+    pub(crate) fn fronted_folder(&self, module_file: &Path) -> Option<PathBuf> {
+        let stem = module_file.file_stem()?;
+        let folder = module_file.parent()?.join(stem);
+        folder.is_dir().then_some(folder)
+    }
+
+    /// Whether a module file names an addressable namespace rather than a
+    /// concept: a layer file directly under `src/` (`src/application.rs`) or
+    /// an adapter-family file directly under `src/infrastructure/`
+    /// (`src/infrastructure/database.rs`). The facade rule exempts both.
+    pub(crate) fn is_namespace_module_file(&self, file: &Path) -> bool {
+        let source_root = self.crate_root.join("src");
+        let Ok(relative) = file.strip_prefix(&source_root) else {
+            return false;
+        };
+        let component_count = relative.components().count();
+        component_count == 1 || (component_count == 2 && relative.starts_with(INFRASTRUCTURE_LAYER))
     }
 
     fn rust_files_under(&self, directory: &Path) -> Vec<PathBuf> {
@@ -295,6 +336,40 @@ impl SourceLine<'_> {
             }
         }
         None
+    }
+
+    /// Whether the line is an attribute (`#[...]` / `#![...]`).
+    pub(crate) fn is_attribute(&self) -> bool {
+        self.0.trim_start().starts_with('#')
+    }
+
+    /// The module name declared by a private `mod <name>;` line.
+    pub(crate) fn private_module_declaration(&self) -> Option<&str> {
+        Self::terminated_module_name(self.0.trim().strip_prefix("mod ")?)
+    }
+
+    /// The module name declared by a `pub mod <name>;` line.
+    pub(crate) fn public_module_declaration(&self) -> Option<&str> {
+        Self::terminated_module_name(self.0.trim().strip_prefix("pub mod ")?)
+    }
+
+    /// The module name re-exported by a `pub use <name>::*;` glob line.
+    pub(crate) fn glob_reexport(&self) -> Option<&str> {
+        let after_use = self.0.trim().strip_prefix("pub use ")?;
+        let name = after_use.strip_suffix("::*;")?.trim();
+        Self::is_module_name(name).then_some(name)
+    }
+
+    fn terminated_module_name(rest: &str) -> Option<&str> {
+        let name = rest.strip_suffix(';')?.trim();
+        Self::is_module_name(name).then_some(name)
+    }
+
+    fn is_module_name(name: &str) -> bool {
+        !name.is_empty()
+            && name
+                .chars()
+                .all(|character| character.is_ascii_alphanumeric() || character == '_')
     }
 }
 ```
@@ -360,8 +435,8 @@ impl fmt::Display for Violation {
 //! scanning function.
 
 use super::constants::{
-    CRATE_PATH_PREFIX, DOMAIN_LAYER, MOD_FILE_ALLOWED_PATHS, MOD_FILE_NAME,
-    MOD_FILE_SEARCH_ROOTS, NOOP_STUB_MARKER, PORT_FILE_NAME, USE_KEYWORD,
+    CRATE_PATH_PREFIX, DOMAIN_LAYER, ENFORCE_CONCEPT_FACADE, MOD_FILE_ALLOWED_PATHS,
+    MOD_FILE_NAME, MOD_FILE_SEARCH_ROOTS, NOOP_STUB_MARKER, PORT_FILE_NAME, USE_KEYWORD,
 };
 use super::source::{SourceLine, SourceTree};
 use super::violation::Violation;
@@ -496,12 +571,13 @@ impl Rule {
         }
     }
 
-    /// `port.rs` files hold trait definitions only — value types belong in
-    /// `model.rs`, errors in `error.rs`. NoOp stubs may stay next to their trait
+    /// `port.rs` files hold trait definitions only — dataflow values belong in
+    /// `model.rs`, construction-time tunables in `config.rs`, errors in
+    /// `error.rs`. NoOp stubs may stay next to their trait
     /// (rust-project-structure: "NoOp stubs live close to the trait").
     pub fn port_files_hold_traits_only() -> Self {
         Self {
-            description: "port.rs must hold traits only (data in model.rs, errors in error.rs)"
+            description: "port.rs must hold traits only (data in model.rs, config in config.rs, errors in error.rs)"
                 .to_string(),
             check: Box::new(|source_tree| {
                 let mut violations = Vec::new();
@@ -520,10 +596,66 @@ impl Rule {
                                 line_index + 1,
                                 line,
                                 &format!(
-                                    "`port.rs` holds traits only; move this `{keyword}` to model.rs/error.rs"
+                                    "`port.rs` holds traits only; move this `{keyword}` to model.rs, config.rs, or error.rs"
                                 ),
                             ));
                         }
+                    }
+                }
+                violations
+            }),
+        }
+    }
+
+    /// A module file that fronts a sibling folder (`order.rs` next to `order/`)
+    /// is a facade: module docs, attributes, `mod <file>;` declarations,
+    /// `pub mod <subfolder>;`, and `pub use <file>::*;` globs — nothing else.
+    /// Layer module files (`src/<layer>.rs`) and adapter-family module files
+    /// directly under `infrastructure/` are exempt: their children are
+    /// addressable namespaces (rust-project-structure: "The Concept Module File
+    /// Is a Facade"). Gated by `ENFORCE_CONCEPT_FACADE` — application crates
+    /// only, never published libraries.
+    pub fn concept_module_files_are_facades() -> Self {
+        Self {
+            description: "concept module files must hold only `mod` declarations and `pub use <file>::*;` globs"
+                .to_string(),
+            check: Box::new(|source_tree| {
+                let mut violations = Vec::new();
+                if !ENFORCE_CONCEPT_FACADE {
+                    return violations;
+                }
+                for file in source_tree.rust_files() {
+                    let Some(fronted_folder) = source_tree.fronted_folder(&file) else {
+                        continue;
+                    };
+                    if source_tree.is_namespace_module_file(&file) {
+                        continue;
+                    }
+                    let contents = source_tree.read(&file);
+                    for (line_index, line) in contents.lines().enumerate() {
+                        let source_line = SourceLine(line);
+                        if line.trim().is_empty()
+                            || source_line.is_comment()
+                            || source_line.is_attribute()
+                            || source_line.private_module_declaration().is_some()
+                            || source_line.glob_reexport().is_some()
+                        {
+                            continue;
+                        }
+                        let message = match source_line.public_module_declaration() {
+                            Some(subfolder) if fronted_folder.join(subfolder).is_dir() => continue,
+                            Some(subfolder) => format!(
+                                "`pub mod {subfolder};` exposes a file — declare `mod {subfolder};` and re-export with `pub use {subfolder}::*;`"
+                            ),
+                            None => "a concept module file holds only `mod` declarations and `pub use <file>::*;` globs"
+                                .to_string(),
+                        };
+                        violations.push(Violation::at_line(
+                            &source_tree.relative(&file),
+                            line_index + 1,
+                            line,
+                            &message,
+                        ));
                     }
                 }
                 violations
@@ -626,6 +758,21 @@ mod port_files {
 }
 ```
 
+### `tests/structure/facade.rs`
+
+```rust
+use super::support::rules::Rule;
+
+mod concept_module_files {
+    use super::*;
+
+    #[test]
+    fn should_hold_only_module_declarations_and_glob_reexports() {
+        Rule::concept_module_files_are_facades().enforce();
+    }
+}
+```
+
 ## Step 3 — Wire the gate
 
 Add `cargo test --test structure` to CI. If the project uses `cargo-make`, give it a
@@ -664,6 +811,15 @@ mkdir -p src/__probe
 printf '' > src/__probe/mod.rs
 cargo test --test structure   # expect: module_files::should_allow_mod_rs_only_in_tests_common fails
 rm -r src/__probe
+```
+
+For the facade rule, probe a concept module file that exposes a file publicly:
+
+```bash
+mkdir -p src/application/__probe
+printf 'pub mod port;\n' > src/application/__probe.rs
+cargo test --test structure   # expect: concept_module_files::should_hold_only_module_declarations_and_glob_reexports fails
+rm -r src/application/__probe src/application/__probe.rs
 ```
 
 On a **new** project the suite then passes clean. On an **existing** project it now
@@ -744,6 +900,12 @@ it references* or *how it is named*.**
 - **`mod.rs` exception** — `MOD_FILE_ALLOWED_PATHS` owns the exact crate-relative
   paths where legacy module layout remains allowed. The default exception is only
   `tests/common/mod.rs`.
+- **Concept-facade rule** — `ENFORCE_CONCEPT_FACADE` gates rule 6. Keep `true` for
+  application crates (services, binaries, internal workspace members — set
+  `publish = false` in their Cargo.toml so the intent is recorded). Set `false` when
+  the crate is published to a registry: the module hierarchy is then legitimately
+  public API (rust-project-structure, principle 14 "Crate scope"). On an existing
+  codebase, prefer the `#[ignore]` ratchet over a wholesale enable.
 - **New rules** — add a `Rule::*` constructor + a one-line test. The `SourceTree`/
   `SourceLine` primitives cover most "scan files / inspect lines" checks.
 
