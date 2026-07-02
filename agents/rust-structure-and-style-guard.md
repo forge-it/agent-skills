@@ -55,19 +55,19 @@ Do not invent conventions — if `project_structure.md` doesn't state something,
 
 ## Step 3 — Code-style lens (rust-code-style)
 
-- **R1 / R2 — Naming.** Intent-revealing names? Flag single-letter or cryptic names in closures, iterators, and locals (`|product|`, not `|p|`).
-- **R6 — Constants.** A literal repeated across the changed files, or duplicating an existing one, should be a named constant in the authoritative module.
-- **R10 — Explicit struct field init.** Flag shorthand (`field` instead of `field: field`).
-- **R11 — Fold single-caller helpers.** A free `fn` with exactly one production caller that lives on a struct should be an associated fn/method on it. Tests don't count as callers.
-- **R12 — Error-type twins.** Near-identical bodies differing only in which error enum they build → one function returning a neutral error, mapped by `From`.
-- **R13 — Self-documenting returns.** A bare `bool` whose meaning isn't in the name, or a positional tuple of 2+ values → a named struct/enum.
+- **R1 — Naming.** Intent-revealing names? Flag single-letter or cryptic names in closures, iterators, and locals (`|product|`, not `|p|`). Generic type parameters (`T`, `E`) and lifetimes (`'a`) are established Rust convention — don't flag them.
+- **R5 — Constants.** A literal repeated across the changed files, or duplicating an existing one, should be a named constant in the authoritative module.
+- **R8 — Fold single-caller helpers.** A free `fn` with exactly one production caller that lives on a struct should be an associated fn/method on it. Tests don't count as callers.
+- **R9 — Error-type twins.** Near-identical bodies differing only in which error enum they build → one function returning a neutral error, mapped by `From`.
+- **R10 — Self-documenting returns.** A bare `bool` whose meaning isn't in the name, or a positional tuple of 2+ values → a named struct/enum.
 - For changed **test** files (style of tests): test names follow `should_<behavior>_when_<condition>` and the module is named for the unit under test (rust-testing S7).
 
 ## Step 4 — Project-structure lens (rust-project-structure)
 
 For each changed file, verify placement is intentional:
 - `domain/` expresses a domain concept (no framework types, no persistence); `application/` orchestrates use cases and defines ports; `infrastructure/` implements ports and knows external systems.
-- A new trait → `port.rs`; new data types → `model.rs`; new errors → `error.rs`.
+- A new trait → `port.rs`; new dataflow values (port inputs/outputs, internal value objects) → `model.rs`; new construction-time tunables (injected via constructor, not carried by a port method) → `config.rs`; new errors → `error.rs`.
+- A concept module file (`<concept>.rs` next to `<concept>/`) holds only module docs, private `mod` declarations, and `pub use <file>::*;` globs. Flag `pub mod <file>;` on a concept's files, curated per-item re-export lists, inline items, and deep imports of concept files (`…::order::model::X`) in changed code. Application crates only — in a published library crate the module hierarchy may deliberately be the API; don't flag `pub mod` there.
 - Module names are short and concept-based, not role-named (`utils.rs`, `helpers.rs`, `common.rs`).
 - New concepts follow the one-concept-per-folder pattern from `project_structure.md`.
 - For changed **test** files (structure of tests): tests live in the test tree mirroring source, not inline `#[cfg(test)]`; support code is split by concern (no kitchen-sink `helpers.rs`); test files hold only tests (rust-testing S8 / S11 / S15 / S16).
