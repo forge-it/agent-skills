@@ -19,7 +19,7 @@ Rules:
 |----|-------------|------------------------|
 | 01 | /home/cristi/Projects/agent-skills/prompts/plan-review/single-language/plan-review-vue-aggressive.md | — |
 | 02 | /home/cristi/Projects/agent-skills/prompts/plan-review/single-language/plan-review-vue.md | — |
-| 03 | /home/cristi/Projects/agent-skills/prompts/plan-review/generic/plan-review-day-off-bet.md | — |
+| 03 | /home/cristi/Projects/agent-skills/prompts/plan-review/generic/plan-review-loss-framing.md | — |
 | 04 | /home/cristi/Projects/agent-skills/prompts/plan-review/lenses/plan-review-security.md | — |
 | 05 | /home/cristi/Projects/agent-skills/prompts/plan-review/lenses/plan-review-tests-and-migrations.md | — |
 
