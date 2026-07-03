@@ -32,4 +32,4 @@ Loop until every finding in every review file is marked `[FIXED]` or `[DEFERRED]
 
 <X> = review file paths, one per line — each file is its own track (e.g. one backend review, one frontend review)
 <Z> = original plan path
-<W> = worker prompt path (e.g. <agent-skills>/prompts/implement-code/stack-based/implement-rust-vue-task.md)
+<W> = worker prompt path (e.g. /home/cristi/Projects/agent-skills/prompts/implement-code/stack-based/implement-rust-vue-task.md)
