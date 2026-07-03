@@ -15,7 +15,7 @@ Rules:
 - Be honest about uncertainty. If you cannot verify something, say so explicitly — do not paper over it.
 
 Output format in <Y>:
-- Group findings by aseverity: Blocking, Important, Nit.
+- Group findings by severity: Blocking, Important, Nit.
 - Each finding states: (1) the issue, (2) where it appears in the plan, (3) what to do about it.
 - End with a one-line verdict: ship as-is, ship with the Blocking items addressed, or rework before implementation.
 
