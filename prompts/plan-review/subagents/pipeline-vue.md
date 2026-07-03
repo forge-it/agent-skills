@@ -17,11 +17,11 @@ Rules:
 
 | NN | Prompt file | Extra placeholder fill |
 |----|-------------|------------------------|
-| 01 | <agent-skills>/prompts/plan-review/single-language/plan-review-vue-aggressive.md | — |
-| 02 | <agent-skills>/prompts/plan-review/single-language/plan-review-vue.md | — |
-| 03 | <agent-skills>/prompts/plan-review/generic/plan-review-day-off-bet.md | — |
-| 04 | <agent-skills>/prompts/plan-review/lenses/plan-review-security.md | — |
-| 05 | <agent-skills>/prompts/plan-review/lenses/plan-review-tests-and-migrations.md | — |
+| 01 | /home/cristi/Projects/agent-skills/prompts/plan-review/single-language/plan-review-vue-aggressive.md | — |
+| 02 | /home/cristi/Projects/agent-skills/prompts/plan-review/single-language/plan-review-vue.md | — |
+| 03 | /home/cristi/Projects/agent-skills/prompts/plan-review/generic/plan-review-day-off-bet.md | — |
+| 04 | /home/cristi/Projects/agent-skills/prompts/plan-review/lenses/plan-review-security.md | — |
+| 05 | /home/cristi/Projects/agent-skills/prompts/plan-review/lenses/plan-review-tests-and-migrations.md | — |
 
 Wait for all 5 to finish before starting Stage 2.
 
@@ -51,4 +51,3 @@ Assemble the skeptic verdicts verbatim into <Y>-plan-review-verified.md: each fi
 
 <X> = 
 <Y> = 
-<agent-skills> = 
