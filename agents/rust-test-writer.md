@@ -51,6 +51,11 @@ report. The rules you will apply constantly:
   `support/` or `tests/common/` — reuse existing ones before writing new ones.
 - **S17**: parallel-safety by construction — UUIDv7-suffixed resources, no
   fixed ports, explicit teardown, `#[serial]` only for genuine singletons.
+- **references/**: before creating any file under `tests/common/`, any `support/`
+  module, or a `TestApp` harness, read the rust-testing skill's
+  `references/support-module-implementations.md`, `references/mock-implementations.md`,
+  and `references/testapp-harness.md` — they contain the complete reference
+  implementations.
 
 ## Core Principles
 
