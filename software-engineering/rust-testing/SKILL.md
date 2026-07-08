@@ -4,7 +4,7 @@ description: Guidelines for writing effective Rust tests. Use when writing or mo
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.9"
+  version: "0.1.0"
 ---
 
 # Rust Testing Skill
@@ -183,7 +183,7 @@ mod new_at {
 In hexagonal architecture, services become testable by injecting mock implementations of ports (repository traits, external service traits). The **canonical pattern is a hand-written mock**: a small struct that allows controlling return values and tracking calls. Hand-written mocks live in `tests/unit/support/mocks.rs` (Section 15) — a test file never defines them at module scope (Section 16). Reach for `mockall` instead only when the mock is stateless and purely expectation-based (Section 1).
 
 ```rust
-// tests/unit/support/mocks.rs — the canonical home for hand-written port mocks
+// tests/unit/support/mocks.rs
 use std::sync::Arc;
 
 use tokio::sync::Mutex;
@@ -194,108 +194,20 @@ pub struct MockAuthorRepository {
     pub create_result: Arc<Mutex<Option<Result<Author, CreateAuthorError>>>>,
 }
 
-impl MockAuthorRepository {
-    pub fn with_create_result(result: Result<Author, CreateAuthorError>) -> Self {
-        Self {
-            create_result: Arc::new(Mutex::new(Some(result))),
-            ..Default::default()
-        }
-    }
-}
-
 impl AuthorRepository for MockAuthorRepository {
-    async fn create(
-        &self,
-        request: &CreateAuthorRequest,
-    ) -> Result<Author, CreateAuthorError> {
+    async fn create(&self, request: &CreateAuthorRequest) -> Result<Author, CreateAuthorError> {
         if let Some(result) = self.create_result.lock().await.take() {
             return result;
         }
-
         let author = Author::new(AuthorId::new(), request.name.clone());
         self.authors.lock().await.push(author.clone());
         Ok(author)
     }
-
-    async fn find_by_id(&self, id: &AuthorId) -> Result<Option<Author>, FindAuthorError> {
-        let authors = self.authors.lock().await;
-        Ok(authors.iter().find(|author| author.id() == id).cloned())
-    }
-}
-
-#[derive(Clone, Default)]
-pub struct MockMetrics {
-    pub success_count: Arc<Mutex<u64>>,
-    pub failure_count: Arc<Mutex<u64>>,
-}
-
-impl AuthorMetrics for MockMetrics {
-    async fn record_creation_success(&self) {
-        *self.success_count.lock().await += 1;
-    }
-
-    async fn record_creation_failure(&self) {
-        *self.failure_count.lock().await += 1;
-    }
-}
-
-#[derive(Clone, Default)]
-pub struct MockNotifier {
-    pub notified_authors: Arc<Mutex<Vec<AuthorId>>>,
-}
-
-impl AuthorNotifier for MockNotifier {
-    async fn author_created(&self, author: &Author) {
-        self.notified_authors.lock().await.push(author.id().clone());
-    }
+    /* other port methods follow the same Arc<Mutex<...>> pattern */
 }
 ```
 
-```rust
-// tests/unit/application/author_service.rs
-use super::super::support::mocks::{MockAuthorRepository, MockMetrics, MockNotifier};
-
-mod create_author {
-    use super::*;
-
-    #[tokio::test]
-    async fn should_record_success_metric() {
-        let repository = MockAuthorRepository::default();
-        let metrics = MockMetrics::default();
-        let notifier = MockNotifier::default();
-        let service = AuthorService::new(repository, metrics.clone(), notifier);
-        let request = CreateAuthorRequest {
-            name: AuthorName::new("Test Author").unwrap(),
-        };
-
-        service.create_author(&request).await.expect("create_author should succeed");
-
-        assert_eq!(*metrics.success_count.lock().await, 1);
-        assert_eq!(*metrics.failure_count.lock().await, 0);
-    }
-
-    #[tokio::test]
-    async fn should_record_failure_metric_on_duplicate() {
-        let repository = MockAuthorRepository::with_create_result(
-            Err(CreateAuthorError::Duplicate {
-                name: AuthorName::new("Existing").unwrap()
-            })
-        );
-        let metrics = MockMetrics::default();
-        let notifier = MockNotifier::default();
-        let service = AuthorService::new(repository, metrics.clone(), notifier);
-        let request = CreateAuthorRequest {
-            name: AuthorName::new("Existing").unwrap(),
-        };
-
-        let result = service.create_author(&request).await;
-
-        assert!(matches!(result, Err(CreateAuthorError::Duplicate { .. })));
-        assert_eq!(*metrics.failure_count.lock().await, 1);
-        assert_eq!(*metrics.success_count.lock().await, 0);
-    }
-}
-```
+**Before writing a hand-written mock, read `references/mock-implementations.md`** for the complete multi-port mock module and the service tests that consume it.
 
 ### 6. Test Scope by Layer (CRITICAL)
 
@@ -592,51 +504,7 @@ E2E API tests run the application **in-process**: a `TestApp` struct in `tests/e
 
 Heavyweight side-effect executors that a workflow subdomain covers separately may be wired as no-op implementations in the API harness — the API tests assert HTTP behaviour, not the pipelines behind it.
 
-```rust
-// tests/e2e/api/support/infra.rs
-// TestApp runs the real router in-process: real repositories on a per-test
-// database, an OS-assigned port, and explicit teardown.
-use myproject::infrastructure::api::router::build_router;
-
-use crate::common::builders::build_services;
-use crate::common::infra::TestDatabase;
-
-pub struct TestApp {
-    pub client: reqwest::Client,
-    base_url: String,
-    server_handle: tokio::task::JoinHandle<()>,
-    test_database: TestDatabase,
-}
-
-impl TestApp {
-    pub async fn new() -> Self {
-        let test_database = TestDatabase::new().await;
-        let services = build_services(test_database.pool().clone());
-
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let address = listener.local_addr().unwrap();
-        let server_handle = tokio::spawn(async move {
-            axum::serve(listener, build_router(services)).await.unwrap();
-        });
-
-        Self {
-            client: reqwest::Client::new(),
-            base_url: format!("http://{address}"),
-            server_handle,
-            test_database,
-        }
-    }
-
-    pub fn url(&self, path: &str) -> String {
-        format!("{}{path}", self.base_url)
-    }
-
-    pub async fn teardown(self) {
-        self.server_handle.abort();
-        self.test_database.teardown().await;
-    }
-}
-```
+**Before creating or modifying a `TestApp` harness, read `references/testapp-harness.md`** for the complete implementation.
 
 ```rust
 // tests/e2e/api/health.rs
@@ -670,7 +538,7 @@ Within a test file, each struct or type gets its own dedicated test submodule, a
 
 ```rust
 // tests/unit/domain/salaries.rs
-use myproject::domain::models::salaries::{Currency, Income, IncomeType, Salary};
+use myproject::domain::models::salaries::{Income, Salary};
 
 mod income {
     use super::*;
@@ -679,47 +547,10 @@ mod income {
         use super::*;
 
         #[test]
-        fn should_create_from_valid_string() {
-            Income::new(Some("5000")).expect("income should parse from a valid string");
-        }
+        fn should_create_from_valid_string() { /* ... */ }
 
         #[test]
-        fn should_fail_when_negative() {
-            let result = Income::new(Some("-100"));
-            assert!(result.is_err());
-        }
-    }
-}
-
-mod income_type {
-    use super::*;
-
-    mod new {
-        use super::*;
-
-        #[test]
-        fn should_accept_net_lowercase() {
-            IncomeType::new(Some("net")).expect("net should be a valid income type");
-        }
-
-        #[test]
-        fn should_fail_when_invalid() {
-            let result = IncomeType::new(Some("gross"));
-            assert!(result.is_err());
-        }
-    }
-}
-
-mod currency {
-    use super::*;
-
-    mod new {
-        use super::*;
-
-        #[test]
-        fn should_accept_dollar_lowercase() {
-            Currency::new(Some("dollar")).expect("dollar should be a valid currency");
-        }
+        fn should_fail_when_negative() { /* ... */ }
     }
 }
 
@@ -730,10 +561,7 @@ mod salary {
         use super::*;
 
         #[test]
-        fn should_create_with_all_required_fields() {
-            Salary::new(Some("5000"), Some("net"), Some("ron"), None, None)
-                .expect("salary should build from all required fields");
-        }
+        fn should_create_with_all_required_fields() { /* ... */ }
     }
 }
 ```
@@ -808,218 +636,13 @@ pub mod helpers;
 pub mod constants;
 ```
 
-**infra.rs — shared stack + per-test database.** The Docker stack (compose file with env-substitutable host ports) starts once per test binary via `#[ctor]`; each test then creates its own uniquely named database (Section 17):
-
-```rust
-// tests/common/infra.rs
-// The Docker stack starts once per test binary; each test creates its own
-// UUIDv7-named database and drops it in teardown.
-use ctor::ctor;
-use sqlx::postgres::PgPoolOptions;
-use sqlx::PgPool;
-
-#[ctor]
-fn start_docker_stack() {
-    let output = std::process::Command::new("docker")
-        .args(["compose", "-f", "docker/docker-compose.yaml", "up", "-d", "--wait"])
-        .output()
-        .expect("docker compose should be runnable");
-    assert!(output.status.success(), "docker compose up failed");
-}
-
-pub struct TestDatabase {
-    pool: PgPool,
-    name: String,
-}
-
-impl TestDatabase {
-    pub async fn new() -> Self {
-        let name = format!("myproject_test_{}", uuid::Uuid::now_v7().simple());
-        let admin_pool = PgPoolOptions::new()
-            .connect(&admin_database_url())
-            .await
-            .unwrap();
-        sqlx::query(&format!(r#"CREATE DATABASE "{name}""#))
-            .execute(&admin_pool)
-            .await
-            .unwrap();
-
-        let pool = PgPoolOptions::new()
-            .connect(&test_database_url(&name))
-            .await
-            .unwrap();
-        sqlx::migrate!().run(&pool).await.unwrap();
-
-        Self { pool, name }
-    }
-
-    pub fn pool(&self) -> &PgPool {
-        &self.pool
-    }
-
-    pub async fn teardown(self) {
-        self.pool.close().await;
-        let admin_pool = PgPoolOptions::new()
-            .connect(&admin_database_url())
-            .await
-            .unwrap();
-        sqlx::query(&format!(r#"DROP DATABASE "{}" WITH (FORCE)"#, self.name))
-            .execute(&admin_pool)
-            .await
-            .unwrap();
-    }
-}
-
-fn admin_database_url() -> String {
-    std::env::var("TEST_DATABASE_ADMIN_URL")
-        .expect("TEST_DATABASE_ADMIN_URL must be set in .env")
-}
-
-fn test_database_url(name: &str) -> String {
-    let server_url = std::env::var("TEST_DATABASE_SERVER_URL")
-        .expect("TEST_DATABASE_SERVER_URL must be set in .env");
-    format!("{server_url}/{name}")
-}
-```
+**infra.rs — shared stack + per-test database.** The Docker stack (compose file with env-substitutable host ports) starts once per test binary via `#[ctor]`; each test then creates its own uniquely named database (Section 17).
 
 If the project has static reference data, seed it in `TestDatabase::new()` right after the migrations run. For simple sqlx projects, `#[sqlx::test]` provides managed per-test databases out of the box; the `TestDatabase` pattern is preferred because it also controls naming, seeding, and teardown.
 
-```rust
-// tests/common/factories.rs
-use uuid::Uuid;
+**Usage in tests** — one `super` per directory level between the test file and the category root; cross-category helpers come from `crate::common`.
 
-pub fn create_test_schedule() -> Schedule {
-    Schedule {
-        id: ScheduleId::new(),
-        name: format!("schedule-{}", Uuid::now_v7()),
-        cron: "0 0 * * *".to_string(),
-    }
-}
-
-pub fn create_test_backup(schedule_id: &ScheduleId) -> Backup {
-    Backup {
-        id: BackupId::new(),
-        schedule_id: schedule_id.clone(),
-        status: BackupStatus::Pending,
-    }
-}
-```
-
-```rust
-// tests/common/fixtures.rs
-use super::factories::create_test_schedule;
-use super::infra::TestDatabase;
-
-pub async fn save_prerequisite_schedule(test_database: &TestDatabase) -> Schedule {
-    let schedule = create_test_schedule();
-    sqlx::query("INSERT INTO schedules (id, name, cron) VALUES ($1, $2, $3)")
-        .bind(&schedule.id)
-        .bind(&schedule.name)
-        .bind(&schedule.cron)
-        .execute(test_database.pool())
-        .await
-        .unwrap();
-    schedule
-}
-```
-
-```rust
-// tests/common/builders.rs
-// Builders construct fully configured application services ready for testing.
-// In common/integration scope they wire REAL dependencies (encryption,
-// repositories backed by the TestDatabase). Mock-wired builders belong to
-// unit support.
-
-pub fn build_encryption_service() -> EncryptionService {
-    let config = EncryptionConfig {
-        algorithm: Algorithm::Aes256Gcm,
-        key: SecretKey::from_bytes(&[0u8; 32]),
-    };
-    EncryptionService::new(config)
-}
-
-pub fn build_secret_service(
-    repository: impl SecretRepository,
-    encryption: EncryptionService,
-) -> SecretService<impl SecretRepository> {
-    SecretService::new(repository, encryption)
-}
-```
-
-```rust
-// tests/common/helpers.rs
-// General-purpose test utilities that simplify common testing patterns.
-// These are convenience functions, not domain-specific.
-
-pub fn unique_email(prefix: &str) -> String {
-    format!("{prefix}-{}@example.com", uuid::Uuid::now_v7())
-}
-
-pub fn unique_name(prefix: &str) -> String {
-    format!("{prefix}-{}", uuid::Uuid::now_v7())
-}
-
-pub fn assert_json_contains(body: &serde_json::Value, key: &str, expected: &str) {
-    let actual = body.get(key)
-        .unwrap_or_else(|| panic!("key '{}' not found in JSON body", key))
-        .as_str()
-        .unwrap_or_else(|| panic!("key '{}' is not a string", key));
-    assert_eq!(actual, expected);
-}
-
-pub async fn retry_until<ConditionFn, ConditionFuture>(
-    max_attempts: u32,
-    delay_milliseconds: u64,
-    condition: ConditionFn,
-) -> bool
-where
-    ConditionFn: Fn() -> ConditionFuture,
-    ConditionFuture: std::future::Future<Output = bool>,
-{
-    for _ in 0..max_attempts {
-        if condition().await {
-            return true;
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(delay_milliseconds)).await;
-    }
-    false
-}
-```
-
-```rust
-// tests/integration/support/constants.rs
-pub const TEST_BUCKET_PREFIX: &str = "myproject-test";
-pub const MAX_RETRY_ATTEMPTS: u32 = 3;
-pub const DEFAULT_TIMEOUT_MILLISECONDS: u64 = 5000;
-```
-
-**Usage in tests** — one `super` per directory level between the test file and the category root; cross-category helpers come from `crate::common`:
-
-```rust
-// tests/integration/infrastructure/db.rs
-use crate::common::factories::create_test_backup;
-use crate::common::infra::TestDatabase;
-
-use super::super::support::fixtures::save_prerequisite_schedule;
-
-mod create_backup {
-    use super::*;
-
-    #[tokio::test]
-    async fn should_persist_backup_for_existing_schedule() {
-        let test_database = TestDatabase::new().await;
-        let schedule = save_prerequisite_schedule(&test_database).await;
-        let backup = create_test_backup(&schedule.id);
-        let repository = PgBackupRepository::new(test_database.pool().clone());
-
-        let saved = repository.save(&backup).await.unwrap();
-
-        assert_eq!(saved.schedule_id, schedule.id);
-
-        test_database.teardown().await;
-    }
-}
-```
+**Before writing any file under `tests/common/` or a `support/` module, read `references/support-module-implementations.md`** — it contains the complete reference implementations (infra.rs with `#[ctor]` and `TestDatabase`, factories, fixtures, builders, helpers, constants) and the import usage from test files.
 
 ### 16. Test Files Contain Only Tests (CRITICAL)
 
