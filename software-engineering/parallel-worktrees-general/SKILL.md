@@ -379,7 +379,7 @@ validated in the orchestrator checkout, discard the worker copy so removal
 can proceed without `--force`:
 
 ```bash
-git -C <worktree-path> checkout -- .
+git -C <worktree-path> reset --hard
 git -C <worktree-path> clean -fd
 ```
 
