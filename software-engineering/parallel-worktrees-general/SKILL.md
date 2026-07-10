@@ -15,7 +15,7 @@ description: >-
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.1"
+  version: "0.0.2"
 ---
 
 # Parallel Worktrees
@@ -161,7 +161,7 @@ Worker rules:
 Orchestrator rules:
 
 - Use `git -C .claude/worktrees/<slug> ...` when inspecting workers from the main checkout.
-- Keep a table of `<slug>`, branch, path scope, status, and tests run.
+- Keep a table of `<slug>`, branch, path scope, status (running / handed off / integrated), and tests run.
 - Stop or redirect a worker that touches unassigned paths before integration.
 
 ## Worker Skill Loadout
@@ -268,12 +268,42 @@ If commits are authorized, commit inside the worker worktree after reviewing
 `git diff`. If commits are not authorized, leave changes uncommitted and let
 the orchestrator integrate by reviewed patch or direct file inspection.
 
+A handoff is per-worker and triggers integration as soon as the orchestrator
+is free: if no integration unit is in progress, move straight to the Integrate
+steps for that worker; if one is in progress, finish it completely — merge,
+validation, cleanup — first. Never run two integration units concurrently,
+and never hold a finished handoff waiting for other workers to finish.
+
 ## Integrate
 
-Before integrating, make the target checkout clean and verify the worker
-state. If the main checkout is dirty, the Preflight rule applies: those
-changes are operator state — do not stash, reset, or discard them to satisfy
-this precondition. Wait, or have the operator clear them.
+Integrate incrementally: merge each worker as soon as it finishes and hands
+off, while the remaining workers keep running. Do not wait for all workers to
+finish and then merge everything in one batch — batching leaves finished work
+sitting unvalidated, stacks all conflicts into one late resolution session,
+and lets one slow worker block integration of work that was done long before.
+
+Process workers in completion order, not dispatch order. When two or more
+workers hand off at the same time, pick one — first received is fine — and
+complete its full integration unit before starting the next; never interleave
+integration steps from two workers. Treat each integration as one atomic
+unit — verify, merge, validate, clean up — then return to monitoring the
+remaining workers.
+
+Merging while other workers run is safe: the merge happens in the
+orchestrator checkout, and the running workers' worktrees and branches are
+untouched. Their branches still fork from the original base; any conflict
+with already-merged work is resolved when that worker's own turn comes, in
+the orchestrator checkout. Do not rebase, merge into, or otherwise update a
+still-running worker's worktree to "catch it up".
+
+Before integrating a worker, make the target checkout clean and verify the
+worker state. If the main checkout is dirty with changes that predate the
+session, the Preflight rule applies: those changes are operator state — do
+not stash, reset, or discard them to satisfy this precondition; report the
+block and wait for the operator to clear them. If the checkout is dirty
+because the current integration unit's conflict resolution is still in
+progress, that is integration state, not operator state — finish resolving
+and complete that unit before starting the next worker's integration.
 
 ```bash
 git status --short --branch
@@ -303,31 +333,54 @@ Untracked files are not included in `git diff`. Before patch handoff, either
 have the worker run `git add -N <new-files>` so the new files appear in the
 diff, or copy/review those files explicitly.
 
-Resolve conflicts only in the orchestrator checkout. After integration, rerun
-the relevant validation in the integrated tree; worker-local test results are
-not enough.
+Resolve conflicts only in the orchestrator checkout. After each merge, rerun
+the self-contained checks relevant to that worker's scope in the integrated
+tree; worker-local test results are not enough.
+
+If the self-contained checks fail after a merge, halt further integration —
+do not merge the next worker into a tree that fails validation. Let
+still-running workers finish; collect their handoffs without integrating
+them. Fix the failure in the orchestrator checkout, or report it to the
+operator if the fix is not obvious, and resume integration only when the
+integrated tree passes again.
+
+Run the shared-infrastructure suites (e2e, Docker-backed integration — see
+Test Safely) once, serially, after the last worker is integrated — not after
+every merge. If those suites fail at that stage, the worker worktrees are
+already removed; report the failure and the state of the integrated branch to
+the operator, and do not attempt an automatic rollback.
 
 After a worker branch is merged into the target branch, whether the target is
 `main` or a feature branch, immediately remove that worker's worktree and
-delete its worker branch before moving to the next integration. Treat merge,
-validation, and cleanup as one integration unit; do not leave merged worktrees
-around waiting for a separate operator cleanup request.
+delete its worker branch before returning to monitor the remaining workers.
+Treat merge, validation, and cleanup as one integration unit; do not leave
+merged worktrees around waiting for a separate operator cleanup request.
 
 ## Cleanup
 
-Delete completed subagent worktrees immediately after their changes are
-integrated or deliberately discarded. A worktree that has been merged into
-`main` or a feature branch is stale by default and should be removed in the
-same workflow, without waiting for the operator to ask. Each worktree carries
-its own build artifacts — a Rust `target/` directory, `node_modules`, a
-virtualenv — which can consume tens of gigabytes per worktree, so keeping
-finished worktrees around wastes disk quickly.
+The timing rule lives in Integrate: merge, validation, and cleanup are one
+integration unit, and a worktree whose changes are integrated or deliberately
+discarded is removed immediately, without waiting for the operator to ask.
+This section covers the removal mechanics. Each worktree carries its own
+build artifacts — a Rust `target/` directory, `node_modules`, a virtualenv —
+which can consume tens of gigabytes per worktree, so keeping finished
+worktrees around wastes disk quickly.
 
 Never delete a linked worktree with `rm -rf`. Inspect first:
 
 ```bash
 git worktree list --porcelain
 git -C <worktree-path> status --short
+```
+
+A worker integrated by patch leaves its worktree dirty — the changes were
+extracted into the patch, not committed. Once the applied patch has been
+validated in the orchestrator checkout, discard the worker copy so removal
+can proceed without `--force`:
+
+```bash
+git -C <worktree-path> checkout -- .
+git -C <worktree-path> clean -fd
 ```
 
 If the worktree is clean and its branch is merged or no longer needed, remove
