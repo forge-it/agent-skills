@@ -4,7 +4,7 @@ description: Opinionated guidelines for structuring Python business applications
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.6"
+  version: "0.1.0"
 ---
 
 # Python Domain-Driven Design Skill
@@ -171,100 +171,7 @@ This is **SoC**: the data needed to create something is a different concern from
 
 There is **one** mapping registry per project, **one** module of `Table(...)` declarations, and **one** module (or one per concept) that calls `mapper_registry.map_imperatively(...)`. The domain dataclasses are never modified to add SQLAlchemy machinery; the registry attaches it at import time.
 
-```python
-# infrastructure/orm/orm.py
-from sqlalchemy.orm import registry
-
-mapper_registry = registry()
-metadata = mapper_registry.metadata
-```
-
-```python
-# infrastructure/orm/tables.py
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Table, Text
-
-from myapp.infrastructure.orm.orm import metadata
-from myapp.infrastructure.utils import get_current_datetime
-
-
-products = Table(
-    "products",
-    metadata,
-    Column("id", String(50), primary_key=True),
-    Column("serial_number", String(50), nullable=True),
-    Column("user_id", String(50), nullable=True),
-    Column("hardware_id", String(50), nullable=True),
-    Column("name", String(255), nullable=True),
-    Column("activation_date", DateTime, nullable=True),
-    Column("sale_value", Integer, nullable=True),
-    Column("company_id", String(50), nullable=True),
-    Column("notes", Text, nullable=True),
-    Column("created_at", DateTime, nullable=True, default=get_current_datetime),
-    Column(
-        "updated_at",
-        DateTime,
-        nullable=True,
-        default=get_current_datetime,
-        onupdate=get_current_datetime,
-    ),
-)
-
-activation_keys = Table(
-    "activation_keys",
-    metadata,
-    Column("id", String(50), primary_key=True),
-    Column("product_key", String(255), nullable=False),
-    Column("product_id", String(50), ForeignKey("products.id"), nullable=True),
-    Column("created_at", DateTime, nullable=True, default=get_current_datetime),
-    Column(
-        "updated_at",
-        DateTime,
-        nullable=True,
-        default=get_current_datetime,
-        onupdate=get_current_datetime,
-    ),
-)
-```
-
-```python
-# infrastructure/orm/mappers.py
-from sqlalchemy.orm import relationship
-
-from myapp.infrastructure.orm import tables
-from myapp.infrastructure.orm.orm import mapper_registry
-from myapp.domain.models import licensing
-
-
-def run_licensing_mapper() -> None:
-    mapper_registry.map_imperatively(
-        licensing.Product,
-        tables.products,
-        properties={
-            "activation_key": relationship(
-                licensing.ActivationKey,
-                uselist=False,
-                lazy="selectin",
-                cascade="save-update, delete, delete-orphan",
-            ),
-            "product_addons": relationship(
-                licensing.ProductAddon,
-                lazy="selectin",
-                back_populates="product",
-                collection_class=list,
-                cascade="save-update, delete, delete-orphan",
-            ),
-        },
-    )
-    mapper_registry.map_imperatively(
-        licensing.ActivationKey,
-        tables.activation_keys,
-    )
-
-
-def run_all_mappers() -> None:
-    run_licensing_mapper()
-    # run_other_concept_mapper(), ...
-```
+**Before writing any of the three ORM files, read `references/sqlalchemy-orm-mapping.md`** for the complete `orm.py` (registry + metadata), `tables.py` (Table declarations), and `mappers.py` (imperative mapping calls).
 
 `run_all_mappers()` is called once during application startup (from `main.py` or an infrastructure startup module), before any query runs.
 
@@ -342,62 +249,7 @@ If a child entity *is* in fact a separate aggregate root (it can be queried inde
 
 The concrete implementation goes in `infrastructure/`:
 
-```python
-# infrastructure/repository/products.py
-from datetime import datetime
-from typing import Optional
-
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from myapp.domain.exceptions import EntityNotFoundError
-from myapp.domain.models.licensing.maintenance import MaintenanceService
-from myapp.domain.models.licensing.products import Product
-from myapp.domain.repositories.products import AbstractProductRepository
-
-
-class SqlAlchemyProductRepository(AbstractProductRepository):
-    def __init__(self, session: AsyncSession):
-        self._session = session
-
-    async def add(self, product: Product) -> None:
-        self._session.add(product)
-
-    async def remove(self, product: Product) -> None:
-        await self._session.delete(product)
-
-    async def get(self, product_id: str) -> Product:
-        product = await self.find_by_id(product_id)
-        if product is None:
-            raise EntityNotFoundError(entity_type="Product", entity_id=product_id)
-        return product
-
-    async def find_by_id(self, product_id: str) -> Optional[Product]:
-        result = await self._session.execute(
-            select(Product).where(Product.id == product_id)
-        )
-        return result.scalars().first()
-
-    async def find_by_serial_number(self, serial_number: str) -> Optional[Product]:
-        result = await self._session.execute(
-            select(Product).where(Product.serial_number == serial_number)
-        )
-        return result.scalars().first()
-
-    async def list_by_user(self, user_id: str) -> list[Product]:
-        result = await self._session.execute(
-            select(Product).where(Product.user_id == user_id)
-        )
-        return list(result.scalars().all())
-
-    async def list_with_expired_maintenance(self, as_of: datetime) -> list[Product]:
-        result = await self._session.execute(
-            select(Product)
-            .join(MaintenanceService)
-            .where(MaintenanceService.end_date < as_of)
-        )
-        return list(result.scalars().all())
-```
+**Before writing a concrete repository or its in-memory fake, read `references/repository-implementations.md`** for the complete `SqlAlchemyProductRepository` and `FakeProductRepository` implementations.
 
 **The concrete implementation receives the session via `__init__`.** It does not open it, does not close it, does not commit it. That is the Unit of Work's job (next section). The repository's only responsibility is to translate domain calls into queries against the session it was handed.
 
@@ -405,48 +257,7 @@ class SqlAlchemyProductRepository(AbstractProductRepository):
 
 **No generic base repository.** Each aggregate gets its own class with its own methods. A generic `SqlAlchemyAsyncRepository[T]` parameterised by model is an attractive nuisance: it pulls every concept's queries into a common base and obscures which methods each aggregate actually needs. This is **SRP**: each repository class has *one* reason to change (the queries its aggregate needs).
 
-**In-memory fakes are part of the pattern.** Every abstract repository gets a sibling in-memory implementation, used in service unit tests:
-
-```python
-# infrastructure/repository/products.py (continued)
-from typing import Optional
-
-
-class FakeProductRepository(AbstractProductRepository):
-    def __init__(self, products: Optional[list[Product]] = None):
-        self._products: dict[str, Product] = {product.id: product for product in (products or [])}
-
-    async def add(self, product: Product) -> None:
-        self._products[product.id] = product
-
-    async def remove(self, product: Product) -> None:
-        self._products.pop(product.id, None)
-
-    async def get(self, product_id: str) -> Product:
-        product = await self.find_by_id(product_id)
-        if product is None:
-            raise EntityNotFoundError(entity_type="Product", entity_id=product_id)
-        return product
-
-    async def find_by_id(self, product_id: str) -> Optional[Product]:
-        return self._products.get(product_id)
-
-    async def find_by_serial_number(self, serial_number: str) -> Optional[Product]:
-        for product in self._products.values():
-            if product.serial_number == serial_number:
-                return product
-        return None
-
-    async def list_by_user(self, user_id: str) -> list[Product]:
-        return [product for product in self._products.values() if product.user_id == user_id]
-
-    async def list_with_expired_maintenance(self, as_of: datetime) -> list[Product]:
-        return [
-            product for product in self._products.values()
-            if product.maintenance_service is not None
-            and product.maintenance_service.end_date < as_of
-        ]
-```
+**In-memory fakes are part of the pattern.** Every abstract repository gets a sibling in-memory implementation, used in service unit tests.
 
 The fake satisfies the exact same abstract port the SQLAlchemy implementation does. Tests construct services with a `FakeUnitOfWork` whose `products` attribute is a `FakeProductRepository`, exercise the use case, then assert on the state of the fake. No mocks, no patches, no databases. The pattern's payoff: every application service has a unit test that runs in milliseconds and exercises the actual control flow.
 
@@ -489,77 +300,9 @@ class AbstractUnitOfWork(abc.ABC):
     async def rollback(self) -> None: ...
 ```
 
-```python
-# infrastructure/unit_of_work.py
-from typing import Self
+**Before writing the concrete or fake Unit of Work, read `references/unit-of-work-implementations.md`** for the complete `SqlAlchemyAsyncUnitOfWork` and `FakeUnitOfWork` implementations.
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-
-from myapp.infrastructure.repository.products import SqlAlchemyProductRepository
-from myapp.infrastructure.repository.users import SqlAlchemyUserRepository
-from myapp.domain.unit_of_work import AbstractUnitOfWork
-from myapp.infrastructure.database.sqlalchemy_session import ASYNC_SESSION_FACTORY
-
-
-class SqlAlchemyAsyncUnitOfWork(AbstractUnitOfWork):
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession] = ASYNC_SESSION_FACTORY):
-        self._session_factory = session_factory
-        self._session: AsyncSession | None = None
-
-    async def __aenter__(self) -> Self:
-        self._session = self._session_factory()
-        self.products = SqlAlchemyProductRepository(session=self._session)
-        self.users = SqlAlchemyUserRepository(session=self._session)
-        return await super().__aenter__()
-
-    async def __aexit__(self, exception_type, exception_value, traceback) -> None:
-        try:
-            await super().__aexit__(exception_type, exception_value, traceback)
-        finally:
-            await self._session.close()
-            self._session = None
-
-    async def commit(self) -> None:
-        await self._session.commit()
-
-    async def rollback(self) -> None:
-        await self._session.rollback()
-```
-
-**The in-memory fake UoW for tests:**
-
-```python
-# infrastructure/unit_of_work.py (continued)
-from typing import Optional, Self
-
-from myapp.infrastructure.repository.products import FakeProductRepository
-from myapp.infrastructure.repository.users import FakeUserRepository
-from myapp.domain.models.licensing.products import Product
-from myapp.domain.models.iam.users import User
-
-
-class FakeUnitOfWork(AbstractUnitOfWork):
-    def __init__(
-        self,
-        products: Optional[list[Product]] = None,
-        users: Optional[list[User]] = None,
-    ):
-        self.products = FakeProductRepository(products=products)
-        self.users = FakeUserRepository(users=users)
-        self.committed = False
-        self.rolled_back = False
-
-    async def __aenter__(self) -> Self:
-        return await super().__aenter__()
-
-    async def commit(self) -> None:
-        self.committed = True
-
-    async def rollback(self) -> None:
-        self.rolled_back = True
-```
-
-The fake is itself an `AbstractUnitOfWork`, so any service that depends on the port works against it. The `committed` / `rolled_back` flags let tests assert that the use case persisted (or refused to persist) without touching a database.
+The fake (`FakeUnitOfWork`) is itself an `AbstractUnitOfWork`, so any service that depends on the port works against it. The `committed` / `rolled_back` flags let tests assert that the use case persisted (or refused to persist) without touching a database.
 
 **Using the Unit of Work:**
 
@@ -763,129 +506,9 @@ If the project uses a message broker, decorate each handler with the broker's `@
 
 Validation logic is split by concern: **domain validations** check pure business rules against domain types; **application validations** need repositories or gateways and run inside a UoW. A **validator** composes several validations into an ordered sequence and runs them.
 
-```python
-# application/validations/common.py
-import abc
+**Before writing any part of the validation hierarchy, read `references/validation-implementations.md`** for the complete `Validation` ABC, domain validation example, application validation example, `BaseValidator`, and concrete `Validator` examples.
 
-from myapp.domain.exceptions import DomainValidationError
-
-
-class Validation(abc.ABC):
-    @abc.abstractmethod
-    async def execute(self) -> None:
-        raise NotImplementedError
-
-
-class ValidationError(DomainValidationError):
-    pass
-```
-
-```python
-# domain/validations/licensing.py
-from myapp.domain.exceptions import DomainValidationError
-from myapp.domain.models.licensing import Product
-
-
-class ProductActivationEligibility:
-    def __init__(self, product: Product):
-        self._product = product
-
-    async def execute(self) -> None:
-        if self._product.activation_date is not None:
-            raise DomainValidationError(
-                message=f"Product '{self._product.id}' has already been activated."
-            )
-```
-
-```python
-# application/validations/licensing.py
-from typing import Callable
-
-from myapp.infrastructure.unit_of_work import SqlAlchemyAsyncUnitOfWork
-from myapp.application.validations.common import Validation, ValidationError
-from myapp.domain.unit_of_work import AbstractUnitOfWork
-
-
-class ProductMustExist(Validation):
-    def __init__(
-        self,
-        product_id: str,
-        unit_of_work_factory: Callable[[], AbstractUnitOfWork] = SqlAlchemyAsyncUnitOfWork,
-    ):
-        self._product_id = product_id
-        self._unit_of_work_factory = unit_of_work_factory
-
-    async def execute(self) -> None:
-        async with self._unit_of_work_factory() as unit_of_work:
-            product = await unit_of_work.products.find_by_id(self._product_id)
-        if product is None:
-            raise ValidationError(message=f"Product '{self._product_id}' does not exist.")
-```
-
-```python
-# application/validators/base.py
-import abc
-
-from myapp.application.validations.common import Validation
-
-
-class BaseValidator(abc.ABC):
-    @abc.abstractmethod
-    def get_validations(self) -> tuple[Validation, ...]: ...
-
-    async def run(self) -> None:
-        for validation in self.get_validations():
-            await validation.execute()
-```
-
-```python
-# application/validators/licensing.py
-from typing import Callable
-
-from myapp.infrastructure.unit_of_work import SqlAlchemyAsyncUnitOfWork
-from myapp.application.validations.common import Validation
-from myapp.application.validations.licensing import ProductMustExist
-from myapp.application.validators.base import BaseValidator
-from myapp.domain.unit_of_work import AbstractUnitOfWork
-
-
-class ProductActivationValidator(BaseValidator):
-    def __init__(
-        self,
-        product_id: str,
-        unit_of_work_factory: Callable[[], AbstractUnitOfWork] = SqlAlchemyAsyncUnitOfWork,
-    ):
-        self._product_id = product_id
-        self._unit_of_work_factory = unit_of_work_factory
-
-    def get_validations(self) -> tuple[Validation, ...]:
-        return (
-            ProductMustExist(product_id=self._product_id, unit_of_work_factory=self._unit_of_work_factory),
-        )
-```
-
-Validations that need the loaded aggregate to apply a domain rule should fetch it through the same factory and pass it to the pure domain validation:
-
-```python
-class ProductCancellationValidator(BaseValidator):
-    def __init__(
-        self,
-        product_id: str,
-        unit_of_work_factory: Callable[[], AbstractUnitOfWork] = SqlAlchemyAsyncUnitOfWork,
-    ):
-        self._product_id = product_id
-        self._unit_of_work_factory = unit_of_work_factory
-
-    def get_validations(self) -> tuple[Validation, ...]:
-        # Compose: existence first, then domain-level eligibility on the loaded aggregate.
-        return (
-            ProductMustExist(product_id=self._product_id, unit_of_work_factory=self._unit_of_work_factory),
-            ProductCancellationEligibilityCheck(
-                product_id=self._product_id,
-                unit_of_work_factory=self._unit_of_work_factory,
-            ),
-        )
-```
+Validations that need the loaded aggregate to apply a domain rule should fetch it through the same factory and pass it to the pure domain validation.
 
 **Why split this way.** This is **SoC** again. A `Validation` knows one rule and how to check it. A `BaseValidator` knows how to run a list of rules. A concrete `Validator` knows *which* rules apply to a specific use case. Each class has **one reason to change**: a new rule changes one `Validation`; a new use case adds one `Validator`; a new check protocol (e.g. parallel execution) changes `BaseValidator`. Mixing all three into one function couples those reasons and forces every change to touch one block.
 
@@ -936,84 +559,13 @@ The consumer defines an abstract port describing *what it needs*, named in its o
 
 Choose a noun that signals a **read-only lookup of a foreign source** — `Directory`, `Reader`, `Lookup` — deliberately **not** `Repository`. In this skill `Repository` means a UoW-backed persistence port for an aggregate the context *owns* (section 4); a foreign read is a different concept and must read as one.
 
-The port returns the consumer's own **read DTO** — a plain dataclass, not the upstream's model and not a wire schema:
+The port returns the consumer's own **read DTO** — a plain dataclass, not the upstream's model and not a wire schema.
 
-```python
-# application/dtos/support.py — read projections assembled from other contexts (ACL output)
-from __future__ import annotations
-
-from dataclasses import dataclass
-from typing import Optional
-
-
-@dataclass
-class Company:                       # referenced as support_dtos.Company — NOT iam.Company
-    id: str
-    name: str
-    vat_number: Optional[str] = None
-    country: Optional[str] = None
-    # Later: support contacts, products, maintenance status — Support's shape, not IAM's.
-```
-
-```python
-# application/services/support/customer_directory.py — the ACL port
-import abc
-from typing import Optional
-
-from myapp.application.dtos import support as support_dtos
-
-
-class CustomerDirectory(abc.ABC):
-    """Support's read-only lookup of customer companies. Named for the capability,
-    not for IAM — the supplier never appears in Support's own language."""
-
-    @abc.abstractmethod
-    async def find_company(self, company_id: str) -> Optional[support_dtos.Company]: ...
-```
+**Before writing any ACL piece, read `references/acl-implementations.md`** for the complete read DTO (`support_dtos.Company`), capability port (`CustomerDirectory`), concrete adapter (`IamCustomerDirectory`), in-memory fake (`FakeCustomerDirectory`), and consuming service (`SupportCompanyService`).
 
 Naming the DTO `Company` even though `iam.Company` exists is intentional: having a `support` `Company` and an `iam` `Company` coexist is exactly what bounded contexts are for, and module-qualified imports (`support_dtos.Company`, `iam.Company`) disambiguate the one file where both appear.
 
 #### Part 2 — An adapter that translates the upstream model into the consumer's
-
-```python
-# application/services/support/customer_directory.py (continued) — the ACL adapter
-from typing import Callable, Optional
-
-from myapp.application.dtos import support as support_dtos
-from myapp.domain.models import iam                       # the ONLY iam import in the support context
-from myapp.domain.unit_of_work import AbstractUnitOfWork
-from myapp.infrastructure.unit_of_work import SqlAlchemyAsyncUnitOfWork
-
-
-class IamCustomerDirectory(CustomerDirectory):            # adapter MAY name the source
-    def __init__(
-        self,
-        iam_unit_of_work_factory: Callable[[], AbstractUnitOfWork] = SqlAlchemyAsyncUnitOfWork,
-    ):
-        self._iam_unit_of_work_factory = iam_unit_of_work_factory
-
-    async def find_company(self, company_id: str) -> Optional[support_dtos.Company]:
-        async with self._iam_unit_of_work_factory() as unit_of_work:
-            company = await unit_of_work.companies.find_by_id(company_id)
-        return self._translate(company) if company is not None else None
-
-    @staticmethod
-    def _translate(company: iam.Company) -> support_dtos.Company:   # iam.Company stays in this file
-        return support_dtos.Company(
-            id=company.id,
-            name=company.name,
-            vat_number=company.vat_number,
-            country=company.country,
-        )
-
-
-class FakeCustomerDirectory(CustomerDirectory):           # for unit-testing the consumer
-    def __init__(self, companies: Optional[list[support_dtos.Company]] = None):
-        self._companies = {company.id: company for company in (companies or [])}
-
-    async def find_company(self, company_id: str) -> Optional[support_dtos.Company]:
-        return self._companies.get(company_id)
-```
 
 The adapter is the **single place in the consumer context allowed to import the upstream context's modules** (`from myapp.domain.models import iam`). Everywhere else under `support/` sees only `support` types. It reads the upstream however that context exposes reads — its repositories through its UoW (as here), or its gateway — and returns the consumer's own DTO. The `FakeCustomerDirectory` parallels the fake repositories from section 4: it lets the consumer be tested with no upstream database.
 
@@ -1039,28 +591,6 @@ Three rules keep the terminology and placement unambiguous:
 Keeping the ACL output a DTO also keeps context translation independent of the wire format: the same DTO can feed any schema or API version, and the ACL never needs to know how the response is serialised.
 
 #### The consuming service depends on the port, not the upstream
-
-```python
-# application/services/support/companies.py
-from typing import Optional
-
-from myapp.application.dtos import support as support_dtos
-from myapp.application.services.support.customer_directory import (
-    CustomerDirectory,
-    IamCustomerDirectory,
-)
-
-
-class SupportCompanyService:
-    def __init__(self, customer_directory: Optional[CustomerDirectory] = None):
-        self._customer_directory = customer_directory or IamCustomerDirectory()
-
-    async def get_company(self, company_id: str) -> Optional[support_dtos.Company]:
-        # When the support view is assembled from several sources, this method
-        # composes them — e.g. a ProductsReader (another ACL port) merged into
-        # the same support_dtos.Company. Each foreign source is its own port.
-        return await self._customer_directory.find_company(company_id)
-```
 
 The service depends on the **capability port**, so it is unit-testable with a `FakeCustomerDirectory(companies=[...])` and never touches the upstream's database. The router maps the returned **DTO** to a wire schema with an ordinary `presentation/mappers/support.py` function — `iam.Company` never appears in `presentation/`. End-to-end:
 
@@ -1198,52 +728,7 @@ def product_to_details_schema(product: Product) -> ProductDetailsSchema:
 
 The entry point composes the application: it initialises logging, registers ORM mappers, runs migrations, sets up the message broker, registers routers and exception handlers, and starts the web server. It is the only place that imports concrete implementations and wires them in.
 
-```python
-# main.py
-from contextlib import asynccontextmanager
-
-import uvicorn
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
-
-from myapp.infrastructure.orm.mappers import run_all_mappers
-from myapp.presentation.routers import health
-from myapp.presentation.routers.licensing import licensing_router
-from myapp.domain.exceptions import DomainValidationError
-from myapp.infrastructure.config.app_config import HOST, PORT
-from myapp.infrastructure.database.migration_runner import run_migrations
-from myapp.infrastructure.logger import init_logging, logger
-# Importing command handlers registers them with the broker.
-from myapp.application import commands as command_handlers  # noqa: F401
-
-
-init_logging()
-
-
-async def domain_validation_handler(request: Request, exception: DomainValidationError) -> JSONResponse:
-    return JSONResponse(status_code=400, content={"message": exception.message})
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    logger.info("Starting up ...")
-    run_all_mappers()
-    run_migrations()
-    yield
-    logger.info("Shutting down ...")
-
-
-app = FastAPI(
-    lifespan=lifespan,
-    exception_handlers={DomainValidationError: domain_validation_handler},
-)
-app.include_router(health.router)
-app.include_router(licensing_router)
-
-
-if __name__ == "__main__":
-    uvicorn.run("main:app", host=HOST, port=PORT, reload=True)
-```
+**Before writing `main.py`, read `references/bootstrap-main.md`** for the complete composition root implementation.
 
 **`run_all_mappers()` runs before any query.** Imperative mapping happens at runtime; if the first query fires before the registry is configured, SQLAlchemy will not know the domain dataclasses are persistent. Place the call in the lifespan startup (or at module import, depending on the project) and never inside a request handler.
 
@@ -1253,101 +738,7 @@ The composition root is the only honest place to wire concrete classes; everythi
 
 ### Canonical Directory Layout
 
-```
-src/myapp/
-├── main.py                                # App entry point and lifespan
-│
-├── presentation/                          # Presentation layer: HTTP delivery + wire format
-│   ├── routers/                           # FastAPI routers
-│   │   ├── health.py
-│   │   └── licensing/
-│   │       ├── router.py                  # licensing_router = APIRouter(...)
-│   │       ├── products.py
-│   │       └── activations.py
-│   ├── schemas/
-│   │   └── licensing/
-│   │       ├── products.py                # Pydantic request/response models
-│   │       └── activations.py
-│   └── mappers/
-│       └── licensing.py                   # Domain ↔ schema mappers
-│
-├── application/                           # Use-case orchestration
-│   ├── services/
-│   │   ├── licensing/
-│   │   │   ├── products.py                # ProductCreationService, ProductRetrievalService, ...
-│   │   │   └── addons.py
-│   │   └── support/                       # a downstream context consuming iam via an ACL
-│   │       ├── companies.py               # SupportCompanyService (depends on ACL ports)
-│   │       └── customer_directory.py      # CustomerDirectory (ACL port) + IamCustomerDirectory + fake
-│   ├── commands/
-│   │   └── licensing/
-│   │       ├── products.py                # @message_handler-decorated functions
-│   │       └── addons.py
-│   ├── validations/
-│   │   ├── common.py                      # Validation ABC, ValidationError
-│   │   └── licensing.py                   # ProductMustExist, ...
-│   ├── validators/
-│   │   ├── base.py                        # BaseValidator
-│   │   └── licensing.py                   # ProductCreateValidator, ...
-│   ├── dtos/
-│   │   ├── licensing.py                   # Pagination results, activation context
-│   │   └── support.py                     # Read DTOs projected from other contexts (ACL output)
-│   ├── mappers/
-│   │   └── licensing.py                   # Domain ↔ application-DTO mappers
-│   └── events/
-│       └── licensing.py                   # Application-level event handlers
-│
-├── domain/                                # Pure business logic, no I/O
-│   ├── commands.py                        # Pydantic command value objects
-│   ├── events.py                          # Domain events
-│   ├── exceptions.py                      # Domain exceptions (EntityNotFoundError, ...)
-│   ├── message_factory.py                 # Broker-payload construction
-│   ├── unit_of_work.py                    # AbstractUnitOfWork (port)
-│   ├── models/
-│   │   ├── licensing/
-│   │   │   ├── products.py                # Product, ActivationKey (dataclasses)
-│   │   │   └── addons.py
-│   │   └── iam/
-│   │       └── users.py
-│   ├── repositories/                      # Abstract repositories (ports)
-│   │   ├── products.py                    # AbstractProductRepository
-│   │   └── users.py                       # AbstractUserRepository
-│   ├── validations/
-│   │   └── licensing.py                   # Pure-rule validations
-│   └── services/
-│       └── licensing.py                   # Pure domain services
-│
-└── infrastructure/                        # Persistence + plumbing (implements domain ports)
-    ├── orm/
-    │   ├── orm.py                         # mapper_registry, metadata
-    │   ├── tables.py                      # Table(...) declarations
-    │   └── mappers.py                     # map_imperatively(...) calls
-    ├── repository/
-    │   ├── products.py                    # SqlAlchemyProductRepository + FakeProductRepository
-    │   └── users.py                       # SqlAlchemyUserRepository + FakeUserRepository
-    ├── unit_of_work.py                    # SqlAlchemyAsyncUnitOfWork + FakeUnitOfWork
-    ├── config/
-    │   ├── app_config.py
-    │   └── settings.py
-    ├── database/
-    │   ├── sqlalchemy_session.py          # ASYNC_SESSION_FACTORY, SYNC_SESSION_FACTORY
-    │   ├── migration_runner.py            # Programmatic Alembic runner
-    │   └── materialized_views.py
-    ├── gateway/
-    │   ├── payment.py                     # PaymentGateway
-    │   └── notifications.py               # NotificationGateway
-    ├── exceptions/
-    │   └── services.py                    # Infrastructure exceptions
-    ├── jobs/
-    │   └── workflow.py                    # Background-job infrastructure
-    ├── startup/
-    │   └── seed_catalogue.py              # One-shot startup tasks
-    ├── messaging.py                       # Broker thin wrapper (async_enqueue_message, ...)
-    ├── utils.py
-    └── logger.py
-```
-
-Migrations live in `src/migrations/` (a sibling of `src/myapp/`) per Alembic convention. The Alembic `env.py` imports `metadata` from `myapp.infrastructure.orm.orm`.
+**Consult `references/directory-layout.md`** for the full annotated directory tree covering all four layers, concept groupings, and file placements — including where migrations live and how Alembic's `env.py` hooks into the ORM registry.
 
 ### Structural Rules
 
