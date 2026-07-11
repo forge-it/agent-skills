@@ -61,7 +61,17 @@ Load only the skills that apply to the current task:
 - **python-commands** for discovering and running the project's Python commands.
 - **python-testing** for adding or changing tests.
 - **python-ddd** when the repository uses, or appears to use, DDD/layered
-  business architecture.
+  business architecture. When writing repositories, the Unit of Work, ORM
+  mapping (`orm.py` / `tables.py` / `mappers.py`), validation hierarchies,
+  ACL patterns, or `main.py`, also read the relevant file under
+  `python-ddd`'s `references/` directory:
+  `sqlalchemy-orm-mapping.md` (ORM mapping files),
+  `repository-implementations.md` (concrete + fake repositories),
+  `unit-of-work-implementations.md` (concrete + fake UoW),
+  `validation-implementations.md` (validation hierarchy),
+  `acl-implementations.md` (ACL port/adapter/fake/service),
+  `bootstrap-main.md` (composition-root main.py),
+  `directory-layout.md` (annotated directory tree).
 - **database-management** when creating or modifying schemas or migrations.
 - **rest-api-design** when adding or changing HTTP/REST endpoints.
 - **general-logging** when adding or changing logging.
