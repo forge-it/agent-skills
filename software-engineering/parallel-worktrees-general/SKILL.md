@@ -7,15 +7,17 @@ description: >-
   subagents", "parallel agents", or "use a separate worktree to
   implement/fix/refactor/test/review X" — or whenever two or more workers must
   edit the same repository concurrently without colliding. Symptoms it
-  prevents: worktrees created from the wrong base commit, workers editing the
-  orchestrator checkout, Edit/Write failing outside the agent CWD, colliding
-  diffs, shared Docker/e2e infrastructure clobbered by concurrent test runs,
+  prevents: worktrees created from the wrong base commit, workers accidentally
+  editing the orchestrator checkout when an isolated worktree was intended
+  (Mode D is the sanctioned single-writer exception), Edit/Write failing
+  outside the agent CWD, colliding diffs, shared Docker/e2e infrastructure
+  clobbered by concurrent test runs,
   merged worktrees left consuming disk, and force-removed worktrees losing
   uncommitted work.
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.2"
+  version: "0.0.3"
 ---
 
 # Parallel Worktrees
@@ -28,25 +30,102 @@ else. For the wider orchestrator role (routing, briefs, relaying results), see
 
 ## STOP - Dispatch Protocol
 
-Choose exactly one dispatch mode before spawning a worker. Do not combine a
-pre-created worktree with `isolation: "worktree"`.
+Choose exactly one of the four dispatch modes before acting — whether the
+orchestrator edits directly (Mode A) or a worker is spawned (Modes B, C, D).
+Every dispatched worker (Modes B, C, D) is a native `Agent` dispatch — never
+a nested CLI invocation of the agent binary; Mode A is the only non-agent
+mode. Do not combine a pre-created worktree with `isolation: "worktree"`.
+
+| Situation                                                             | Mode |
+| --------------------------------------------------------------------- | ---- |
+| Orchestrator performs a trivial edit itself                           | A    |
+| One sequential worker must edit the existing current checkout         | D    |
+| Parallel / controlled worker needs a selected base and isolated files | B    |
+| Native isolated sandbox based from acceptable remote/default base     | C    |
+
+> Mode D is the only mode for a subagent that must modify the current
+> orchestrator checkout. Spawn it as a native `Agent` with no `isolation`
+> parameter and `run_in_background: false` — passing `isolation` would send
+> the worker to a separate worktree or remote environment instead of the
+> current checkout.
 
 Protocol:
 
-1. Decide whether the worker must start from current local `HEAD` or unpushed commits.
-2. If yes, use Mode B. If no and `origin/HEAD` is an acceptable base (no unpushed commits or specific local branch needed), use Mode C. If the orchestrator is doing the work itself, or a single sequential worker will edit the main checkout with no concurrent edits, use Mode A — no worktree needed.
+1. Decide whether the work edits the current orchestrator checkout. A trivial edit the orchestrator makes itself is Mode A; a dispatched worker that must edit the current checkout is Mode D.
+2. Otherwise, decide whether the worker must start from current local `HEAD` or unpushed commits. If yes, use Mode B. If no and `origin/HEAD` is an acceptable base (no unpushed commits or specific local branch needed), use Mode C.
 3. Put the chosen mode, worktree path expectations, and required skill loadout in the spawn prompt.
 4. Require the worker's first response to include `pwd`, `git status --short --branch`, and `git branch --show-current`.
 5. If the path or branch is wrong, stop the worker immediately and re-dispatch.
 
-### Mode A - Direct, Sequential
+### Mode A - Orchestrator Direct Edit
 
-Use this when the orchestrator is doing the work itself, or when a single
-sequential worker can safely edit the main checkout. Do not use this for
-parallel edits.
+Use this only when the orchestrator itself makes a trivial, safe edit directly
+in the current checkout. Mode A is not a worker dispatch mode: nothing is
+spawned and no worktree is involved.
 
-Spawn with no `isolation` parameter and no extra worktree. All edits and
-commands run against the orchestrator checkout.
+If a worker must be dispatched to edit the current checkout, that is Mode D,
+not Mode A.
+
+### Mode D - Current Checkout Native Worker
+
+Use this for exactly one sequential worker that must edit the orchestrator's
+current checkout — for example, when the operator explicitly says "work in the
+current worktree" or "do not use a separate worktree."
+
+Mode D is mutually exclusive with Modes B and C. It is never safe for parallel
+writers: the worker shares the orchestrator's files, git index, build
+artifacts, and branch. No second writer, no parallel review fixer, and no
+simultaneous build/test command competing for the same build directory may run
+alongside it.
+
+Spawn it as a native `Agent` with **no `isolation` parameter** and
+**`run_in_background: false`**. Without isolation the agent inherits the
+orchestrator CWD — the primary checkout — so its file tools target it directly
+(the same mechanism Mode B relies on for `.claude/worktrees/` paths). The
+synchronous spawn enforces the single-writer rule structurally: the
+orchestrator is blocked until the worker finishes and cannot edit files or run
+competing build commands mid-run. Continue the same worker across turns with
+`SendMessage`, keeping the same one-writer discipline — but note that
+`SendMessage` does not block like the initial spawn: after a continuation,
+wait for the worker's response before doing any file-editing, staging, or
+build work in the primary checkout.
+
+Preflight before launch:
+
+```bash
+git status --short --branch
+git worktree list --porcelain
+git branch --show-current
+```
+
+The current checkout must be clean unless the operator has explicitly
+identified the existing dirty files as the worker's intended starting state.
+Never use Mode D over unrecognized operator changes.
+
+The spawn prompt must include:
+
+```text
+Dispatch mode: D.
+You are editing the current primary checkout:
+<absolute-primary-checkout-path>
+
+First run: pwd && git status --short --branch && git branch --show-current
+
+Do not create or enter a worktree. Do not use isolation: "worktree" for
+this worker or any nested worker. Do not create or switch branches.
+Do not stage, commit, push, merge, reset, restore, or revert unless the
+operator explicitly authorizes it. Leave changes unstaged for orchestrator
+review. Do not start parallel workers.
+```
+
+Mode-D worker rules:
+
+- Edit only the assigned paths.
+- Do not create or use a worktree or branch.
+- Do not stage, commit, push, merge, stash, reset, restore, or clean. The worker leaves its diff unstaged unless separately authorized.
+- Do not run integration/e2e or shared-infrastructure commands (see Test Safely) unless the orchestrator specifically delegates and serializes them.
+- Report `git status --short`, `git diff --stat HEAD`, files changed, tests run, failures, and any unresolved decision.
+- The orchestrator must not edit the assigned paths, stage files, or run competing build/test commands against the same checkout while this worker is active.
 
 ### Mode B - Pre-Created Worktree, No Agent Isolation
 
@@ -164,11 +243,27 @@ Orchestrator rules:
 - Keep a table of `<slug>`, branch, path scope, status (running / handed off / integrated), and tests run.
 - Stop or redirect a worker that touches unassigned paths before integration.
 
+### Mode D ownership
+
+Mode D has one writer: the native worker. The synchronous spawn blocks the
+orchestrator while the worker runs; between runs (for example before a
+`SendMessage` continuation) the orchestrator may inspect and coordinate but
+must not edit the worker's assigned paths, stage files, or run competing
+build/test commands from the same checkout. For `SendMessage` continuations
+this is enforced by convention, not by the tool's blocking semantics — after
+a continuation, hold off all checkout writes until the worker's response
+arrives.
+
+A Mode-D worker has no merge or patch handoff. Its handoff is the unstaged
+diff in the current checkout. The orchestrator reviews and validates that
+diff in place, then either requests fixes, stages/commits after operator
+authorization, or discards nothing without explicit direction.
+
 ## Worker Skill Loadout
 
-When deploying a subagent into a separate worktree, include the required
-skills in its prompt and require it to load them before editing. Match the
-loadout to the assigned paths:
+When dispatching a native agent worker (Modes B, C, or D), include the
+required skills in its prompt and require it to load them before editing.
+Match the loadout to the assigned paths:
 
 | Assigned paths | Required skills |
 |----------------|-----------------|
@@ -264,9 +359,15 @@ any uncommitted or untracked files.
 For Mode C, report the actual auto-created worktree path and branch from
 `git status --short --branch`; do not invent a `<slug>`.
 
-If commits are authorized, commit inside the worker worktree after reviewing
-`git diff`. If commits are not authorized, leave changes uncommitted and let
-the orchestrator integrate by reviewed patch or direct file inspection.
+For Mode D, there is no worktree path or worker branch to report: the handoff
+is the unstaged diff in the primary checkout, reviewed in place (see
+Integrate).
+
+If commits are authorized, commit inside the worker worktree (Modes B and C)
+after reviewing `git diff`. If commits are not authorized, leave changes
+uncommitted and let the orchestrator integrate by reviewed patch or direct
+file inspection. Mode D commits happen only in the primary checkout, by the
+orchestrator, after operator authorization.
 
 A handoff is per-worker and triggers integration as soon as the orchestrator
 is free: if no integration unit is in progress, move straight to the Integrate
@@ -275,6 +376,20 @@ validation, cleanup — first. Never run two integration units concurrently,
 and never hold a finished handoff waiting for other workers to finish.
 
 ## Integrate
+
+The merge/patch integration below applies to Modes B and C only. For Mode D,
+inspect the primary checkout directly:
+
+```bash
+git status --short --branch
+git diff --stat HEAD
+git diff --check
+```
+
+Do not run `git merge`, generate a worktree patch, remove a worktree, or
+delete a branch for Mode D: there is no separate worker branch or worktree.
+Review, tests, and any eventual staging/commit happen in the primary checkout
+only after the worker stops.
 
 Integrate incrementally: merge each worker as soon as it finishes and hands
 off, while the remaining workers keep running. Do not wait for all workers to
@@ -357,6 +472,10 @@ Treat merge, validation, and cleanup as one integration unit; do not leave
 merged worktrees around waiting for a separate operator cleanup request.
 
 ## Cleanup
+
+Mode D creates no linked worktree, so it has no worktree cleanup step. Do not
+run `git worktree remove` as part of a Mode-D completion. Everything below
+applies to Modes B and C.
 
 The timing rule lives in Integrate: merge, validation, and cleanup are one
 integration unit, and a worktree whose changes are integrated or deliberately
