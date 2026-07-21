@@ -1,10 +1,10 @@
 ---
 name: technical-design-discussions
-description: "Defines how to conduct a technical design discussion: verify sources before agreeing, surface unstated deployment/scale context, weigh trade-offs honestly, recommend with reasoning, absorb push-back as exploration, explain from first principles on demand, guard against over-engineering, and capture locked decisions as ADRs and handoffs. Use it when the user wants a design conversation — assessing a spec, plan, review, or proposal, choosing between architectures or mechanisms, or thinking a decision through — rather than code changes."
+description: "Defines how to conduct a technical design discussion: verify sources before agreeing, surface unstated deployment/scale context, weigh trade-offs honestly, recommend with reasoning, absorb push-back as exploration, explain from first principles on demand, guard against over-engineering, and capture locked decisions as ADRs and handoffs. Use it when the user wants a design conversation — assessing a spec, plan, review, or proposal, choosing between architectures or mechanisms, or thinking a decision through — rather than code changes. Do NOT use when the deliverable is an edit to the codebase — implementing, fixing, or refactoring is code-change-workflow; switch there once a decision locks and the user says build it."
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.1.0"
+  version: "0.1.1"
 ---
 
 # Technical Design Discussions Skill
@@ -14,8 +14,9 @@ metadata:
 Act as a design sparring partner, not an implementer. The deliverable is the
 conversation itself: verified assessments, honestly weighed trade-offs,
 explicit recommendations, first-principles explanations, and durable decision
-records. Code changes are out of scope unless explicitly requested; the
-typical artifacts are ADRs, handoff messages, and updated design documents.
+records. Code changes are out of scope — implementation belongs to the
+code-change-workflow skill; the typical artifacts are ADRs, handoff
+messages, and updated design documents.
 
 The user may provide a spec, plan, review, or decision document — or nothing
 but a question. Treat any provided document as a claim to verify, not a truth

@@ -20,7 +20,8 @@ Each skill includes:
 | Skill | Description |
 |-------|-------------|
 | [general-logging](software-engineering/general-logging/SKILL.md) | Wide events logging pattern for powerful debugging and analytics |
-| [general-workflow](software-engineering/general-workflow/SKILL.md) | Consultation-first approach for AI-assisted development |
+| [code-change-workflow](software-engineering/code-change-workflow/SKILL.md) | Execution discipline for code-changing tasks: inspect, proceed or ask, verify, report |
+| [technical-design-discussions](software-engineering/technical-design-discussions/SKILL.md) | Design conversations: verify sources, weigh trade-offs, recommend, record ADRs |
 | [git-workflow](software-engineering/git-workflow/SKILL.md) | Git branch naming, commits, and version control |
 | [database-management](software-engineering/database-management/SKILL.md) | Database schema management and migration strategies |
 | [python-code-style](software-engineering/python-code-style/SKILL.md) | Python code style for clean, maintainable code |
@@ -72,7 +73,7 @@ agent-skills/
 └── software-engineering/
     ├── general-logging/
     │   └── SKILL.md
-    ├── general-workflow/
+    ├── code-change-workflow/
     │   └── SKILL.md
     ├── git-workflow/
     │   └── SKILL.md
@@ -94,7 +95,9 @@ agent-skills/
     │   └── SKILL.md
     ├── rust-hexagonal-architecture/
     │   └── SKILL.md
-    └── rust-testing/
+    ├── rust-testing/
+    │   └── SKILL.md
+    └── technical-design-discussions/
         └── SKILL.md
 ```
 

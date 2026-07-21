@@ -139,7 +139,7 @@ part of the orchestrator's single responsibility.
 Decisions the operator owns are not dispatched on a guess: public API / schema /
 wire-format / migration changes, product/UX/security/dependency/deployment
 changes, ambiguous scope, or materially different viable approaches. Stop and
-ask. See **general-workflow** for the escalation baseline.
+ask. See **code-change-workflow** for the escalation baseline.
 
 ## Anti-Patterns to Avoid
 
