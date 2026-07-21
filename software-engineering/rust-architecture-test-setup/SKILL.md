@@ -1,6 +1,6 @@
 ---
 name: rust-architecture-test-setup
-description: One-time setup of a `tests/structure/` cargo-test gate for a Rust hexagonal-architecture project, so the layering invariants (dependencies point inward — domain → application → infrastructure) and the project-structure conventions (`port.rs` holds traits only, file names don't stutter, `mod.rs` stays out of `src/` and `tests/` except `tests/common/`, concept module files stay glob facades in application crates, the domain stays framework-free) are enforced by `cargo test` — and therefore CI — instead of by review. Use when bootstrapping a new Rust hexagonal project's architecture enforcement, or adding it to an existing one. Assumes a layered hexagonal codebase (domain/application/infrastructure under `src/`).
+description: One-time setup of a `tests/structure/` cargo-test gate for a Rust hexagonal-architecture project, so the layering invariants (dependencies point inward — domain → application → infrastructure, and no layer imports the composition root), the project-structure conventions (`port.rs` holds traits only, file names don't stutter, `mod.rs` stays out of `src/` and `tests/` except `tests/common/`, concept module files stay glob facades in application crates, the domain stays framework-free), the composition-root wiring seam (concrete adapter assembly never escapes `src/composition/`), workspace dependency boundaries (a shared library crate stays consumer-free; a worker binary stays core-free and free of direct database drivers), and generic-machinery vocabulary (designated generic modules never name product concepts) are enforced by `cargo test` — and therefore CI — instead of by review. Use when bootstrapping a new Rust hexagonal project's architecture enforcement, or adding it to an existing one. Assumes a layered hexagonal codebase (domain/application/infrastructure under `src/`).
 vibe: Turns the architecture doc into a build that fails when someone crosses a layer.
 license: UNLICENSED
 metadata:
@@ -37,7 +37,11 @@ Run this once. After `tests/structure/` exists, you do not re-run the skill.
 
 ## What it enforces
 
-Six rules, drawn from the two architecture skills:
+Ten rules. Rules 1–6 come from the two architecture skills; rules 7–10 come from
+the composition-root wiring seam and the workspace boundaries that emerged once
+the reference codebase grew a worker fleet and shared library crates (its
+ADR-R06/ADR-R11 era) — decisions that are far cheaper to enforce from commit 1
+than to retrofit:
 
 1. **Dependencies point inward** — a file under `domain/` must not reference
    `application` or `infrastructure`; a file under `application/` must not reference
@@ -57,18 +61,46 @@ Six rules, drawn from the two architecture skills:
    directly under `infrastructure/` are exempt. Gated by `ENFORCE_CONCEPT_FACADE` —
    application crates only, never published libraries. (`rust-project-structure`,
    "The Concept Module File Is a Facade".)
+7. **No layer imports the composition root** — `composition/` is the outermost
+   wiring seam (see `patterns/project_structure/composition_pattern.md`): it may
+   import everything, and nothing may import it. In particular
+   `infrastructure/` implements adapters but never *assembles* them — a
+   `use crate::composition::…` inside any layer is a violation. On a crate with
+   no `composition` module the rule is inert (nothing can reference it), so it
+   is safe to keep on everywhere.
+8. **Concrete adapter assembly stays in the composition root** — designated
+   concrete adapter/provider types are constructed (`Type::new(…)`) only under
+   `src/composition/`; outside composition (and the implementation modules that
+   define them) their names may not appear at all, and the implementation
+   modules may not hide them behind `type` aliases or `use … as` re-exports.
+   Driven by marker lists in `constants.rs` that start empty and grow as the
+   project designates composition-only types.
+9. **Workspace dependency boundaries hold** — (workspace projects) a crate's
+   `Cargo.toml` must not declare designated forbidden dependencies: a shared
+   library crate never depends on its consumers (it stays core-free and
+   contracts-free), and a worker binary never depends on the core crate or a
+   direct database driver. The check parses the manifest as TOML, so package
+   renames (`core_alias = { package = "my-core" }`), workspace-inherited
+   (`workspace = true`) and target-specific dependency tables are all caught.
+10. **Generic machinery stays concept-free** — a designated generic module
+    (e.g. a worker's `application/task/` runtime machinery) must not name
+    product concepts (`backup`, `restore`, …), so adding a product feature
+    never widens the generic layer. Driven by path/marker lists that start
+    empty (inert until populated).
 
-It assumes the canonical hexagonal layers `domain/`, `application/`, `infrastructure/`
-under `src/`. Adapt the layer set in `constants.rs` (see
-[Customization](#customization-knobs)).
+It assumes the canonical hexagonal layers `domain/`, `application/`,
+`infrastructure/` under `src/`, plus the `composition` wiring root. Adapt the
+layer set in `constants.rs` (see [Customization](#customization-knobs)).
 
 ## Step 1 — Confirm your layers
 
 Open `src/` and confirm the top-level layer directories. The default rules assume
-`domain/`, `application/`, `infrastructure/`. If the project has an extra outermost
-wiring layer (e.g. a `composition/` module rather than a bare `bin/main.rs`), note it —
-you'll add it to the forbidden lists in `constants.rs` so inner layers can't depend on
-it.
+`domain/`, `application/`, `infrastructure/`, and the wiring root `composition`
+(`src/composition.rs` + `src/composition/`, per the composition pattern). The
+forbidden lists in `constants.rs` encode the inward-only direction including
+composition; a crate that wires everything in `bin/main.rs` and has no
+`composition` module keeps the same constants — the composition rules are simply
+inert there.
 
 ## Step 2 — Create the structure test
 
@@ -79,12 +111,16 @@ it.
 tests/
 ├── structure.rs                 # entry: declares the module tree
 └── structure/
+    ├── assembly.rs              # tests-only: composition-only assembly rules + their rule-logic tests
     ├── facade.rs                # tests-only: concept-module-file facade rule
-    ├── layering.rs              # tests-only: dependency-direction rules
+    ├── layering.rs              # tests-only: dependency-direction rules (incl. composition seam)
     ├── naming.rs                # tests-only: file-name stutter + mod.rs rules
     ├── ports.rs                 # tests-only: port.rs-traits-only rule
+    ├── vocabulary.rs            # tests-only: generic-machinery-stays-concept-free rule
+    ├── workspace_deps.rs        # tests-only: manifest dependency-boundary rule (workspace projects)
     └── support/
-        ├── constants.rs         # layer names, forbidden lists, magic strings
+        ├── constants.rs         # layer names, forbidden lists, marker lists, magic strings
+        ├── manifest.rs          # Cargo.toml dependency-gate scanner (TOML-backed)
         ├── source.rs            # SourceTree + SourceLine (scanning primitives)
         ├── rules.rs             # the Rule type + the named invariants
         └── violation.rs         # the Violation finding type
@@ -92,6 +128,21 @@ tests/
 
 This layout follows `rust-testing`: the test files contain **only** tests; every
 helper, constant, and type lives under `support/` (Sections 15–16).
+
+The manifest gate parses `Cargo.toml` as TOML, so add the parser to the test
+dependencies (verify the current version on crates.io before pinning):
+
+```toml
+# Cargo.toml
+[dev-dependencies]
+toml = "0.9"
+```
+
+On a single-crate project with no workspace boundaries to guard, omit
+`workspace_deps.rs` and `support/manifest.rs` (and the `toml` dependency)
+entirely — and with them the two module declarations that mount them: drop
+`mod workspace_deps;` from `tests/structure.rs` and `pub mod manifest;` from
+`tests/structure/support.rs`, or the crate will not compile.
 
 ### `tests/structure.rs`
 
@@ -101,10 +152,13 @@ helper, constant, and type lives under `support/` (Sections 15–16).
 mod structure {
     pub mod support;
 
+    mod assembly;
     mod facade;
     mod layering;
     mod naming;
     mod ports;
+    mod vocabulary;
+    mod workspace_deps;
 }
 ```
 
@@ -116,6 +170,7 @@ mod structure {
 //! type, and constants live here.
 
 pub mod constants;
+pub mod manifest;
 pub mod rules;
 pub mod source;
 pub mod violation;
@@ -123,26 +178,30 @@ pub mod violation;
 
 ### `tests/structure/support/constants.rs`
 
-**Before writing `tests/structure/support/constants.rs`, read `references/support-scanning-primitives.md`** — it contains the complete implementations of all three support files (`constants.rs`, `source.rs`, and `violation.rs`); write all three in one pass from this single reference.
+**Before writing `tests/structure/support/constants.rs`, read `references/support-scanning-primitives.md`** — it contains the complete implementations of all four support files (`constants.rs`, `source.rs`, `violation.rs`, and `manifest.rs`); write all four in one pass from this single reference.
 
 ### `tests/structure/support/source.rs`
 
-**Before writing `tests/structure/support/source.rs`, read `references/support-scanning-primitives.md`** — the same reference introduced at `constants.rs` above; it covers this file.
+Covered by `references/support-scanning-primitives.md` (see `constants.rs` above).
 
 ### `tests/structure/support/violation.rs`
 
-**Before writing `tests/structure/support/violation.rs`, read `references/support-scanning-primitives.md`** — the same reference introduced at `constants.rs` above; it covers this file.
+Covered by `references/support-scanning-primitives.md` (see `constants.rs` above).
+
+### `tests/structure/support/manifest.rs`
+
+Covered by `references/support-scanning-primitives.md` (see `constants.rs` above).
 
 ### `tests/structure/support/rules.rs`
 
-**Before writing `tests/structure/support/rules.rs`, read `references/support-rules-implementation.md`** — it contains the complete `Rule` type, all six named constructors, and the `enforce()` method.
+**Before writing `tests/structure/support/rules.rs`, read `references/support-rules-implementation.md`** — it contains the complete `Rule` type, all named constructors, the rule-logic helpers, and the `enforce()` method.
 
 ### `tests/structure/layering.rs`
 
 ```rust
 use super::support::constants::{
     APPLICATION_FORBIDDEN_LAYERS, APPLICATION_LAYER, DOMAIN_FORBIDDEN_LAYERS, DOMAIN_LAYER,
-    INFRASTRUCTURE_CRATES,
+    INFRASTRUCTURE_CRATES, INFRASTRUCTURE_FORBIDDEN_LAYERS, INFRASTRUCTURE_LAYER,
 };
 use super::support::rules::Rule;
 
@@ -164,8 +223,18 @@ mod application_layer {
     use super::*;
 
     #[test]
-    fn should_not_depend_on_infrastructure() {
+    fn should_not_depend_on_infrastructure_or_composition() {
         Rule::layer_depends_inward_only(APPLICATION_LAYER, APPLICATION_FORBIDDEN_LAYERS).enforce();
+    }
+}
+
+mod infrastructure_layer {
+    use super::*;
+
+    #[test]
+    fn should_not_depend_on_composition() {
+        Rule::layer_depends_inward_only(INFRASTRUCTURE_LAYER, INFRASTRUCTURE_FORBIDDEN_LAYERS)
+            .enforce();
     }
 }
 ```
@@ -224,10 +293,138 @@ mod concept_module_files {
 }
 ```
 
+### `tests/structure/assembly.rs`
+
+The enforcement tests run the composition-only assembly rules against the source
+tree; the rule-logic tests exercise the scanners against inline snippets, so a
+regression in the scanner itself (e.g. it stops catching aliases) is caught even
+while the codebase is clean:
+
+```rust
+use super::support::rules::Rule;
+
+mod concrete_adapter_assembly {
+    use super::*;
+
+    #[test]
+    fn should_construct_designated_adapters_only_in_composition() {
+        Rule::concrete_assembly_is_limited_to_composition().enforce();
+    }
+
+    #[test]
+    fn should_name_designated_adapter_types_only_in_composition_or_their_implementations() {
+        Rule::concrete_types_are_limited_to_composition().enforce();
+    }
+
+    #[test]
+    fn should_not_hide_designated_adapter_types_behind_aliases_in_implementations() {
+        Rule::adapter_implementations_do_not_hide_concrete_types().enforce();
+    }
+}
+
+mod assembly_rule_logic {
+    use super::*;
+
+    #[test]
+    fn should_report_a_construction_call_found_in_a_source_snippet() {
+        let violations = Rule::assembly_violations_in_source(
+            "let provider = PostgresOrderRepository::new(pool);",
+            &["PostgresOrderRepository::new("],
+        );
+
+        assert_eq!(violations, vec!["PostgresOrderRepository::new("]);
+    }
+
+    #[test]
+    fn should_report_a_type_hidden_behind_an_alias() {
+        let violations = Rule::type_alias_violations_in_source(
+            "type Repository = PostgresOrderRepository<Postgres>;",
+            &["PostgresOrderRepository"],
+        );
+
+        assert_eq!(violations, vec!["PostgresOrderRepository"]);
+    }
+
+    #[test]
+    fn should_ignore_a_commented_construction_expression() {
+        let violations = Rule::assembly_violations_in_source(
+            "// PostgresOrderRepository::new(pool);",
+            &["PostgresOrderRepository::new("],
+        );
+
+        assert!(violations.is_empty());
+    }
+}
+```
+
+### `tests/structure/vocabulary.rs`
+
+Inert until `GENERIC_MODULE_PATHS` / `GENERIC_MODULE_FORBIDDEN_MARKERS` in
+`constants.rs` are populated (see [Customization](#customization-knobs)):
+
+```rust
+use super::support::rules::Rule;
+
+mod generic_machinery {
+    use super::*;
+
+    #[test]
+    fn should_not_name_product_concepts() {
+        Rule::generic_module_stays_concept_free().enforce();
+    }
+}
+```
+
+### `tests/structure/workspace_deps.rs`
+
+Workspace projects only. Each crate that owns a dependency boundary gets this
+test with its own forbidden list — see
+[Multi-crate workspaces](#multi-crate-workspaces-where-each-gate-lives) for
+which crate owns which boundary:
+
+```rust
+use super::support::constants::{CRATE_MANIFEST, MANIFEST_FORBIDDEN_DEPS, WORKSPACE_MANIFEST};
+use super::support::manifest::forbidden_dependency_violations;
+use super::support::source::read_crate_file;
+
+mod manifest_dependency_boundary {
+    use super::*;
+
+    #[test]
+    fn should_not_declare_forbidden_dependencies() {
+        let manifest = read_crate_file(CRATE_MANIFEST);
+        let workspace_manifest = read_crate_file(WORKSPACE_MANIFEST);
+        let violations = forbidden_dependency_violations(
+            CRATE_MANIFEST,
+            WORKSPACE_MANIFEST,
+            &manifest,
+            &workspace_manifest,
+            MANIFEST_FORBIDDEN_DEPS,
+        );
+        assert!(
+            violations.is_empty(),
+            "this crate must not depend on the forbidden packages {MANIFEST_FORBIDDEN_DEPS:?}.\nviolations:\n{}",
+            violations.join("\n")
+        );
+    }
+}
+```
+
 ## Step 3 — Wire the gate
 
-Add `cargo test --test structure` to CI. If the project uses `cargo-make`, give it a
-task so it runs with the rest of the suite:
+Add `cargo test --test structure` to CI (see `ci-setup`). Give the project's
+task runner a recipe so it runs with the rest of the suite — with `just` (see
+`justfile-setup`):
+
+```just
+# justfile
+structure:
+    cargo test --test structure
+
+check: format clippy structure test
+```
+
+or with `cargo-make`:
 
 ```toml
 # Makefile.toml
@@ -241,7 +438,10 @@ dependencies = ["format", "clippy", "structure", "test"]
 ```
 
 `cargo test` exits non-zero on a failing assertion, so once it's in CI a violation
-blocks the merge. Without that CI step the rules only report locally.
+blocks the merge. Without that CI step the rules only report locally. On a
+workspace, `cargo test --workspace --test structure` fails if any member lacks
+the target, so run each crate's gate via its own recipe line (or plain
+`cargo test --workspace`, which runs every discovered test target).
 
 ## Step 4 — Verify it works
 
@@ -273,6 +473,23 @@ cargo test --test structure   # expect: concept_module_files::should_hold_only_m
 rm -r src/application/__probe src/application/__probe.rs
 ```
 
+For the composition-seam rule, probe an infrastructure file that imports the
+wiring root:
+
+```bash
+printf 'use crate::composition::Services;\n' > src/infrastructure/__probe.rs
+cargo test --test structure   # expect: infrastructure_layer::should_not_depend_on_composition fails
+rm src/infrastructure/__probe.rs
+```
+
+The assembly rules are probed the same way once their marker lists are populated
+(drop a `<Marker>::new(…)` line in a file outside `src/composition/`); until the
+lists have entries the enforcement tests are inert, but the `assembly_rule_logic`
+tests still prove the scanners work. For the manifest rule, temporarily add one
+of the forbidden packages to `[dev-dependencies]` and confirm
+`manifest_dependency_boundary::should_not_declare_forbidden_dependencies` fails,
+then remove it.
+
 On a **new** project the suite then passes clean. On an **existing** project it now
 prints exactly where the codebase diverges — this is your conformance report.
 
@@ -302,19 +519,31 @@ prints exactly where the codebase diverges — this is your conformance report.
   Never leave a rule advisory forever — a warning that never becomes an error trains
   everyone to ignore it.
 
+  The marker-driven rules (8–10) need no ratchet on an existing codebase: their
+  lists start empty, so they enforce nothing until you designate the first
+  composition-only type, forbidden dependency, or generic module — designate them
+  one at a time as you clean each one up.
+
 ## How it works (the scan)
 
-The mechanism, in one sentence: **each rule reads files under the roots it owns
-(`src/`, and for `mod.rs`, `tests/`) and checks *where a file lives* against *what
-it references* or *how it is named*.**
+The mechanism, in one sentence: **each rule reads the files it owns (`src/`;
+`tests/` for the `mod.rs` rule; `Cargo.toml` for the manifest rule) and checks
+*where a file lives* against *what it references*, *how it is named*, or *what
+it declares*.**
 
 - `SourceTree` (in `source.rs`) locates the crate via `CARGO_MANIFEST_DIR` (so the
   test is independent of the working directory), walks `src/` or any configured
   roots for `.rs` files, reads them, and renders paths relative to the crate root.
 - `SourceLine` classifies a single line: `is_comment()` (skip `//` lines so a comment
-  mentioning another layer isn't a false hit) and `module_level_item()` (a column-0
-  `struct`/`enum`/`union`/`impl` — trait members are indented, so a hit means a
-  non-trait item at the top level of a `port.rs`).
+  mentioning another layer isn't a false hit), `code()` (the portion before any
+  trailing `//` comment, which is what the assembly scanners match against), and
+  `module_level_item()` (a column-0 `struct`/`enum`/`union`/`impl` — trait members
+  are indented, so a hit means a non-trait item at the top level of a `port.rs`).
+- `manifest.rs` parses `Cargo.toml` as TOML and resolves each dependency
+  declaration to its *effective* package name — following `package = "…"`
+  renames, `workspace = true` inheritance (through the workspace manifest), and
+  `[target.'…'.dependencies]` tables — before matching it against the forbidden
+  list. A lexical grep would miss all three.
 - A `Rule` pairs a `description` with a `check`; `enforce()` collects `Vec<Violation>`
   and asserts it's empty, printing each `Violation` (which owns its own rendering).
 - The test files are the spec: each test instantiates a named rule and calls
@@ -330,22 +559,33 @@ it references* or *how it is named*.**
 
 ## Customization knobs
 
-- **Layers** — `constants.rs` owns the layer names and the forbidden lists. The lists
-  encode the inward-only direction. If the project has an extra outermost wiring layer
-  (e.g. `composition/`), add it and forbid every inner layer (and infrastructure) from
-  importing it:
-
-  ```rust
-  pub const COMPOSITION_LAYER: &str = "composition";
-  pub const DOMAIN_FORBIDDEN_LAYERS: &[&str] =
-      &[APPLICATION_LAYER, INFRASTRUCTURE_LAYER, COMPOSITION_LAYER];
-  pub const APPLICATION_FORBIDDEN_LAYERS: &[&str] = &[INFRASTRUCTURE_LAYER, COMPOSITION_LAYER];
-  pub const INFRASTRUCTURE_FORBIDDEN_LAYERS: &[&str] = &[COMPOSITION_LAYER];
-  ```
-
-  then add an `infrastructure_layer` test in `layering.rs` mirroring the others.
+- **Layers** — `constants.rs` owns the layer names and the forbidden lists; the
+  lists encode the inward-only direction, and the defaults already include the
+  `composition` wiring root as the outermost element (forbidden to every other
+  layer). If the project renames a layer or adds another one, adjust the names
+  and lists and mirror the per-layer tests in `layering.rs`.
 - **Infrastructure crates** — extend `INFRASTRUCTURE_CRATES` to match what the project
   actually depends on. It can only ever flag a real `use`, so a generous list is safe.
+- **Assembly markers** — `COMPOSITION_ONLY_CONSTRUCTION_MARKERS` (exact
+  constructor-call strings, e.g. `"PostgresOrderRepository::new("`),
+  `COMPOSITION_ONLY_TYPE_MARKERS` (the bare type names), and
+  `ADAPTER_IMPLEMENTATION_PATHS` (the crate-relative files that legitimately
+  define those types) drive rule 8. All three start empty — the rule costs
+  nothing until the project designates its first composition-only adapter.
+  Whenever a new concrete provider/adapter family is added, extend all three in
+  the same change. `COMPOSITION_PATHS` owns what counts as "inside composition"
+  (default `src/composition.rs` + `src/composition/`).
+- **Forbidden dependencies** — `MANIFEST_FORBIDDEN_DEPS` drives rule 9 and is
+  per-crate: in a worker binary list the core crate and every direct database
+  driver family (`sqlx`, `tokio-postgres`, `diesel`, `sea-orm`, …); in a shared
+  library crate list its consumers (the core crate, the wire-contracts crate) so
+  the dependency direction can never invert. Empty list = rule inert.
+- **Generic-module vocabulary** — rule 10 activates when you populate
+  `GENERIC_MODULE_PATHS` (e.g. `"src/application/task/"` plus its facade
+  `"src/application/task.rs"`) and `GENERIC_MODULE_FORBIDDEN_MARKERS` (the
+  lowercase product-concept words, e.g. `"backup"`, `"restore"`). Typical use:
+  a worker's generic task runtime must never name the product operations it
+  dispatches, so adding a product feature never widens the generic layer.
 - **NoOp exception** — `NOOP_STUB_MARKER` lets NoOp stubs live in `port.rs` per the
   structure skill. Rename or drop it if your project doesn't use that idiom.
 - **`mod.rs` exception** — `MOD_FILE_ALLOWED_PATHS` owns the exact crate-relative
@@ -359,6 +599,31 @@ it references* or *how it is named*.**
   codebase, prefer the `#[ignore]` ratchet over a wholesale enable.
 - **New rules** — add a `Rule::*` constructor + a one-line test. The `SourceTree`/
   `SourceLine` primitives cover most "scan files / inspect lines" checks.
+
+## Multi-crate workspaces: where each gate lives
+
+On a workspace (see `rust-workspace-setup`), the gate is **per crate**, and each
+crate carries only the rules that guard a boundary it owns:
+
+- **Every layered binary crate** (the API core, the worker) gets the full
+  `tests/structure/` target described above, each with its own constants —
+  the worker's manifest gate forbids the core crate and every direct database
+  driver (the worker is stateless and owns no persistence; see
+  `patterns/scalability/worker_pattern.md`), while the core's gate carries the
+  layering, assembly, and facade rules.
+- **Every shared library crate that must stay consumer-free** (an execution
+  library both the core and the worker call into, a wire-contracts crate) gets
+  at least an in-crate `tests/structure/` with the manifest gate, forbidding its
+  consumers — that is what keeps the dependency direction `core → library`
+  permanent instead of aspirational.
+- **The in-crate gate is the source of truth** for a crate's forbidden list. A
+  consumer crate may *mirror* the same list in its own gate for
+  defense-in-depth; if it does, document that the two lists must stay identical
+  and which file is authoritative.
+
+This is how the reference codebase runs it: the core, the worker, and the shared
+execution crate each carry their own `tests/structure/` target, and
+`cargo test --workspace` runs all of them.
 
 ## Stronger enforcement: crate-per-layer (optional)
 
@@ -377,7 +642,9 @@ This setup deliberately follows the other Rust skills, and any rule you add shou
 
 - **`rust-testing`** — all tests live under `tests/`; the test files contain only
   `use` + `mod … { #[test] should_… }` blocks (no module-scope helpers, no comments);
-  every helper, constant, and type lives under `support/` split by concern.
+  every helper, constant, and type lives under `support/` split by concern. The
+  `assembly_rule_logic` tests in `assembly.rs` are ordinary tests *of* the support
+  helpers (fed inline snippets), not helpers themselves — they comply.
 - **`rust-code-style`** — descriptive names everywhere (incl. closures), magic strings
   extracted to `constants.rs`, `///` on the public surface.
 - **`rust-design-idioms`** — `Violation` is a structured type with a `Display` impl

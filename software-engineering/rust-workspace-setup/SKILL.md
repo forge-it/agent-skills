@@ -388,7 +388,10 @@ invocations in CI so new members are automatically included.
   `rust-architecture-test-setup` maps one layer per workspace member.
 - **rust-architecture-test-setup** — the `tests/structure/` cargo-test gate; run it per
   member that uses hexagonal layers. `SourceTree` resolves via `CARGO_MANIFEST_DIR` so
-  it naturally scopes to the member crate.
+  it naturally scopes to the member crate. Its **manifest dependency gate** is what
+  keeps the workspace's dependency directions permanent: give every shared library
+  crate an in-crate gate forbidding its consumers, and give the worker a gate
+  forbidding the core crate and direct database drivers.
 - **justfile-setup** — workspace-level task runner; `just check` can invoke
   `cargo check --workspace` rather than per-member commands.
 

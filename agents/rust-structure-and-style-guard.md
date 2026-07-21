@@ -26,7 +26,7 @@ search commands — never to modify anything.
 |---|---|
 | Formatting | `cargo fmt --check` |
 | Unused vars, dead code, common bugs | `cargo clippy -D warnings` |
-| Layer-direction, `port.rs`-traits-only, file-name stutter, framework-free domain | the project's architecture gate (e.g. a `tests/structure/` cargo test), if it has one |
+| Layer-direction (incl. composition-seam imports), `port.rs`-traits-only, file-name stutter, framework-free domain, concrete-adapter assembly outside composition, manifest dependency boundaries, generic-module vocabulary | the project's architecture gate (e.g. a `tests/structure/` cargo test), if it has one |
 
 Flag one of these only if you suspect the gate has a gap, or the project has no such gate.
 
