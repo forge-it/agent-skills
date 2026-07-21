@@ -1,6 +1,6 @@
 # Support Scanning Primitives
 
-This file contains the complete implementations for `tests/structure/support/constants.rs`, `tests/structure/support/source.rs`, and `tests/structure/support/violation.rs`. `/home/cristi/Projects/agent-skills/software-engineering/rust-architecture-test-setup/SKILL.md` is the normative source — the rules for when and how the scanning primitives are used live there (Step 2). These implementations are provided here for direct reference by agents setting up the architecture gate.
+This file contains the complete implementations for `tests/structure/support/constants.rs`, `tests/structure/support/source.rs`, `tests/structure/support/violation.rs`, and `tests/structure/support/manifest.rs`. `/home/cristi/Projects/agent-skills/software-engineering/rust-architecture-test-setup/SKILL.md` is the normative source — the rules for when and how the scanning primitives are used live there (Step 2). These implementations are provided here for direct reference by agents setting up the architecture gate.
 
 ## constants.rs — Layer names, forbidden lists, and shared magic strings
 
@@ -13,16 +13,25 @@ Target path: `tests/structure/support/constants.rs`
 //! legacy module-layout exceptions, and the magic strings the checks match
 //! against.
 
-/// The architectural layers, by their directory name under `src/`.
+/// The architectural layers, by their directory name under `src/`. The
+/// composition root (`src/composition.rs` + `src/composition/`) is the
+/// outermost wiring seam: it may import every layer, and no layer may import
+/// it. On a crate without a `composition` module these rules are inert.
 pub const DOMAIN_LAYER: &str = "domain";
 pub const APPLICATION_LAYER: &str = "application";
 pub const INFRASTRUCTURE_LAYER: &str = "infrastructure";
+pub const COMPOSITION_LAYER: &str = "composition";
 
 /// Layers `domain/` must never reference (the domain depends on nothing).
-pub const DOMAIN_FORBIDDEN_LAYERS: &[&str] = &[APPLICATION_LAYER, INFRASTRUCTURE_LAYER];
+pub const DOMAIN_FORBIDDEN_LAYERS: &[&str] =
+    &[APPLICATION_LAYER, INFRASTRUCTURE_LAYER, COMPOSITION_LAYER];
 
 /// Layers `application/` must never reference.
-pub const APPLICATION_FORBIDDEN_LAYERS: &[&str] = &[INFRASTRUCTURE_LAYER];
+pub const APPLICATION_FORBIDDEN_LAYERS: &[&str] = &[INFRASTRUCTURE_LAYER, COMPOSITION_LAYER];
+
+/// Layers `infrastructure/` must never reference. Infrastructure implements
+/// adapters; it never assembles them — assembly is the composition root's job.
+pub const INFRASTRUCTURE_FORBIDDEN_LAYERS: &[&str] = &[COMPOSITION_LAYER];
 
 /// External infrastructure crates that must not leak into the framework-free
 /// domain. Extend this list to match the project's actual infrastructure
@@ -77,6 +86,47 @@ pub const CRATE_PATH_PREFIX: &str = "crate::";
 
 /// Keyword that introduces a `use` import statement.
 pub const USE_KEYWORD: &str = "use";
+
+/// What counts as "inside the composition root" for the assembly rules.
+/// Entries ending in `/` are prefixes; other entries are exact file paths.
+pub const COMPOSITION_PATHS: &[&str] = &["src/composition.rs", "src/composition/"];
+
+/// Exact constructor-call strings of concrete adapter/provider types whose
+/// assembly is a composition-root concern (e.g. `"PostgresOrderRepository::new("`).
+/// Starts empty; extend it (together with the two lists below, in the same
+/// change) whenever the project designates a new composition-only type.
+pub const COMPOSITION_ONLY_CONSTRUCTION_MARKERS: &[&str] = &[];
+
+/// Bare type names of those concrete adapters. Outside the composition root and
+/// the implementation modules below, these names may not appear at all — not as
+/// imports, not as aliases, not in signatures.
+pub const COMPOSITION_ONLY_TYPE_MARKERS: &[&str] = &[];
+
+/// Crate-relative source files that legitimately define the concrete types
+/// above (their implementation modules). They may name their own types, but may
+/// not hide them behind `type` aliases or `use … as` re-exports.
+pub const ADAPTER_IMPLEMENTATION_PATHS: &[&str] = &[];
+
+/// This crate's manifest, and the workspace root manifest that `workspace = true`
+/// dependency declarations inherit from. Adjust the relative depth per member:
+/// `../Cargo.toml` for a top-level member, `../../Cargo.toml` for `crates/<name>`.
+pub const CRATE_MANIFEST: &str = "Cargo.toml";
+pub const WORKSPACE_MANIFEST: &str = "../Cargo.toml";
+
+/// Effective package names this crate's Cargo.toml must never declare a
+/// dependency on. Per-crate: a worker binary lists the core crate and every
+/// direct database driver family (e.g. "my-core", "sqlx", "tokio-postgres",
+/// "diesel", "sea-orm"); a shared library crate lists its consumers so the
+/// dependency direction can never invert. Empty list = rule inert.
+pub const MANIFEST_FORBIDDEN_DEPS: &[&str] = &[];
+
+/// Generic-machinery vocabulary rule (opt-in). `GENERIC_MODULE_PATHS` entries
+/// ending in `/` are prefixes, others exact files (e.g. "src/application/task/"
+/// plus its facade "src/application/task.rs"); the markers are the lowercase
+/// product-concept words the generic module must never mention. Both empty by
+/// default = rule inert.
+pub const GENERIC_MODULE_PATHS: &[&str] = &[];
+pub const GENERIC_MODULE_FORBIDDEN_MARKERS: &[&str] = &[];
 ```
 
 ## source.rs — SourceTree and SourceLine scanning primitives
@@ -127,6 +177,14 @@ impl SourceTree {
     pub(crate) fn read(&self, path: &Path) -> String {
         std::fs::read_to_string(path)
             .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()))
+    }
+
+    /// Whether the crate-relative unix path matches one of `paths`: entries
+    /// ending in `/` are prefixes, other entries are exact file paths.
+    pub(crate) fn matches_any(relative_path: &str, paths: &[&str]) -> bool {
+        paths.iter().any(|path| {
+            relative_path == *path || (path.ends_with('/') && relative_path.starts_with(path))
+        })
     }
 
     pub(crate) fn relative(&self, path: &Path) -> String {
@@ -188,12 +246,29 @@ impl SourceTree {
     }
 }
 
+/// Reads a file addressed relative to the crate root (`CARGO_MANIFEST_DIR`),
+/// e.g. `Cargo.toml` or `../Cargo.toml` for the manifest gate.
+pub(crate) fn read_crate_file(crate_relative_path: &str) -> String {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(crate_relative_path);
+    std::fs::read_to_string(&path)
+        .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()))
+}
+
 /// A single source line, with the classification queries the rules need.
 pub(crate) struct SourceLine<'line>(pub(crate) &'line str);
 
-impl SourceLine<'_> {
+impl<'line> SourceLine<'line> {
     pub(crate) fn is_comment(&self) -> bool {
         self.0.trim_start().starts_with("//")
+    }
+
+    /// The code portion of the line — everything before a trailing `//`
+    /// comment. The assembly scanners match markers against this, so a comment
+    /// that merely mentions a concrete type is never a false hit. Returns
+    /// `&'line str` (not `&self`-bound) so it works on a temporary
+    /// `SourceLine(line)`.
+    pub(crate) fn code(&self) -> &'line str {
+        self.0.split("//").next().unwrap_or_default()
     }
 
     /// Detects a module-level (column-0) data/impl item. Trait members are
@@ -311,6 +386,142 @@ impl fmt::Display for Violation {
             }
             _ => write!(formatter, "{}: {}", self.file, self.message),
         }
+    }
+}
+```
+
+## manifest.rs — Cargo.toml dependency-gate scanner (TOML-backed)
+
+Target path: `tests/structure/support/manifest.rs`
+
+Requires `toml` in `[dev-dependencies]` (verify the current version on crates.io
+before pinning). A lexical grep over the manifest is not enough: a forbidden
+crate can hide behind a dependency rename (`core_alias = { package = "my-core" }`),
+behind `workspace = true` inheritance, or inside a `[target.'…'.dependencies]`
+table — this scanner resolves all three to the *effective* package name before
+matching. Omit this file (and `workspace_deps.rs`) on single-crate projects.
+
+```rust
+// tests/structure/support/manifest.rs
+//! Effective Cargo.toml dependency gate: resolves every dependency declaration
+//! (including package renames, `workspace = true` inheritance, and
+//! target-specific tables) to its effective package name and reports the ones
+//! on the forbidden list.
+
+use toml::{Table, Value};
+
+pub fn forbidden_dependency_violations(
+    manifest_path: &str,
+    workspace_manifest_path: &str,
+    manifest: &str,
+    workspace_manifest: &str,
+    forbidden_packages: &[&str],
+) -> Vec<String> {
+    let manifest_table = manifest
+        .parse::<Table>()
+        .unwrap_or_else(|error| panic!("failed to parse {manifest_path}: {error}"));
+    let workspace_table = workspace_manifest
+        .parse::<Table>()
+        .unwrap_or_else(|error| panic!("failed to parse {workspace_manifest_path}: {error}"));
+    let workspace_dependencies = workspace_table
+        .get("workspace")
+        .and_then(Value::as_table)
+        .and_then(|workspace| workspace.get("dependencies"))
+        .and_then(Value::as_table);
+
+    dependency_declarations(&manifest_table)
+        .into_iter()
+        .filter_map(|declaration| {
+            let package_name =
+                effective_package_name(declaration.key, declaration.value, workspace_dependencies)?;
+            forbidden_packages
+                .contains(&package_name.as_str())
+                .then(|| {
+                    format!(
+                        "{manifest_path}: {}.{} declares forbidden package `{package_name}`{}",
+                        declaration.table_path,
+                        declaration.key,
+                        is_workspace_inherited(declaration.value)
+                            .then(|| format!(" (resolved through {workspace_manifest_path})"))
+                            .unwrap_or_default(),
+                    )
+                })
+        })
+        .collect()
+}
+
+struct DependencyDeclaration<'value> {
+    key: &'value str,
+    value: &'value Value,
+    table_path: String,
+}
+
+fn dependency_declarations(table: &Table) -> Vec<DependencyDeclaration<'_>> {
+    let mut declarations = Vec::new();
+    collect_dependency_table_declarations(table, "", &mut declarations);
+    declarations
+}
+
+fn collect_dependency_table_declarations<'value>(
+    table: &'value Table,
+    prefix: &str,
+    declarations: &mut Vec<DependencyDeclaration<'value>>,
+) {
+    for dependency_table_name in ["dependencies", "dev-dependencies", "build-dependencies"] {
+        if let Some(dependencies) = table.get(dependency_table_name).and_then(Value::as_table) {
+            let table_path = join_path(prefix, dependency_table_name);
+            declarations.extend(
+                dependencies
+                    .iter()
+                    .map(|(key, value)| DependencyDeclaration {
+                        key,
+                        value,
+                        table_path: table_path.clone(),
+                    }),
+            );
+        }
+    }
+
+    if let Some(targets) = table.get("target").and_then(Value::as_table) {
+        for (target_name, target_value) in targets {
+            if let Some(target_table) = target_value.as_table() {
+                let target_prefix = join_path(&join_path(prefix, "target"), target_name);
+                collect_dependency_table_declarations(target_table, &target_prefix, declarations);
+            }
+        }
+    }
+}
+
+fn effective_package_name(
+    dependency_key: &str,
+    dependency_value: &Value,
+    workspace_dependencies: Option<&Table>,
+) -> Option<String> {
+    if is_workspace_inherited(dependency_value) {
+        let workspace_dependency = workspace_dependencies?.get(dependency_key)?;
+        return effective_package_name(dependency_key, workspace_dependency, None);
+    }
+    dependency_value
+        .as_table()
+        .and_then(|details| details.get("package"))
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned)
+        .or_else(|| Some(dependency_key.to_string()))
+}
+
+fn is_workspace_inherited(dependency_value: &Value) -> bool {
+    dependency_value
+        .as_table()
+        .and_then(|details| details.get("workspace"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+}
+
+fn join_path(prefix: &str, segment: &str) -> String {
+    if prefix.is_empty() {
+        segment.to_string()
+    } else {
+        format!("{prefix}.{segment}")
     }
 }
 ```

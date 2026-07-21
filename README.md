@@ -57,9 +57,11 @@ Language-agnostic backend / full-stack architecture patterns — each a concrete
 | lifecycle | [bootstrap_pattern](patterns/lifecycle/bootstrap_pattern.md) | Startup side effects: idempotent seeding, fail-fast eager init |
 | lifecycle | [runtime_pattern](patterns/lifecycle/runtime_pattern.md) | Background worker supervision + bounded graceful drain |
 | scalability | [worker_pattern](patterns/scalability/worker_pattern.md) | Broker-backed worker as its own hexagonal app (scalable from day 1) |
+| scalability | [worker_fleet_pattern](patterns/scalability/worker_fleet_pattern.md) | Homogeneous worker fleet: replica-count-only scaling + self-enrollment identity (ADRs) |
 | testing | [parallel_test_isolation_pattern](patterns/testing/parallel_test_isolation_pattern.md) | Parallel integration tests via per-test isolation |
 | decisions | [local_port_allocation_pattern](patterns/decisions/local_port_allocation_pattern.md) | Non-overlapping port ranges (ADR) for parallel envs/worktrees |
 | decisions | [frontend_api_type_mirroring_pattern](patterns/decisions/frontend_api_type_mirroring_pattern.md) | Keep frontend types in sync with the API contract (ADR) |
+| decisions | [observability_posture_pattern](patterns/decisions/observability_posture_pattern.md) | The app emits, the platform collects — staged observability (ADR) |
 | documentation | [claude_md_pattern](patterns/documentation/claude_md_pattern.md) | CLAUDE.md navigation hierarchy + templates |
 | documentation | [docs_artifact_layout_pattern](patterns/documentation/docs_artifact_layout_pattern.md) | Root + per-component `docs/` layout |
 | documentation | [repo_root_files_pattern](patterns/documentation/repo_root_files_pattern.md) | Canonical root + per-component files (README, env, etc.) |

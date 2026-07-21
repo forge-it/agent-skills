@@ -388,4 +388,7 @@ companion [bootstrap (lifecycle) pattern](../lifecycle/bootstrap_pattern.md).
 - **`rust-architecture-test-setup` / `python-import-linter-setup`** — make the
   central invariant ("application and domain never import infrastructure; only
   the composition root imports both") an automated gate instead of a review
-  note.
+  note. The Rust gate also enforces the reverse direction (no layer imports
+  `composition/`) and, via its marker-driven assembly rules, that designated
+  concrete adapter construction never escapes the composition root — including
+  through hidden `type` aliases or `use … as` re-exports.

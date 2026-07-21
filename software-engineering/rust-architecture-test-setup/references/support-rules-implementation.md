@@ -1,10 +1,14 @@
 # Support Rules Implementation
 
-This file contains the complete implementation for `tests/structure/support/rules.rs`. `/home/cristi/Projects/agent-skills/software-engineering/rust-architecture-test-setup/SKILL.md` is the normative source — the description of what each `Rule` constructor enforces and how the six rules map to the architecture invariants lives there (Step 2). This implementation is provided here for direct reference by agents setting up the architecture gate.
+This file contains the complete implementation for `tests/structure/support/rules.rs`. `/home/cristi/Projects/agent-skills/software-engineering/rust-architecture-test-setup/SKILL.md` is the normative source — the description of what each `Rule` constructor enforces and how the rules map to the architecture invariants lives there (Step 2). This implementation is provided here for direct reference by agents setting up the architecture gate.
 
-## rules.rs — Rule type, six named constructors, and enforce()
+## rules.rs — Rule type, named constructors, rule-logic helpers, and enforce()
 
 Target path: `tests/structure/support/rules.rs`
+
+Note: the manifest dependency gate (rule 9) does not live here — it is a free
+function in `support/manifest.rs` (see `support-scanning-primitives.md`),
+because it scans `Cargo.toml`, not the source tree.
 
 ```rust
 // tests/structure/support/rules.rs
@@ -15,8 +19,11 @@ Target path: `tests/structure/support/rules.rs`
 //! scanning function.
 
 use super::constants::{
-    CRATE_PATH_PREFIX, DOMAIN_LAYER, ENFORCE_CONCEPT_FACADE, MOD_FILE_ALLOWED_PATHS,
-    MOD_FILE_NAME, MOD_FILE_SEARCH_ROOTS, NOOP_STUB_MARKER, PORT_FILE_NAME, USE_KEYWORD,
+    ADAPTER_IMPLEMENTATION_PATHS, COMPOSITION_ONLY_CONSTRUCTION_MARKERS,
+    COMPOSITION_ONLY_TYPE_MARKERS, COMPOSITION_PATHS, CRATE_PATH_PREFIX, DOMAIN_LAYER,
+    ENFORCE_CONCEPT_FACADE, GENERIC_MODULE_FORBIDDEN_MARKERS, GENERIC_MODULE_PATHS,
+    MOD_FILE_ALLOWED_PATHS, MOD_FILE_NAME, MOD_FILE_SEARCH_ROOTS, NOOP_STUB_MARKER,
+    PORT_FILE_NAME, USE_KEYWORD,
 };
 use super::source::{SourceLine, SourceTree};
 use super::violation::Violation;
@@ -243,6 +250,182 @@ impl Rule {
         }
     }
 
+    /// Designated concrete adapter/provider construction (`Type::new(…)`) is a
+    /// composition-root concern: outside `COMPOSITION_PATHS`, none of the
+    /// `COMPOSITION_ONLY_CONSTRUCTION_MARKERS` may appear in code
+    /// (composition pattern, "the composition root is the only assembly
+    /// location"). Inert while the marker list is empty.
+    pub fn concrete_assembly_is_limited_to_composition() -> Self {
+        Self {
+            description: "concrete adapter assembly must remain in the composition root"
+                .to_string(),
+            check: Box::new(|source_tree| {
+                let mut violations = Vec::new();
+                for file in source_tree.rust_files() {
+                    let relative_path = source_tree.relative_unix(&file);
+                    if SourceTree::matches_any(&relative_path, COMPOSITION_PATHS) {
+                        continue;
+                    }
+                    let contents = source_tree.read(&file);
+                    for (line_index, line) in contents.lines().enumerate() {
+                        let code = SourceLine(line).code();
+                        for marker in COMPOSITION_ONLY_CONSTRUCTION_MARKERS {
+                            if code.contains(marker) {
+                                violations.push(Violation::at_line(
+                                    &source_tree.relative(&file),
+                                    line_index + 1,
+                                    line,
+                                    "concrete adapter assembly belongs in the composition root",
+                                ));
+                            }
+                        }
+                    }
+                }
+                violations
+            }),
+        }
+    }
+
+    /// Outside the composition root and the implementation modules that define
+    /// them, designated concrete adapter type names may not appear at all — not
+    /// as imports, not in signatures. The implementation modules are excluded
+    /// because a lexical scan cannot distinguish a definition from a foreign
+    /// use. Inert while the marker list is empty.
+    pub fn concrete_types_are_limited_to_composition() -> Self {
+        Self {
+            description: "designated concrete adapter types must remain composition-owned"
+                .to_string(),
+            check: Box::new(|source_tree| {
+                let mut violations = Vec::new();
+                for file in source_tree.rust_files() {
+                    let relative_path = source_tree.relative_unix(&file);
+                    if SourceTree::matches_any(&relative_path, COMPOSITION_PATHS)
+                        || SourceTree::matches_any(&relative_path, ADAPTER_IMPLEMENTATION_PATHS)
+                    {
+                        continue;
+                    }
+                    let contents = source_tree.read(&file);
+                    for (line_index, line) in contents.lines().enumerate() {
+                        let code = SourceLine(line).code();
+                        for marker in COMPOSITION_ONLY_TYPE_MARKERS {
+                            if code.contains(marker) {
+                                violations.push(Violation::at_line(
+                                    &source_tree.relative(&file),
+                                    line_index + 1,
+                                    line,
+                                    "designated concrete adapter type belongs in the composition root",
+                                ));
+                            }
+                        }
+                    }
+                }
+                violations
+            }),
+        }
+    }
+
+    /// The exempt implementation modules may define their concrete types, but
+    /// they may not create `type` aliases or `use … as` re-exports that hide
+    /// those types from the composition-only guards above.
+    pub fn adapter_implementations_do_not_hide_concrete_types() -> Self {
+        Self {
+            description:
+                "adapter implementations must not hide concrete types behind aliases"
+                    .to_string(),
+            check: Box::new(|source_tree| {
+                let mut violations = Vec::new();
+                for relative_path in ADAPTER_IMPLEMENTATION_PATHS {
+                    let file =
+                        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(relative_path);
+                    let contents = source_tree.read(&file);
+                    for (line_index, line) in contents.lines().enumerate() {
+                        if let Some(marker) =
+                            concrete_type_alias_marker(line, COMPOSITION_ONLY_TYPE_MARKERS)
+                        {
+                            violations.push(Violation::at_line(
+                                relative_path,
+                                line_index + 1,
+                                line,
+                                &format!(
+                                    "adapter implementation must not hide `{marker}` behind an alias or re-export"
+                                ),
+                            ));
+                        }
+                    }
+                }
+                violations
+            }),
+        }
+    }
+
+    /// Designated generic-machinery modules (`GENERIC_MODULE_PATHS`) must not
+    /// name product concepts (`GENERIC_MODULE_FORBIDDEN_MARKERS`), so adding a
+    /// product feature never widens the generic layer. Opt-in: inert while the
+    /// path list is empty.
+    pub fn generic_module_stays_concept_free() -> Self {
+        Self {
+            description: "generic machinery must not name product concepts".to_string(),
+            check: Box::new(|source_tree| {
+                let mut violations = Vec::new();
+                for file in source_tree.rust_files() {
+                    let relative_path = source_tree.relative_unix(&file);
+                    if !SourceTree::matches_any(&relative_path, GENERIC_MODULE_PATHS) {
+                        continue;
+                    }
+                    let contents = source_tree.read(&file);
+                    for (line_index, line) in contents.lines().enumerate() {
+                        let code = SourceLine(line).code().to_lowercase();
+                        for marker in GENERIC_MODULE_FORBIDDEN_MARKERS {
+                            if code.contains(marker) {
+                                violations.push(Violation::at_line(
+                                    &source_tree.relative(&file),
+                                    line_index + 1,
+                                    line,
+                                    &format!(
+                                        "generic machinery must not name the product concept `{marker}`"
+                                    ),
+                                ));
+                            }
+                        }
+                    }
+                }
+                violations
+            }),
+        }
+    }
+
+    /// Rule-logic helper: the construction markers found in a source snippet.
+    /// Exercised directly by the `assembly_rule_logic` tests so a scanner
+    /// regression is caught even while the codebase is clean.
+    pub(crate) fn assembly_violations_in_source<'marker>(
+        source: &str,
+        construction_markers: &[&'marker str],
+    ) -> Vec<&'marker str> {
+        source
+            .lines()
+            .flat_map(|line| {
+                let code = SourceLine(line).code();
+                construction_markers
+                    .iter()
+                    .copied()
+                    .filter(move |marker| code.contains(marker))
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    }
+
+    /// Rule-logic helper: the type markers hidden behind an alias or re-export
+    /// in a source snippet.
+    pub(crate) fn type_alias_violations_in_source<'marker>(
+        source: &str,
+        type_markers: &[&'marker str],
+    ) -> Vec<&'marker str> {
+        source
+            .lines()
+            .filter_map(|line| concrete_type_alias_marker(line, type_markers))
+            .collect()
+    }
+
     /// Source locations violating this rule.
     pub(crate) fn violations(&self) -> Vec<Violation> {
         (self.check)(&SourceTree::new())
@@ -263,5 +446,25 @@ impl Rule {
             violations.len(),
         );
     }
+}
+
+/// The type marker a `type` alias or `use … as` re-export line hides, if any.
+fn concrete_type_alias_marker<'marker>(
+    line: &str,
+    type_markers: &[&'marker str],
+) -> Option<&'marker str> {
+    let code = SourceLine(line).code().trim_start();
+    let is_type_alias = (code.starts_with("type ")
+        || code.starts_with("pub type ")
+        || code.starts_with("pub(") && code.contains(") type "))
+        && code.contains('=');
+    let is_re_export =
+        (code.starts_with("use ") || code.starts_with("pub use ")) && code.contains(" as ");
+    (is_type_alias || is_re_export).then(|| {
+        type_markers
+            .iter()
+            .copied()
+            .find(|marker| code.contains(marker))
+    })?
 }
 ```

@@ -74,8 +74,8 @@ name; *pattern* = read the doc), and the gate that proves it is live.
 | 4 | Backend wiring + lifecycle | *composition_pattern* → *bootstrap_pattern* → *runtime_pattern* | app boots; workers drain on SIGTERM |
 | 5 | Task runner | SKILL `justfile-setup` | `just` recipes (dev / local-prod / prod / lint / test-all) run |
 | 6 | Local infra + parallel test isolation | *local_port_allocation_pattern* + *parallel_test_isolation_pattern* | integration tests pass **in parallel**, no collisions |
-| 7 | Scalability (opt-in, default-on for SaaS) | *worker_pattern* + the shared task-contracts crate (`rust-workspace-setup`) | worker boots and consumes a test task |
-| 8 | Day-1 cross-cutting decisions (ADRs) | *frontend_api_type_mirroring_pattern* (if vue+backend); port allocation (phase 6) | each decision recorded as an ADR in `docs/decisions/` |
+| 7 | Scalability (opt-in, default-on for SaaS) | *worker_pattern* + *worker_fleet_pattern* + the shared task-contracts crate (`rust-workspace-setup`) | worker boots and consumes a test task |
+| 8 | Day-1 cross-cutting decisions (ADRs) | *observability_posture_pattern*; *frontend_api_type_mirroring_pattern* (if vue+backend); *worker_fleet_pattern* topology + identity ADRs (if worker); port allocation (phase 6) | each decision recorded as an ADR in `docs/decisions/` |
 | 9 | Navigation + docs | *claude_md_pattern* + *docs_artifact_layout_pattern* + *repo_root_files_pattern* | root + per-component `CLAUDE.md` and `docs/` trees exist; root files present |
 | 10 | Automation gates | SKILL `agent-hooks-setup` + `ci-setup`; *dependency_audit_pattern* | hooks fire locally; CI is green on a trial PR; audit command runs |
 | 11 | Continuous practices (wire in, not one-shot) | SKILL `rust-testing` / `python-testing`, `*-code-style`, `rust-design-principles` / `rust-design-idioms`, `rest-api-design`, `reconcile-docs` | referenced by `CLAUDE.md`, enforced by phase-10 hooks + CI |
@@ -109,7 +109,7 @@ Which phases apply to which components (✓ = applies, — = skip):
 | 4 wiring/lifecycle | ✓ | ✓ | — | ✓ |
 | 6 test isolation | ✓ | ✓ | partial | ✓ |
 | 7 worker | — | — | — | ✓ |
-| 8 type-mirroring ADR | (provider) | (provider) | ✓ (consumer) | — |
+| 8 day-1 ADRs | ✓ | ✓ | ✓ (type-mirroring consumer) | ✓ (fleet topology + identity) |
 | 9 docs + CLAUDE.md | ✓ | ✓ | ✓ | ✓ |
 | 10 hooks/CI/audit | ✓ | ✓ | ✓ | ✓ |
 
@@ -161,11 +161,12 @@ The foundation is live only when **all** of these pass together:
 `frontend-vue-code-style`, `reconcile-docs`.
 
 **Patterns (read the doc):** project_structure/`composition_pattern`;
-lifecycle/`bootstrap_pattern`, `runtime_pattern`; scalability/`worker_pattern`;
-testing/`parallel_test_isolation_pattern`;
-decisions/`local_port_allocation_pattern`, `frontend_api_type_mirroring_pattern`;
-documentation/`claude_md_pattern`, `docs_artifact_layout_pattern`,
-`repo_root_files_pattern`; automation/`dependency_audit_pattern`.
+lifecycle/`bootstrap_pattern`, `runtime_pattern`; scalability/`worker_pattern`,
+`worker_fleet_pattern`; testing/`parallel_test_isolation_pattern`;
+decisions/`local_port_allocation_pattern`, `frontend_api_type_mirroring_pattern`,
+`observability_posture_pattern`; documentation/`claude_md_pattern`,
+`docs_artifact_layout_pattern`, `repo_root_files_pattern`;
+automation/`dependency_audit_pattern`.
 
 **Continuous guards (installed in phase 10):** `rust-structure-and-style-guard`,
 `vue-structure-and-style-guard`, `python-structure-and-style-guard` — dispatched

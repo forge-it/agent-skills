@@ -127,6 +127,15 @@ and worker binaries share for the dispatch boundary**. Domain crates (`ironbox-
 connectors-runtime`) may also be shared where appropriate. Neither binary imports
 the other's application or infrastructure layer.
 
+When the worker must execute heavy mechanics the API also owns (in ironbox:
+backup/restore connector execution), those mechanics live in **consumer-free
+library crates** shared by both binaries — the library never depends on the API
+crate, the contracts crate, or any consumer. Each binary assembles the
+library's adapters in its own composition seam. The direction (`api → library`,
+`worker → library`, never `library → consumer`) is enforced by the manifest
+dependency gate in `rust-architecture-test-setup`, so it cannot silently
+invert.
+
 ## The Shared Contract Crate — the Queue Boundary
 
 The contract crate (`crates/ironbox-task-contracts/`) is a **pure wire-types
@@ -470,6 +479,22 @@ runtime.run(shutdown).await?;
   full hexagonal application, not a library or a plugin.
 - **Adding a task type is one registration line in the composition root.** The
   generic runtime, the consumer adapter, and `main.rs` are never touched.
+- **Vocabulary is binding: a *heartbeat* is control-plane liveness only** (a
+  periodic "I am alive" that extends the lease; its failure is a stale lease).
+  **A *progress report* is data-plane advancement** (cumulative counters, phase
+  transitions; its failure is a stall). Never name a progress signal a
+  heartbeat — a hung subprocess keeps heartbeats healthy while the work is
+  dead, and conflating the words hides exactly that failure mode. Fix the
+  vocabulary on day 1; renaming a misnamed `*Heartbeat` port later ripples
+  through traits, implementors, and wire DTOs.
+- **The control plane is authoritative for outcomes; record before
+  acknowledge.** The worker reports its fenced result, the control plane
+  persists the outcome, and only then does the worker ack the broker delivery.
+  Acking first loses durable authority over a completed delivery.
+- **The worker owns no persistence** — no core-crate dependency, no direct
+  database driver. Enforce it with the manifest dependency gate
+  (`rust-architecture-test-setup`) so the boundary survives every future
+  contributor.
 
 ## Anti-Patterns to Avoid
 
@@ -532,3 +557,14 @@ runtime.run(shutdown).await?;
   `crates/` directory, declared as a path dependency by both the API and the
   worker `Cargo.toml` files. The workspace enforces a single version of every
   shared type across all workspace members.
+
+- **[worker fleet pattern](worker_fleet_pattern.md)** — once this pattern's
+  API/worker/broker split exists, the fleet pattern fixes the next two day-1
+  decisions: the deployment topology (homogeneous fleet, replica-count-only
+  scaling) and worker identity (self-enrollment with the control plane as
+  certificate authority).
+
+- **[observability posture](../decisions/observability_posture_pattern.md)** —
+  the durable task rows this pattern mandates (leases, attempts, outcomes) are
+  the Stage-1 operational-evidence surface: runbook queries first, exported
+  metrics later, with zero application change.
