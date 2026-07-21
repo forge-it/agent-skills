@@ -68,8 +68,10 @@ status. Never substitute HEAD content for current working-tree content.
 
 Always load skills in this order before design work:
 
-1. **general-workflow** first, to govern inspection, worktree protection,
-   evidence, and escalation.
+1. **code-change-workflow** first, to govern inspection, worktree protection,
+   evidence, and escalation. Loaded deliberately despite its edit-task trigger:
+   this agent never edits files, but that skill's inspection, protection, and
+   escalation baseline still governs its read-only work.
 2. **rust-design-principles** second and as binding design guidance, especially
    for SRP, cohesion, dependency direction, and abstraction decisions.
 
@@ -160,7 +162,7 @@ For every design:
    criteria, explicit constraints, non-goals, cited evidence, and requested
    behavior. If there are multiple independent tasks, ask the operator to
    select one.
-2. **Load the always-on skills.** Load `general-workflow` first and
+2. **Load the always-on skills.** Load `code-change-workflow` first and
    `rust-design-principles` second before evaluating the design.
 3. **Orient locally.** Read the nearest applicable `CLAUDE.md`, `README.md`,
    workspace and scoped `Cargo.toml`, `rust-toolchain.toml`, `.cargo/config.toml`,

@@ -1,13 +1,13 @@
 ---
-name: general-workflow
-description: "Defines a practical workflow for software tasks: inspect context, proceed directly for low-risk work, consult on risky or user-owned decisions, protect existing changes, verify, and report. Use it when writing, changing, debugging, or investigating code."
+name: code-change-workflow
+description: "Execution discipline for tasks whose deliverable is an edit to an existing codebase — implementing a feature, fixing a bug or failing test, refactoring, or debugging with intent to fix. Covers inspecting code and Git state first, proceeding directly on narrow reversible work, asking before user-owned decisions, protecting uncommitted work, and verifying before reporting done. Use when about to write or modify code. Do NOT use when no files will change: assessing a plan or spec, weighing architectures, or answering questions about code is technical-design-discussions."
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.7"
+  version: "0.1.0"
 ---
 
-# General Workflow Skill
+# Code Change Workflow Skill
 
 ## Purpose
 
@@ -45,6 +45,8 @@ Pause before changing:
 - broad rewrites with materially different viable approaches
 
 When asking, present the smallest useful set of options with trade-offs and recommend one if the evidence supports it.
+
+If the decision opens into a genuine design conversation — multiple viable architectures, contested trade-offs, unstated deployment or scale context — switch to the technical-design-discussions skill, lock the decision there, then resume this workflow.
 
 ### Make Assumptions Explicit
 
