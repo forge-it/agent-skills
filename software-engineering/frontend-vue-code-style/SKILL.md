@@ -5,7 +5,7 @@ vibe: Keeps Vue codebases predictable, traceable, and free of spaghetti.
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.5"
+  version: "0.0.7"
 ---
 
 # Vue Code Style — Patterns & Conventions
@@ -145,8 +145,8 @@ const error = ref(null)
 async function fetchBackups() {
   isLoading.value = true
   try {
-    const res = await fetch('/api/backups')
-    backups.value = await res.json()
+    const response = await fetch('/api/backups')
+    backups.value = await response.json()
   } catch {
     error.value = 'Failed'
   } finally {
@@ -227,6 +227,7 @@ const role = inject('userRole')      // type is unknown
 ```typescript
 // ✅ CORRECT — focused, ref in / ref out, cleanup, object return
 import { ref, computed, onMounted, onUnmounted, type Ref } from 'vue'
+import { BACKUP_STATUS_ARCHIVED } from '@/features/backups/constants'
 
 export function useBackupSearch(backups: Ref<Backup[]>) {
   const searchQuery = ref('')
@@ -237,7 +238,7 @@ export function useBackupSearch(backups: Ref<Backup[]>) {
       const matchesSearch = backup.name
         .toLowerCase()
         .includes(searchQuery.value.toLowerCase())
-      const matchesStatus = showArchived.value || backup.status !== 'archived'
+      const matchesStatus = showArchived.value || backup.status !== BACKUP_STATUS_ARCHIVED
       return matchesSearch && matchesStatus
     })
   )
@@ -257,8 +258,8 @@ export function usePolling(url: string, intervalMs = 30_000) {
   let timerId: number | undefined
 
   async function poll() {
-    const res = await fetch(url)
-    data.value = await res.json()
+    const response = await fetch(url)
+    data.value = await response.json()
   }
 
   onMounted(() => {
@@ -406,6 +407,7 @@ const loading = ref(false)  // "loading" is ambiguous — loading what?
 // src/features/backups/stores/useBackupStore.ts
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
+import { getBackups } from '../api/backupApi'
 import type { Backup } from '../types'
 
 export const useBackupStore = defineStore('backups', () => {
@@ -422,12 +424,7 @@ export const useBackupStore = defineStore('backups', () => {
     error.value = null
 
     try {
-      const response = await fetch('/api/backups')
-      if (!response.ok) {
-        throw new Error('Failed to fetch backups')
-      }
-
-      backups.value = await response.json()
+      backups.value = await getBackups()  // getBackups(): Promise<Backup[]> — typed at the wire boundary, throws on failure
     } catch (caughtError) {
       error.value = caughtError instanceof Error ? caughtError.message : 'Unknown error'
     } finally {
@@ -455,6 +452,7 @@ export const useBackupStore = defineStore('backups', () => {
 // src/features/backups/composables/useBackupSearch.ts
 import { computed, ref } from 'vue'
 import { storeToRefs } from 'pinia'
+import { BACKUP_STATUS_ARCHIVED } from '../constants'
 import { useBackupStore } from '../stores/useBackupStore'
 
 export function useBackupSearch() {
@@ -469,7 +467,7 @@ export function useBackupSearch() {
       const matchesSearch = backup.name
         .toLowerCase()
         .includes(searchQuery.value.toLowerCase())
-      const matchesStatus = showArchived.value || backup.status !== 'archived'
+      const matchesStatus = showArchived.value || backup.status !== BACKUP_STATUS_ARCHIVED
       return matchesSearch && matchesStatus
     })
   )
@@ -518,16 +516,16 @@ const { backups, isLoading, activeBackups } = useBackupStore()
 
 **Why:** Persisting everything feels convenient until stale loading flags, old error messages, transient filters, or selection state survive a reload and confuse the user. Persistence is not a dumping ground for the whole store. It is an explicit durability decision.
 
-**Rule:** Persist only state that must survive a page reload: auth tokens, remembered user preferences, UI settings, or similarly durable data. Never persist loading flags, error messages, transient search queries, temporary selections, or anything that should reset naturally when the page is refreshed. Prefer `pick` to whitelist persisted fields explicitly instead of persisting the whole store by default.
+**Rule:** Persist only state that must survive a page reload: remembered user preferences, UI settings, or similarly durable data. Never persist loading flags, error messages, transient search queries, temporary selections, or anything that should reset naturally when the page is refreshed. Auth tokens do not belong in `localStorage`: keep access tokens in memory and let the refresh token live in an `HttpOnly` cookie; persisting a token client-side is an explicit, documented exception, never a default. Prefer `pick` to whitelist persisted fields explicitly instead of persisting the whole store by default.
 
 ```typescript
-// ✅ CORRECT — persist only durable auth fields
+// ✅ CORRECT — persist the preference, not the token
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null)
-  const token = ref<string | null>(null)
+  const token = ref<string | null>(null)  // in memory only; the refresh token lives in an HttpOnly cookie
   const rememberMe = ref(false)
   const isLoading = ref(false)
   const error = ref<string | null>(null)
@@ -552,19 +550,21 @@ export const useAuthStore = defineStore('auth', () => {
 }, {
   persist: {
     key: 'auth',
-    pick: ['token', 'rememberMe'],
+    pick: ['rememberMe'],
   },
 })
 ```
 
 ```typescript
 // ✅ CORRECT — preferences are durable, so persisting the whole store is reasonable
+type ThemeName = 'light' | 'dark'
+
 export const usePreferencesStore = defineStore('preferences', () => {
   const sidebarCollapsed = ref(false)
-  const theme = ref<'light' | 'dark'>('light')
+  const theme = ref<ThemeName>('light')
   const tablePageSize = ref(20)
 
-  function setTheme(nextTheme: 'light' | 'dark'): void {
+  function setTheme(nextTheme: ThemeName): void {
     theme.value = nextTheme
     document.documentElement.setAttribute('data-theme', nextTheme)
   }
@@ -608,16 +608,16 @@ export const useBackupStore = defineStore('backups', () => {
 **Rule:** Any literal value (string, number, etc.) that appears in more than one place across the codebase **must** be extracted into a named constant. Define the constant once in the module that owns the concept, then import it everywhere else. Never duplicate the raw literal.
 
 ```typescript
-// ✅ CORRECT — single source of truth, imported everywhere
-// constants/backups.ts
+// ✅ CORRECT — single source of truth in the feature that owns the concept
+// src/features/backups/constants.ts
 export const BACKUP_STATUS_ACTIVE = 'active' as const
 export const BACKUP_STATUS_FAILED = 'failed' as const
 export const BACKUP_STATUS_ARCHIVED = 'archived' as const
 
 export const MAX_BACKUP_RETENTION_DAYS = 90
 
-// composables/useBackups.ts
-import { BACKUP_STATUS_ARCHIVED } from '@/constants/backups'
+// src/features/backups/composables/useBackups.ts
+import { BACKUP_STATUS_ARCHIVED } from '../constants'
 
 const filteredBackups = computed(() =>
   backups.value.filter(backup => backup.status !== BACKUP_STATUS_ARCHIVED)
