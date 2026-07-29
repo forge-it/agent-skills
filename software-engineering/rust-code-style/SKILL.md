@@ -4,7 +4,7 @@ description: Coding conventions and style rules for Rust. Apply when writing or 
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.9"
+  version: "0.0.10"
 ---
 
 # Rust Code Style Skill
@@ -397,6 +397,76 @@ let value = slice[index]; // or slice.get(index) when the index may be absent
 let recovered = unsafe { Box::from_raw(raw_pointer) };
 ```
 
+### 12. Uniform Altitude in Coordinating Functions (CRITICAL)
+
+A coordinating function — an application service method, orchestrator, or use-case entry point — has one responsibility: **the ordering of the steps**. Its body is a table of contents: every step appears as **one named call** (a private method, a domain-object method, or a collaborator call), and the reader learns *what happens* without ever being shown *how a step happens*.
+
+The violation is an **inline step implementation**: a multi-line block inside the coordinator that *does* a step instead of *naming* it. The three recurring shapes:
+
+- a `match`/`if` ladder over command or input shapes computing a derived value,
+- inline data normalization/transformation,
+- error discrimination by string comparison or tuple decoding.
+
+Altitude is about *how the fn speaks*, not *what it causes*. A coordinator that validates, persists, and publishes through one named call each is at uniform altitude — that is its job, and it is NOT a violation regardless of how many concerns the flow touches. Count inline implementations, not touched concerns.
+
+```rust
+// Bad — the coordinator implements two steps inline (mixed altitude)
+async fn update_profile(&self, command: UpdateProfileCommand) -> Result<Profile, UpdateProfileError> {
+    let mut profile = self.repository.find(&command.profile_id).await?
+        .ok_or(UpdateProfileError::NotFound(command.profile_id.clone()))?;
+
+    // inline step: branching over command shape to compute a derived value
+    let effective_contact = match &command.contact {
+        ContactUpdateMode::Inline(contact) => contact.clone(),
+        ContactUpdateMode::ReuseSaved => profile.contact().clone(),
+    };
+
+    self.verify_change_proof(&command)
+        // inline step: error taxonomy decoded from a tuple by string comparison
+        .map_err(|(expired, message)| {
+            if expired {
+                UpdateProfileError::ExpiredProof(message)
+            } else if message == "proof is required" {
+                UpdateProfileError::MissingProof
+            } else {
+                UpdateProfileError::InvalidProof(message)
+            }
+        })?;
+
+    profile.update(&command.into_request(effective_contact))?;
+    self.repository.update(&profile).await?;
+    Ok(profile)
+}
+
+// Good — every step is a named call; the fn reads as a table of contents
+async fn update_profile(&self, command: UpdateProfileCommand) -> Result<Profile, UpdateProfileError> {
+    let mut profile = self.load_profile(&command.profile_id).await?;
+    let effective_contact = command.effective_contact(&profile);   // command owns its shapes
+    self.verify_change_proof(&command)?;                           // returns ProofError; From<ProofError> maps variants
+    profile.update(&command.into_request(effective_contact))?;
+    self.repository.update(&profile).await?;
+    Ok(profile)
+}
+```
+
+**Fix menu — apply the first that fits, escalate only if it doesn't:**
+
+| # | Fix | When |
+|---|---|---|
+| **F1** | **Extract named step** — inline block → private method on the same struct with an intention-revealing name | default; always try first |
+| **F2** | **Push into the type that owns the data** (tell-don't-ask) — a condition reading an aggregate's fields → aggregate method; a transformation of a command's shapes → command method | the inline code interrogates another object's data to decide |
+| **F3** | **Scoped error enum** — the step returns its own error type (`ProofError { Missing, Expired, Invalid }`); callers map via `From` impls (Rule 9); message formatting stays at the transport boundary | the inline code discriminates errors by strings or tuples |
+| **F4** | **Extract a step object** — a cluster of steps plus the collaborators only they use → a new type with a verb (`RestoreResolution::resolve_all()`); the coordinator's constructor sheds those collaborators | the extracted steps need their own dependencies, or the cluster recurs across services. Never a field-bag `Deps` struct — a step object has behavior |
+
+F4 requires no special permission — shrinking a coordinator's collaborator list by extracting a behavioral step object is the expected remedy, not a design deviation.
+
+**When NOT to apply:**
+- Single-expression derivations (`let id = request.id.clone();`, one `?`-chain with `ok_or_else`) — naming every one-liner is ceremony, not altitude repair.
+- Leaf functions that *are* the implementation (an adapter's SQL, a parser, a probe body) — this rule governs coordinators, not workers.
+- A trailing `match` that *is* the fn's entire dispatch logic.
+
+**Rationale:** A coordinator that both orders steps and implements some inline has two reasons to change — the flow, and each embedded step. The reader must switch between "what happens next" and "how this branch normalizes data" mid-function. This is the SRP violation that stays invisible to size-based checks: an 80-line fn with two inline steps is guiltier than a 130-line fn of pure named calls.
+
 ## Anti-Patterns to Avoid
 
 1. **Single-letter variables** — `x`, `i`, `p` in closures or anywhere else instead of descriptive names (Rule 1)
@@ -413,3 +483,4 @@ let recovered = unsafe { Box::from_raw(raw_pointer) };
 12. **Error-type twins** — `_for_x` / `_for_y` copies of the same body, differing only in the error variant built (Rule 9)
 13. **Opaque return shapes** — a tuple of primitives or a bare `bool` instead of a named struct/enum (Rule 10)
 14. **Gratuitous `unsafe`** — `unsafe` for convenience or to silence the borrow checker (Rule 11)
+15. **Inline step implementations in coordinators** — a service/orchestrator fn implementing a step in a multi-line block instead of naming it as a call (Rule 12)
