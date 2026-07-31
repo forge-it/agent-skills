@@ -197,6 +197,26 @@ agent names live in the operator's fleet (listed at session start / under
 | Catch structure/style drift a linter can't (naming, cohesion, placement) | Structure/style guard | `{rust,python,vue}-structure-and-style-guard` |
 | Design an implementation strategy | Planner | `Plan`, or write the plan yourself |
 
+### Which Model per Role
+
+Agent definitions carry `model: inherit`, which binds worker quality to whatever
+the dispatching context happens to be — an ambient setting nobody stated, and
+usually the cheap tier. **Name the model on the dispatch instead.**
+
+| Role | Model | Why |
+|------|-------|-----|
+| Implementor | `opus` | Cheap implementation is a false economy: it produces findings, and each one costs a review round, a verifier, and a fix |
+| Verifier / refuter | `opus` | A wrong refute silently deletes a real defect — the one role where a cheap error leaves no trace |
+| Fixer | `opus` | Applies findings to code it did not write, under a plan constraint |
+| Final gate | `opus` | The last claim before the operator sees it |
+| Review lens | `sonnet`, high effort | Many run in parallel against an explicit brief; breadth beats depth, and corroboration filters the noise |
+| Explorer, investigator | `sonnet` | Locating and reproducing |
+| Structure/style guard | pinned in the agent | Mechanical — already `sonnet` by definition |
+
+Scale it to the work, not just the role: a one-line fix does not need a strong
+fixer, and a subtle concurrency bug deserves a strong investigator. The table is
+the default you depart from deliberately.
+
 **Commit vs no-commit:** default to the **`-no-commit`** variant so the operator
 reviews the dirty worktree before anything is committed. Use commit variants only
 when the operator has said commits are fine — which a "yes" on the parallel
@@ -261,6 +281,8 @@ Vibe mode suspends this: decide and record, per **Vibe Mode** above.
 - **Relaying raw dumps.** Forwarding a worker's full output instead of the
   integrated conclusion.
 - **Committing when the operator wanted to review.** Default to `-no-commit`.
+- **Letting workers inherit an ambient model.** `model: inherit` silently lands
+  implementors and verifiers on the cheap tier. Name the model per role.
 
 ## Quick Reference
 
@@ -268,7 +290,8 @@ Vibe mode suspends this: decide and record, per **Vibe Mode** above.
 2. Read to reason — dispatch to execute.
 3. In a fleet mode, inline edit only one trivial line, no test, no gate loop; in
    an implementer mode, promote out when the task stops being small.
-4. Route by role → pick the language variant → default `-no-commit`.
+4. Route by role → pick the language variant → name the model → default
+   `-no-commit`.
 5. Independent work → parallel in one message; parallel writers → worktrees;
    the operator's parallelism answer is a ceiling.
 6. Dependent work → investigate → plan → implement → review → fix.
