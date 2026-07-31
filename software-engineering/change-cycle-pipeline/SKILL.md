@@ -51,37 +51,31 @@ using it would suppress exactly the regressions this loop exists to catch.
 ## The Cycle Brief
 
 One artifact, written once per cycle, reused **verbatim** by the implementor,
-every reviewer, every verifier, the fixer, and the final gate. This is the
-pipeline's largest saving: without it, each stage's prompt is hand-authored, and
-a loop that costs an hour of prompt writing per cycle does not get run.
-
-It names:
+every reviewer, every verifier, the fixer, and the final gate. It names:
 
 - **Scope** — the files and subsystems, and the plan section this cycle implements
 - **Out of scope** — the baseline failures from the entry gate, and work belonging to other cycles
 - **Acceptance** — the exact commands the final gate will run, and what their passing output looks like
-- **Commit policy** — worktrees: workers commit inside their own worktree, which the operator's parallelism answer authorizes because integration needs it; single tree: `-no-commit`, the tree stays dirty. Neither authorizes a push.
+- **Commit policy** — worktrees: workers commit inside their own worktree; single tree: `-no-commit`, the tree stays dirty. Neither authorizes a push.
 - **Starting tree** — in single-tree mode, addressed to the worker: the files dirty at cycle start, listed, plus "any file this cycle's own earlier rounds touched is also intended state — it is pipeline state, not operator state, and it is your starting point." Unlisted, a worker following **parallel-worktrees-general** stops on unrecognized dirt. Snapshot `git status --short` *before cycle 1's implementor* and keep it in the ledger: only files in that snapshot are the operator's.
-- **Escalation clause** — what the worker decides alone, versus what it must **stop and return with, unanswered**. A subagent cannot ask mid-flight; escalating means ending its turn with the question and the options. The orchestrator answers — or, in vibe mode, decides and records.
+- **Escalation clause** — what the worker decides alone, versus what it must **stop and return with, unanswered**. The orchestrator answers — or, in vibe mode, decides and records.
 
 Reviewers review **the diff plus its blast radius** — the code whose behaviour
 the diff can change: callers and callees of the changed symbols, the contracts
 and schemas it touches, and the tests covering them. Pre-existing defects outside
-that boundary go to an observations bucket that never blocks the cycle and never
-reaches the fix step. What they see there and set aside goes into the ledger's
-observations, not into the void.
+that boundary go to the ledger's observations bucket, which never blocks the
+cycle and never reaches the fix step.
 
 ## Entry Gate and Baseline
 
 The cheap deterministic gate — build, tests, lint, typecheck — runs **twice per
-cycle**, answering a different question each time. The orchestrator runs it;
-executing the pipeline's own checks is integration, not implementation.
+cycle**, answering a different question each time. The orchestrator runs it (see
+*What counts as integration*).
 
-**At cycle start, before the Brief is written.** Whatever fails here is the
-baseline, and it is what fills the Brief's Out-of-scope field — which is why it
-cannot wait until after the implementor. Compute it; never hand-maintain a list
-of known pre-existing failures inside a prompt. Such a list goes stale within
-days and then quietly starts suppressing *new* defects that resemble old ones.
+**At cycle start, before the Brief is written** — whatever fails here is the
+baseline, and it fills the Brief's Out-of-scope field. Compute it; a
+hand-maintained list of known failures goes stale and quietly starts suppressing
+*new* defects that resemble old ones.
 
 **After the implementor, before the first reviewer.** Anything failing now that
 is not in the baseline was introduced by this cycle. Send a fixer — a review loop
@@ -99,30 +93,27 @@ loop's reviewers, verifiers, and fixer are still dispatched.
 
 **Single tree** — implementors leave it dirty, `-no-commit`, and the loop reviews
 the tree as it stands. Each cycle inherits the previous cycle's uncommitted work,
-which is why the Brief lists it. One writer at a time is structural here, not a
-preference: Mode D forbids a second writer, a parallel fixer, and any competing
-build or test command in the same checkout.
+which is why the Brief lists it.
 
-**Parallel worktrees** — do not parallelize dependent pieces in the first place;
-sequence them, so integration stays in the completion order that skill requires.
+**Parallel worktrees** — this pipeline adds exactly two constraints on top:
 
-This pipeline adds exactly two constraints on top:
-
-- **A worktree passes the cheap gate before it hands off.** Merging a red
-  worktree and letting the review loop discover it costs a full round.
+- **A worktree passes the cheap gate before it hands off.**
 - **The review loop runs once, on the integrated result** — never per worktree.
 
 ### What counts as integration
 
-Resolving a merge conflict, running the pipeline's gates — baseline, pre-review,
-post-fix, and the post-merge validation **parallel-worktrees-general** requires —
-and making the small deterministic repair that gets a post-merge validation
-passing (an import, a rename, a moved symbol): all integration, all the
-orchestrator's, none of it a breach of the read/write boundary. The fleet skill's
-red flag on running a gate loop means iterating edit-run-edit on your own
-production changes, not executing the pipeline's own checks.
+Resolving a merge conflict, running the pipeline's **working gates** — baseline,
+pre-review, post-fix, post-merge — and making the small deterministic repair that
+gets a post-merge validation passing (an import, a rename, a moved symbol): all
+integration, all the orchestrator's, none of it a breach of the read/write
+boundary. The fleet skill's red flag on gate loops means iterating on your own
+production changes, not executing the pipeline's checks. A post-merge failure that
+needs judgment goes to a fixer.
 
-A post-merge failure that needs judgment goes to a fixer.
+The **final gate** is not one of these. A working gate is an instrument that
+informs the loop; the final gate is the attestation the operator acts on, and the
+context that drove the loop to convergence is the wrong one to certify it — the
+same self-review problem the fleet skill names. Dispatch it.
 
 ## The Review Loop
 
@@ -151,12 +142,10 @@ was implemented ambiguously. At full depth you dispatch the set, plus one to thr
 written for this cycle: the SQL semantics, the concurrency protocol, the wire
 contract.
 
-Generating from the shared set also keeps this loop and the manual pipeline from
-drifting into two different definitions of a good review. They are not the same
-thing, though: those `subagents/pipeline-*.md` prompts are a **one-shot review
-report** — the deliverable for a plan or code review — and they stop at verified
-findings, skipping nits. This loop verifies every severity, fixes what it
-confirms, and repeats.
+They are not the same thing as the `subagents/pipeline-*.md` prompts in that
+directory — those are a **one-shot review report**, the deliverable for a plan or
+code review, and they stop at verified findings, skipping nits. This loop
+verifies every severity, fixes what it confirms, and repeats.
 
 ### Round memory
 
@@ -169,20 +158,14 @@ ground is already settled. The synthesizer matches new findings against the
 refuted set exactly as it matches duplicates against each other, and drops a
 re-raised finding with a citation instead of paying to verify it twice.
 
-Without both consumers the loop does not converge: round 2 re-raises what round 1
-killed and may flip the verdict on a coin toss, so the count of open findings
-stops measuring anything.
-
 ### Synthesize before verifying
 
 Merge findings that describe the same defect, and tag each with its
 corroboration — found by k of N lenses.
 
-Matching on file, line and title merges nothing: two reviewers naming one defect
-differently become two candidates, two verifiers, and two fixes that can
-conflict. Corroboration is also the strongest prioritisation signal available —
-a defect four independent lenses found is not the same claim as one lens's
-hunch.
+Matching on file, line and title merges nothing — two reviewers naming one defect
+differently become two verifiers and two fixes that can conflict. Corroboration
+is the strongest prioritisation signal the loop has.
 
 ### Verify adversarially
 
@@ -191,39 +174,34 @@ the plan, and the neighbouring tests. Confirmed requires a concrete wrong
 behaviour, a material contractual omission, a test that cannot catch the defect
 it claims to cover, or an operational gap the plan or its runbook asked for.
 
-That last clause is what makes the operational-readiness and security-hardening
-lenses worth dispatching at all — without it their findings are structurally
-unconfirmable and every round pays to refute all of them. Hardening the plan
-never asked for is an observation, not a finding.
+Hardening the plan never asked for is an observation, not a finding.
 
-**Style preference is always refuted.** That is what makes "any severity blocks"
-safe to run: nits never reach the fix step, so they cannot ping-pong for three
-rounds.
+**Style preference is always refuted** — nits never reach the fix step, so they
+cannot ping-pong across rounds.
 
 Escalate to a three-verifier panel, majority wins, when the fix would be
-expensive or hard to reverse — schema, migration, public API, wire format. A
-lone refuter is a single point of failure in both directions.
+expensive or hard to reverse — schema, migration, public API, wire format.
 
 ### Coverage
 
 **A round in which any lens died is not eligible for the zero-findings exit.**
 
-Declaring a tree clean because six of eight reviewers timed out is the worst
-outcome this loop can produce: it is indistinguishable from success, and it is
-reported as success.
-
 ### Fix
 
-One fixer at a time, carrying the whole confirmed set. The loop's tree has a
-single writer — **parallel-worktrees-general** Mode D — and one fixer keeps the
-edits coherent besides. Test-coverage findings go out as a **tests-only
-brief** — to a dedicated test-writer agent where the fleet has one for the
-language, otherwise to the implementor or fixer with production code declared
-off-limits.
+One fixer at a time, carrying the whole confirmed set — the loop's tree has a
+single writer. Test-coverage findings go out as a **tests-only brief**,
+production code declared off-limits; the fleet's routing table names the
+test-writer.
 
 The fixer **may reject a finding** — if it is wrong, already remediated, or its
 fix would violate the plan, it reports the rejection with reasoning instead of
 forcing a bad edit.
+
+**The fix handoff has a required shape.** Per confirmed finding: its disposition
+(fixed, already remediated, or rejected with reasoning), the files changed for it
+or why nothing changed, and the focused verification actually run with its result.
+A handoff missing that shape is a **failed stage, not a completed one** — see
+*When a Stage Fails*.
 
 Run the deterministic gate after every fix round, not only at the exit. A fix
 that regressed a test is a fact for round N+1, not something eight reviewers
@@ -231,8 +209,7 @@ should have to rediscover.
 
 ## When a Stage Fails
 
-Every stage gets **one** recovery; the table says what follows it. Unbounded retry
-is how a loop that cannot converge becomes a loop that never ends.
+Every stage gets **one** recovery; the table says what follows it.
 
 | Failure | Recovery |
 |---------|----------|
@@ -241,6 +218,7 @@ is how a loop that cannot converge becomes a loop that never ends.
 | A lens dies | Retry it; if it dies again the round is uncovered, cannot exit clean, and its findings are partial |
 | Merge conflict the orchestrator cannot resolve | Report it with both diffs — **parallel-worktrees-general** owns this path |
 | Fixer rejects a confirmed finding | Record the rejection and its reasoning; the finding stays open and counts against the exit |
+| Fixer returns without the required handoff shape | Re-dispatch once with the contract restated; then fail the cycle. Never count an unsubstantiated "done" as a fixed round |
 | Operator rejects at their gate | Their objections enter the next round as already-confirmed findings, and the round cap is re-asked |
 
 ## Round Cap and Exit
@@ -248,9 +226,9 @@ is how a loop that cannot converge becomes a loop that never ends.
 The operator sets the cap at intake: a number of rounds, or *until zero
 findings*. Three terminal states.
 
-**Converged** — zero confirmed findings on a fully covered round. Run the
-acceptance commands from the Brief and return an evidence table of exact counts
-and exit codes. This is the only clean exit.
+**Converged** — zero confirmed findings on a fully covered round. Dispatch the
+final gate: a fresh agent that runs the Brief's Acceptance commands and returns an
+evidence table of exact counts and exit codes. This is the only clean exit.
 
 **Capped** — rounds exhausted without a converged round, whether findings remain
 open or the final round simply was not fully covered. The cycle is **not done**.
@@ -269,12 +247,6 @@ cycle). Handle it exactly as Capped.
 - a confirmed finding the fixer has rejected twice
 - a lens dead in two consecutive rounds
 - two consecutive rounds with no net decrease in open confirmed findings
-
-The first two are structurally unclosable; the third is churn, where every round
-fixes its set and the reviewers confirm fresh findings on the fixed code. All
-three run forever otherwise — and in vibe mode nothing will interrupt them.
-
-Never report a cap as a pass.
 
 ## The Operator Report
 
@@ -296,21 +268,17 @@ the committed tree (see *When a Stage Fails*), not by discarding a dirty tree. S
 which of the two the operator is looking at.
 
 Vibe mode has no gate: the same report goes into the ledger and the run continues
-on the intake answers. The operator reads it afterwards — it is the only account
-of the run they get.
+on the intake answers.
 
 ## The Ledger
 
 One file per task — `.claude/cycles/<task-slug>.md`, or the project's own
-Before the first write: add `.claude/cycles/` to `.gitignore` if it is not
-already ignored, mirroring the repository's existing `.claude/worktrees/` entry,
-then create the directory. Do not widen this to `.claude/` — that directory
-normally holds tracked configuration (settings, hooks, agents), and ignoring all
-of it hides every future config file from `git status`.
-
-Both steps are the pipeline's own setup, not a change to the project: an
-unignored ledger surfaces as dirt in every worker's `git status` and inside every
-reviewer's change set.
+equivalent. Before the first write: add `.claude/cycles/` to `.gitignore` if it
+is not already ignored, mirroring the existing `.claude/worktrees/` entry, then
+create the directory. Do not widen this to `.claude/` — it holds tracked
+configuration. Both steps are the pipeline's own setup, not a change to the
+project: an unignored ledger surfaces as dirt in every worker's `git status`
+and every reviewer's change set.
 
 It is the pipeline's only durable state, so it holds everything a later round, a
 later cycle, or a resumed session needs:
@@ -323,11 +291,6 @@ later cycle, or a resumed session needs:
 - observations set aside outside the blast radius
 - deviations from the plan and follow-ups deferred
 - the vibe-mode record of decisions taken without asking, any residue report, and the operator report
-
-If a stage needs it and the ledger does not hold it, a compaction or a killed
-session loses it — and the run continues on invented parameters. Without the
-ledger at all, cycle 4 re-litigates decisions cycle 2 made, and its reviewers
-report cycle 2's accepted trade-offs as fresh defects.
 
 When a cycle proves the plan wrong, **amend the plan** — a 2 → 2 + 2B split is a
 plan change. Later cycles review against the plan, and a stale plan produces
@@ -346,54 +309,32 @@ cap sets how many times it repeats. They are independent answers.
 | **Narrow loop — the default** | 1 | one refuter per finding | one fixer | **Ordinary work.** Full shape, width 1: findings are adversarially checked and actually closed |
 | Full loop | 6–9 | one refuter per finding, a panel for expensive fixes | one fixer | The exception — see below |
 
-**Start from the narrow loop.** It keeps what makes the loop worth running — a
-finding is refuted before it costs a fix, and confirmed findings get closed rather
-than reported — at a cost that does not make an operator skip the process. A
-review depth nobody runs protects nothing.
-
-Its weakness is coverage, not rigour: one lens finds only what its angle sees, and
-`found-by k/N` corroboration degenerates to k=1. So pick the lens for what the
-change actually risks, rather than defaulting to the language reviewer.
-
 **The full loop is never self-selected.** Six to nine lenses per round plus a
-verifier per finding is the most expensive thing this pipeline can do, so it runs
-only when the operator confirms it *for this change*, with that cost quoted.
-
-Nothing else is confirmation: not a memory of how an earlier phase was reviewed,
-not a workflow file sitting in the repo, not a line in the plan, not your own read
-of the risk. Those are reasons to **propose** it — and a proposal the operator
-declines is a decision, not an obstacle.
+verifier per finding is the most expensive thing this pipeline can do, so it
+runs only when the operator confirms it *for this change*, with that cost
+quoted. Memory of an earlier phase, a workflow file, a line in the plan, your
+own read of the risk — reasons to **propose**, never confirmation; a declined
+proposal is a decision, not an obstacle.
 
 Propose it when a missed defect would be expensive to reverse — migrations and
 persisted shapes, security or authorization boundaries, concurrency, wire
 contracts across repos — or when the risk surface plainly exceeds one lens.
-
 Propose it mid-cycle too: if the single lens confirms findings in more than one
-category, the change is wider than the lens and the depth was the wrong bet. Say
-so, rather than finishing a review you no longer believe covers the change.
+category, the change is wider than the lens and the depth was the wrong bet.
 
 In vibe mode there is nobody to confirm, so the intake depth stands for the whole
 run. Where you would have proposed an upgrade, record the reason in the ledger and
 continue at the depth you were given.
 
-Simple panel and narrow loop are not consecutive steps on one scale — they trade
-opposite things. The panel gives you many perspectives and leaves you as the
-verifier; the narrow loop gives you one perspective that is adversarially checked
-and actually fixed. Reach for the panel only when you specifically want breadth
-you will judge yourself.
-
-Depth is the operator's intake answer, not yours to reset per cycle. Where a cycle
-is plainly mechanical, **propose** a lighter depth at its gate — never downgrade
-silently. A loop too heavy for its work gets skipped entirely, which is worse than
-one slightly too light, but that is an argument to make to the operator.
+Depth is the operator's intake answer, not yours to reset per cycle. Where a
+cycle is plainly mechanical, **propose** a lighter depth at its gate — never
+downgrade silently.
 
 ## Cost and Resumption
 
-**agent-fleet-orchestration** carries the model per role; name it on every
-dispatch rather than letting a worker inherit whatever is ambient. A cycle costs
-roughly lenses × rounds, plus one verifier per unique finding. The operator is
-quoted that figure at the intake gate, where the cap is actually chosen — by then
-this skill has not loaded, so that obligation also lives in the fleet skill.
+**agent-fleet-orchestration** carries the model per role — name it on every
+dispatch — and owns quoting the cycle cost at the intake gate, where the cap is
+chosen before this skill has loaded.
 
 A killed loop resumes from the ledger — round number, fixed and refuted sets,
 coverage — rather than restarting. Where the loop runs inside a workflow harness

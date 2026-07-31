@@ -5,8 +5,10 @@ description: >-
   fleet of specialized subagents — settling how the task will run, decomposing
   the work, and dispatching explorers, investigators, implementors, fixers, and
   reviewers rather than editing many files or running long gate loops yourself.
-  Use at the start of ANY non-trivial task, before the first dispatch, whatever
-  the deliverable is: a code change, a plan, a plan review, or a code review.
+  Use ONCE at the start of a non-trivial task, before the first dispatch,
+  whatever the deliverable is: a code change, a plan, a plan review, or a code
+  review. Do NOT reload it for follow-up instructions inside a task it is already
+  governing — it stays in effect until the task ends or the deliverable changes.
   Symptoms it prevents: committing a task to a supervision level or round cap
   the operator never chose, the orchestrator becoming the implementor, staying
   hands-on past the point the task is still small, serial dispatch of
@@ -29,8 +31,7 @@ the right specialized worker for each piece, and integrates what comes back.
 > **Core principle (separation of concerns / single responsibility):** the
 > orchestrator owns *reasoning, routing, and integration*. Each worker owns
 > *execution* of its concern (search, investigation, implementation, fixing,
-> review). In a fleet mode, the urge to edit files and run gate loops yourself
-> is a worker's job; hand it off.
+> review).
 
 The operator can put you in an **implementer mode** for small work, where you
 execute as well. That is a choice made at the intake gate, not a licence to
@@ -43,26 +44,25 @@ live across the whole task, reads files to reason, and dispatches workers.
 
 A **subagent** is the opposite: dispatched into an isolated context, it cannot
 talk back mid-flight and returns exactly **one final message**. That is right
-for a leaf task, wrong for the conductor. Never try to run the orchestrator *as*
-a dispatched agent — it would lose the interactive loop and collapse into a
-single blob. This is why the orchestrator is a skill (it shapes the main loop),
-not an agent (a dispatched worker).
+for a leaf task, wrong for the conductor — never run the orchestrator *as* a
+dispatched agent.
 
-## When to Use / When Not
+## When Not to Use
 
-**Use** for any non-trivial, multi-step task where specialized agents exist:
-implementing a ticket, fixing a bug, reviewing a change, mapping a subsystem,
-or any mix of these that benefits from decomposition.
-
-**Do not use** for a single conversational answer, a one-line edit the operator
-pointed you straight at, or a question you can settle by reading one file. Do
-not add orchestration ceremony where a direct answer serves.
+A single conversational answer, a one-line edit the operator pointed you
+straight at, or a question one file settles needs no orchestration ceremony.
 
 ## The Intake Gate
 
 Before any dispatch, settle how the task runs. Ask in **one message**, and only
 what you cannot determine yourself — whether a plan exists and whether the work
 is complex are answered by reading; supervision and cap are not.
+
+**The gate is answered once per task, not once per message.** A follow-up
+instruction — redirect the work, salvage a failed stage, change the scope — is
+the operator steering the task you are already running; carry the existing
+answers forward. Re-open the gate only when the deliverable itself changes (a
+code change becomes a plan review), or when the operator changes an answer.
 
 | Axis | Options | Skip when |
 |------|---------|-----------|
@@ -80,8 +80,7 @@ table below does not name is still legitimate.
 
 **Precedent is not an answer.** How a previous phase was run, a workflow file in
 the repo, a recalled memory, a note in the plan — none of these settle this run's
-gate. They are useful for framing the question and worthless as a substitute for
-it. This matters most for the answers that spend money or forfeit review: the
+gate. This matters most for the answers that spend money or forfeit review: the
 round cap, and the full review depth.
 
 **In vibe mode the intake gate is the last interactive moment.** Cap, worktrees,
@@ -109,37 +108,19 @@ fit one reviewable cycle. Run **superpowers:brainstorming**, then
 ### Vibe Mode
 
 Full power, no escalation: decide what the operator would have been asked and
-keep moving. Two obligations survive.
-
-- **Record what you decided.** Every point where you would have stopped to ask
-  goes into the run's record with the choice and the reason. That record is the
-  operator's only view of the run. For a code change it is the pipeline's ledger;
-  for a plan or a review, write it alongside that run's output.
-- **A round cap is still a failure.** Reaching it means the cycle did not
-  converge. Write the residue and say so. Vibe mode removes the interruption,
-  not the truth.
-
-## The Orchestration Loop
-
-```
-1. Read enough to answer what reading answers — does a plan exist, is this complex
-2. Run the intake gate in one message; settle supervision, implementer, depth, cap, parallelism
-3. Understand the request; read files as needed to reason (read freely)
-4. Reason with the operator; escalate decisions the operator owns
-5. Decompose into independent vs dependent pieces
-6. Dispatch the right worker per piece (parallel where independent)
-7. Integrate results; relay what matters, not raw dumps
-8. Verify the whole holds together; report changes, risks, next step
-```
-
-You may write **plans and patch plans** at step 5 — those are specs, not
-production code, and are core orchestrator output. When a new feature needs
-design first, run **superpowers:brainstorming**, then **superpowers:writing-plans**.
+keep moving. One obligation survives: **record what you decided.** Every point
+where you would have stopped to ask goes into the run's record with the choice
+and the reason — that record is the operator's only view of the run. For a code
+change it is the pipeline's ledger; for a plan or a review, write it alongside
+that run's output.
 
 ## The Read/Write Boundary
 
 **Read anything** to reason and route. Whether you may *write* depends on the
 mode the intake gate selected.
+
+You may write **plans and patch plans** in any mode — specs are core
+orchestrator output, not production code.
 
 ### Fleet modes — you do not implement
 
@@ -156,16 +137,6 @@ pointed at. **Everything else is dispatched.**
 
 All of these mean: stop, write a precise brief, dispatch a fixer or implementor.
 
-#### Rationalization table — fleet modes only
-
-| Excuse | Reality |
-|--------|---------|
-| "It's just a one-liner, faster to do it myself" | One trivial line is fine. A second file, a test update, or running gates is a worker's job — dispatch. |
-| "Dispatch has overhead, I'll just edit these few files" | Multi-file edits in the main loop bloat your context and skip the worker's tests and gates. Dispatch. |
-| "I already understand the fix, no subagent needed" | Understanding is *your* job; applying + testing + verifying is the *worker's*. Hand off what you understood as a brief. |
-| "The worker might get it wrong, safer to do it myself" | Then the brief was too vague. A precise brief is the fix, not doing the work yourself. |
-| "I'll write it and have a reviewer check it after" | Keep your context for integration. Dispatch an implementor, then a reviewer. |
-
 ### Implementer modes — you write, and growth is the promotion trigger
 
 Promotion fires on the work growing past **what the gate was told**, not on a
@@ -179,9 +150,8 @@ Supervised, say so in one line. In vibe there is nobody to tell: record the
 promotion and its reason instead.
 
 Reviewing your own work is verification, not review: the context that wrote the
-code cannot see its own blind spots. Gate-only depth means the gate is the whole
-claim — never report it as reviewed. When judgment actually has to be applied to
-the change, dispatch reviewers.
+code cannot see its own blind spots. When judgment has to be applied to the
+change, dispatch reviewers.
 
 ## Routing: Which Worker for Which Task
 
@@ -200,14 +170,15 @@ agent names live in the operator's fleet (listed at session start / under
 | Review an implementation against a brief or plan | Code reviewer | `{rust,python}-code-reviewer` |
 | Run one review lens over a diff | Lens reviewer | a general-purpose agent carrying a prompt file from `/home/cristi/Projects/agent-skills/prompts/code-implementation-review/` verbatim |
 | Refute or confirm one finding | Verifier / skeptic | a general-purpose agent carrying the Stage 3 skeptic brief from that directory's `subagents/pipeline-<stack>.md` verbatim |
+| Certify that a converged cycle actually passes | Final gate | a fresh general-purpose agent, read-only, running the Brief's Acceptance commands and returning an evidence table — never the context that drove the loop |
 | Catch structure/style drift a linter can't (naming, cohesion, placement) | Structure/style guard | `{rust,python,vue}-structure-and-style-guard` |
 | Design an implementation strategy | Planner | `Plan`, or write the plan yourself |
 
 ### Which Model per Role
 
-Agent definitions carry `model: inherit`, which binds worker quality to whatever
-the dispatching context happens to be — an ambient setting nobody stated, and
-usually the cheap tier. **Name the model on the dispatch instead.**
+Agent definitions carry `model: inherit`, which silently lands workers on
+whatever tier is ambient — usually the cheap one. **Name the model on the
+dispatch instead.**
 
 | Role | Model | Why |
 |------|-------|-----|
@@ -237,12 +208,11 @@ grants a push, and never a merge into a shared branch.
   **superpowers:dispatching-parallel-agents**.
 - **Parallel writers to the same repo** → give each its **own git worktree** so
   diffs don't collide. REQUIRED: **parallel-worktrees-general** owns the dispatch
-  modes, base selection, and integration order (**superpowers:using-git-worktrees**
-  covers the generic mechanics). `isolation: "worktree"` is only its Mode C and
-  branches from the default remote base — wrong whenever the work builds on a
-  local feature branch or unpushed commits, which is the normal case mid-task.
-  Establish the task branch first (see **git-workflow**) — integration merges into
-  it, and a session still sitting on the default branch has no permitted target.
+  modes, base selection, and integration order — do not reach for
+  `isolation: "worktree"` directly; that is only its Mode C and bases from the
+  default remote, wrong whenever the work builds on local commits. Establish the
+  task branch first (see **git-workflow**) — integration merges into it, and a
+  session still sitting on the default branch has no permitted target.
 - **Dependent pieces** → **sequence** them and feed each stage's output into the
   next: investigate → plan → implement → review → fix findings.
 
@@ -270,28 +240,11 @@ Vibe mode suspends this: decide and record, per **Vibe Mode** above.
 
 ## Anti-Patterns to Avoid
 
-- **Skipping the intake gate.** Guessing the supervision level, the round cap,
-  or the operator's gate cadence commits the whole task to a shape the operator
-  never chose — and in vibe mode there is no later moment to correct it.
 - **Answering the gate from precedent.** A remembered previous run is not this
   run's operator. Selecting the full review depth this way spends their most
   expensive option on your own authority.
-- **Becoming the implementor.** In a fleet mode, editing many files or running
-  gate loops in the main loop instead of dispatching. Bloats context, skips the
-  worker's tests and gates.
-- **Dispatching the orchestrator as a subagent.** It loses the interactive loop
-  and returns one blob. The orchestrator is the main loop.
 - **Vague briefs.** "Fix the bug" with no repro, expected behavior, or scope
   wastes a worker round-trip. A precise brief is the orchestrator's real output.
-- **Serial dispatch of independent work.** Losing wall-clock by not batching
-  parallel Agent calls into one message.
-- **Parallel writers without worktrees.** Concurrent agents editing the same
-  repo produce colliding, corrupted diffs.
-- **Relaying raw dumps.** Forwarding a worker's full output instead of the
-  integrated conclusion.
-- **Committing when the operator wanted to review.** Default to `-no-commit`.
-- **Letting workers inherit an ambient model.** `model: inherit` silently lands
-  implementors and verifiers on the cheap tier. Name the model per role.
 
 ## Quick Reference
 
