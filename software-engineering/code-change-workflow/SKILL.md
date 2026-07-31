@@ -4,7 +4,7 @@ description: "Execution discipline for tasks whose deliverable is an edit to an 
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.1.0"
+  version: "0.1.1"
 ---
 
 # Code Change Workflow Skill
@@ -12,6 +12,10 @@ metadata:
 ## Purpose
 
 Default workflow: inspect, make the smallest safe change, verify, and report. Escalate only when the next decision is ambiguous, risky, irreversible, or belongs to product or architecture ownership.
+
+This is the discipline for a **single change**, and it holds whoever makes it. Multi-step, plan-driven, or fleet-backed delivery adds a layer on top: **agent-fleet-orchestration** settles how the task runs and who executes each piece, and **change-cycle-pipeline** runs cycles, briefs, and the review → verify → fix loop.
+
+That layer also decides **who answers the escalations below**. A dispatched worker always escalates to its orchestrator, never to the user, in every mode — and since a subagent cannot ask mid-flight, escalating means ending its turn with the question and the options, not stalling. In vibe mode the chain stops at the orchestrator: it decides and records the decision instead of asking the user.
 
 ## Core Principles
 
