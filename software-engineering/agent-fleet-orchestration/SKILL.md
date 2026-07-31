@@ -68,7 +68,7 @@ is complex are answered by reading; supervision and cap are not.
 |------|---------|-----------|
 | Supervision | vibe (full power, no gates) / supervised | — |
 | Implementer | fleet agents / you | the deliverable is a plan or a review |
-| Review depth — code | gate-only / simple panel / full loop | the deliverable is a plan or a review |
+| Review depth — code | gate-only / simple panel (2–3 lenses, no verifier, no fixer) / narrow loop (1 lens, refuted, fixed) / full loop | the deliverable is a plan or a review |
 | Pipeline variant — plan or code review | simple / complex | the deliverable is a code change |
 | Spec input — plan or code review | the plan path or ticket key to review against, plus the git base for a code review | the deliverable is a code change |
 | Round cap | N rounds / until zero findings — **quote the cost in the same message**: lenses dispatched × rounds, plus one verifier per unique finding | depth is not the full loop |

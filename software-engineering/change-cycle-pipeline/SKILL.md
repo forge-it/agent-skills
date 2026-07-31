@@ -145,7 +145,11 @@ bug-hunt, divergence). Add one to three lenses for what *this* cycle actually
 risks — the SQL semantics, the concurrency protocol, the wire contract.
 
 Generating from the shared set also keeps this loop and the manual pipeline from
-drifting into two different definitions of a good review.
+drifting into two different definitions of a good review. They are not the same
+thing, though: those `subagents/pipeline-*.md` prompts are a **one-shot review
+report** — the deliverable for a plan or code review — and they stop at verified
+findings, skipping nits. This loop verifies every severity, fixes what it
+confirms, and repeats.
 
 ### Round memory
 
@@ -325,11 +329,20 @@ confident, wrong findings. Once the operator accepts a cycle, run
 
 ## Review Depth
 
-| Depth | What it is | Use for |
-|-------|-----------|---------|
-| Gate-only | Tests, lint, typecheck pass — that is the whole claim. Do not call it reviewed. | Mechanical changes |
-| Simple panel | A small lens set, no verification, no fixer; you read the findings and decide. | Small changes worth a second pair of eyes |
-| Full loop | Everything above. | Migrations, concurrency, security boundaries, wire contracts, anything with a persisted or public shape |
+Depth sets **how wide the review is and whether findings get closed**. The round
+cap sets how many times it repeats. They are independent answers.
+
+| Depth | Lenses | Verify | Fix | Use for |
+|-------|--------|--------|-----|---------|
+| Gate-only | — | — | — | Mechanical changes. Tests, lint, typecheck pass is the whole claim; do not call it reviewed |
+| Simple panel | 2–3 | no | no | Breadth without machinery — you read the raw findings and decide. One round |
+| Narrow loop | 1 | one refuter per finding | one fixer | Closure without breadth — the full shape at width 1 |
+| Full loop | 6–9 | one refuter per finding, a panel for expensive fixes | one fixer | Migrations, concurrency, security boundaries, wire contracts, anything with a persisted or public shape |
+
+Simple panel and narrow loop are not consecutive steps on one scale — they trade
+opposite things. The panel gives you many perspectives and leaves you as the
+verifier; the narrow loop gives you one perspective that is adversarially checked
+and actually fixed. Pick by which you are short of: coverage, or closure.
 
 Depth is the operator's intake answer, not yours to reset per cycle. Where a cycle
 is plainly mechanical, **propose** a lighter depth at its gate — never downgrade
