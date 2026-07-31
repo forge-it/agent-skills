@@ -68,10 +68,10 @@ is complex are answered by reading; supervision and cap are not.
 |------|---------|-----------|
 | Supervision | vibe (full power, no gates) / supervised | — |
 | Implementer | fleet agents / you | the deliverable is a plan or a review |
-| Review depth — code | gate-only / simple panel (2–3 lenses, no verifier, no fixer) / narrow loop (1 lens, refuted, fixed) / full loop | the deliverable is a plan or a review |
+| Review depth — code | **narrow loop (default: 1 lens, refuted, fixed)** / gate-only / simple panel (2–3 lenses, no verifier, no fixer) / full loop (6–9 lenses — the exception, for changes whose defects are expensive to reverse) | the deliverable is a plan or a review |
 | Pipeline variant — plan or code review | simple / complex | the deliverable is a code change |
 | Spec input — plan or code review | the plan path or ticket key to review against, plus the git base for a code review | the deliverable is a code change |
-| Round cap | N rounds / until zero findings — **quote the cost in the same message**: lenses dispatched × rounds, plus one verifier per unique finding | depth is not the full loop |
+| Round cap | N rounds / until zero findings — **quote the cost in the same message**: lenses dispatched × rounds, plus one verifier per unique finding | the depth has no fix step (gate-only, simple panel) |
 | Operator gate | per cycle / at the end | supervision is vibe, or the deliverable is a plan or a review |
 | Parallel worktrees | yes / no | you are the implementer, or the deliverable is a plan or a review |
 
@@ -90,10 +90,10 @@ fit one reviewable cycle. Run **superpowers:brainstorming**, then
 
 | Deliverable | Combination | What you run |
 |---|---|---|
-| Code | vibe + fleet + full loop | **change-cycle-pipeline**, no operator gate |
-| Code | vibe + you implement + full loop | **change-cycle-pipeline**; you write, subagents review, verify, and fix |
-| Code | supervised + fleet + full loop + gate per cycle | **change-cycle-pipeline** — the default for plan-driven work |
-| Code | supervised + fleet + full loop + gate at end | **change-cycle-pipeline**; cycles still exist, only the loop and gate move to the end |
+| Code | vibe + fleet | **change-cycle-pipeline** at the chosen depth, no operator gate |
+| Code | vibe + you implement | **change-cycle-pipeline**; you write, subagents review, verify, and fix |
+| Code | supervised + fleet + gate per cycle | **change-cycle-pipeline** — the default for plan-driven work |
+| Code | supervised + fleet + gate at end | **change-cycle-pipeline**; cycles still exist, only the loop and gate move to the end |
 | Code | supervised + you implement + gate-only | You edit, then run the project's gate — that is the whole claim, and it is not a review |
 | Code | supervised + you implement + simple panel | You edit, then dispatch 2–3 lenses from `/home/cristi/Projects/agent-skills/prompts/code-implementation-review/`; no verifier, no fixer — read the findings and decide |
 | Plan | — | **superpowers:brainstorming** → **superpowers:writing-plans**; **technical-design-discussions** for the decisions you escalate; `Explore` agents for the facts |
@@ -295,6 +295,7 @@ Vibe mode suspends this: decide and record, per **Vibe Mode** above.
 5. Independent work → parallel in one message; parallel writers → worktrees;
    the operator's parallelism answer is a ceiling.
 6. Dependent work → investigate → plan → implement → review → fix.
-7. Delivering a code change in a fleet mode, or at full-loop depth →
-   **change-cycle-pipeline**.
+7. Delivering a code change in a fleet mode, or at a depth that fixes (narrow or
+   full loop) → **change-cycle-pipeline**. Narrow is the default; full is the
+   exception.
 8. Relay the integrated conclusion, not the raw subagent output.
