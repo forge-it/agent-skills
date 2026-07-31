@@ -21,6 +21,8 @@ Each skill includes:
 |-------|-------------|
 | [general-logging](software-engineering/general-logging/SKILL.md) | Wide events logging pattern for powerful debugging and analytics |
 | [code-change-workflow](software-engineering/code-change-workflow/SKILL.md) | Execution discipline for code-changing tasks: inspect, proceed or ask, verify, report |
+| [agent-fleet-orchestration](software-engineering/agent-fleet-orchestration/SKILL.md) | Orchestrator role: intake gate, mode selection, routing work to specialized subagents |
+| [change-cycle-pipeline](software-engineering/change-cycle-pipeline/SKILL.md) | Delivery pipeline for a code change: cycles, briefs, and the review → verify → fix loop |
 | [technical-design-discussions](software-engineering/technical-design-discussions/SKILL.md) | Design conversations: verify sources, weigh trade-offs, recommend, record ADRs |
 | [git-workflow](software-engineering/git-workflow/SKILL.md) | Git branch naming, commits, and version control |
 | [database-management](software-engineering/database-management/SKILL.md) | Database schema management and migration strategies |
@@ -34,7 +36,7 @@ Each skill includes:
 | [rust-hexagonal-architecture](software-engineering/rust-hexagonal-architecture/SKILL.md) | Hexagonal architecture (ports and adapters) for Rust |
 | [rust-testing](software-engineering/rust-testing/SKILL.md) | Rust testing best practices using cargo test |
 
-> **Note:** the table above lists the original core skills only. The repository also contains setup skills, structure-and-style guard skills, Python DDD, and Vue skills not yet enumerated here.
+> **Note:** the table above lists the core workflow and language skills. The repository also contains setup skills, structure-and-style guard skills, `parallel-worktrees-general`, Python DDD, and React/Vue skills not yet enumerated here.
 
 ### Greenfield Project Setup
 
@@ -76,6 +78,10 @@ agent-skills/
     ├── general-logging/
     │   └── SKILL.md
     ├── code-change-workflow/
+    │   └── SKILL.md
+    ├── agent-fleet-orchestration/
+    │   └── SKILL.md
+    ├── change-cycle-pipeline/
     │   └── SKILL.md
     ├── git-workflow/
     │   └── SKILL.md
