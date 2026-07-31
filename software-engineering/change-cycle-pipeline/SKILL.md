@@ -291,12 +291,15 @@ of the run they get.
 ## The Ledger
 
 One file per task — `.claude/cycles/<task-slug>.md`, or the project's own
-convention where it has one. Confirm the repository ignores `.claude/cycles/`
-before the first write, adding the entry if it is missing — exactly as
-**parallel-worktrees-general** does for `.claude/worktrees/`. The ledger must
-never surface as dirt in a worker's `git status` or inside a reviewer's change
-set, and `.claude/` itself is too broad to ignore: most repositories track
-configuration there.
+Before the first write: add `.claude/cycles/` to `.gitignore` if it is not
+already ignored, mirroring the repository's existing `.claude/worktrees/` entry,
+then create the directory. Do not widen this to `.claude/` — that directory
+normally holds tracked configuration (settings, hooks, agents), and ignoring all
+of it hides every future config file from `git status`.
+
+Both steps are the pipeline's own setup, not a change to the project: an
+unignored ledger surfaces as dirt in every worker's `git status` and inside every
+reviewer's change set.
 
 It is the pipeline's only durable state, so it holds everything a later round, a
 later cycle, or a resumed session needs:
@@ -335,11 +338,11 @@ one slightly too light, but that is an argument to make to the operator.
 
 ## Cost and Resumption
 
-Cheap models at high effort for the lens fan-out; strong models for verifying
-expensive findings and for the final gate; mid for fixing. A cycle costs roughly
-lenses × rounds, plus one verifier per unique finding. The operator is quoted that
-figure at the intake gate, where the cap is actually chosen — by then this skill
-has not loaded, so the obligation lives in **agent-fleet-orchestration**.
+**agent-fleet-orchestration** carries the model per role; name it on every
+dispatch rather than letting a worker inherit whatever is ambient. A cycle costs
+roughly lenses × rounds, plus one verifier per unique finding. The operator is
+quoted that figure at the intake gate, where the cap is actually chosen — by then
+this skill has not loaded, so that obligation also lives in the fleet skill.
 
 A killed loop resumes from the ledger — round number, fixed and refuted sets,
 coverage — rather than restarting. Where the loop runs inside a workflow harness
