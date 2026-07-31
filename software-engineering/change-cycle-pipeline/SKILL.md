@@ -2,8 +2,9 @@
 name: change-cycle-pipeline
 description: >-
   Use when a code change is being delivered through the review pipeline, after
-  agent-fleet-orchestration's intake gate has selected a fleet mode or full-loop
-  review depth. Symptoms it prevents: reviewing a tree
+  agent-fleet-orchestration's intake gate has selected a fleet mode, or a review
+  depth that verifies and fixes — the default narrow loop, or the full loop.
+  Symptoms it prevents: reviewing a tree
   that does not build, re-raising findings an earlier round already refuted,
   declaring zero findings when half the reviewers died, paying twice to verify
   one defect filed under two titles, and reporting a round cap as if it were a
@@ -137,12 +138,18 @@ the gate once and hands every lens the same result.
 
 ### Lenses — generate, don't hand-author
 
-The standard set already exists under
+The lens set already exists under
 `/home/cristi/Projects/agent-skills/prompts/code-implementation-review/`: the
 language reviewers in `single-language/`, `generic/implementation-review-loss-framing.md`,
 and the `lenses/` set (security, tests-and-migrations, operational-readiness,
-bug-hunt, divergence). Add one to three lenses for what *this* cycle actually
-risks — the SQL semantics, the concurrency protocol, the wire contract.
+bug-hunt, divergence).
+
+At the default narrow depth you dispatch **one**, chosen for what the change
+risks rather than reflexively the language reviewer — tests-and-migrations for a
+migration, security for an authorization change, divergence when a written plan
+was implemented ambiguously. At full depth you dispatch the set, plus one to three
+written for this cycle: the SQL semantics, the concurrency protocol, the wire
+contract.
 
 Generating from the shared set also keeps this loop and the manual pipeline from
 drifting into two different definitions of a good review. They are not the same
@@ -336,13 +343,33 @@ cap sets how many times it repeats. They are independent answers.
 |-------|--------|--------|-----|---------|
 | Gate-only | — | — | — | Mechanical changes. Tests, lint, typecheck pass is the whole claim; do not call it reviewed |
 | Simple panel | 2–3 | no | no | Breadth without machinery — you read the raw findings and decide. One round |
-| Narrow loop | 1 | one refuter per finding | one fixer | Closure without breadth — the full shape at width 1 |
-| Full loop | 6–9 | one refuter per finding, a panel for expensive fixes | one fixer | Migrations, concurrency, security boundaries, wire contracts, anything with a persisted or public shape |
+| **Narrow loop — the default** | 1 | one refuter per finding | one fixer | **Ordinary work.** Full shape, width 1: findings are adversarially checked and actually closed |
+| Full loop | 6–9 | one refuter per finding, a panel for expensive fixes | one fixer | The exception — see below |
+
+**Start from the narrow loop.** It keeps what makes the loop worth running — a
+finding is refuted before it costs a fix, and confirmed findings get closed rather
+than reported — at a cost that does not make an operator skip the process. A
+review depth nobody runs protects nothing.
+
+Its weakness is coverage, not rigour: one lens finds only what its angle sees, and
+`found-by k/N` corroboration degenerates to k=1. So pick the lens for what the
+change actually risks, rather than defaulting to the language reviewer.
+
+**Escalate to the full loop** when a missed defect is expensive to reverse —
+migrations and persisted shapes, security or authorization boundaries,
+concurrency, wire contracts across repos — or when the risk surface plainly
+exceeds one lens.
+
+Escalate mid-cycle too: if the single lens confirms findings in more than one
+category, the change is wider than the lens, and the depth was the wrong bet.
+Propose the full loop at that point instead of finishing a review you no longer
+believe covers the change.
 
 Simple panel and narrow loop are not consecutive steps on one scale — they trade
 opposite things. The panel gives you many perspectives and leaves you as the
 verifier; the narrow loop gives you one perspective that is adversarially checked
-and actually fixed. Pick by which you are short of: coverage, or closure.
+and actually fixed. Reach for the panel only when you specifically want breadth
+you will judge yourself.
 
 Depth is the operator's intake answer, not yours to reset per cycle. Where a cycle
 is plainly mechanical, **propose** a lighter depth at its gate — never downgrade
