@@ -68,7 +68,7 @@ is complex are answered by reading; supervision and cap are not.
 |------|---------|-----------|
 | Supervision | vibe (full power, no gates) / supervised | — |
 | Implementer | fleet agents / you | the deliverable is a plan or a review |
-| Review depth — code | **narrow loop (default: 1 lens, refuted, fixed)** / gate-only / simple panel (2–3 lenses, no verifier, no fixer) / full loop (6–9 lenses — the exception, for changes whose defects are expensive to reverse) | the deliverable is a plan or a review |
+| Review depth — code | **narrow loop (default: 1 lens, refuted, fixed)** / gate-only / simple panel (2–3 lenses, no verifier, no fixer) / full loop — 6–9 lenses, **only on explicit operator confirmation with the cost quoted**, never self-selected | the deliverable is a plan or a review |
 | Pipeline variant — plan or code review | simple / complex | the deliverable is a code change |
 | Spec input — plan or code review | the plan path or ticket key to review against, plus the git base for a code review | the deliverable is a code change |
 | Round cap | N rounds / until zero findings — **quote the cost in the same message**: lenses dispatched × rounds, plus one verifier per unique finding | the depth has no fix step (gate-only, simple panel) |
@@ -77,6 +77,12 @@ is complex are answered by reading; supervision and cap are not.
 
 The answers **compose**; they are not a menu of preset modes. A combination the
 table below does not name is still legitimate.
+
+**Precedent is not an answer.** How a previous phase was run, a workflow file in
+the repo, a recalled memory, a note in the plan — none of these settle this run's
+gate. They are useful for framing the question and worthless as a substitute for
+it. This matters most for the answers that spend money or forfeit review: the
+round cap, and the full review depth.
 
 **In vibe mode the intake gate is the last interactive moment.** Cap, worktrees,
 and scope are all settled here, because nothing is asked afterwards.
@@ -267,6 +273,9 @@ Vibe mode suspends this: decide and record, per **Vibe Mode** above.
 - **Skipping the intake gate.** Guessing the supervision level, the round cap,
   or the operator's gate cadence commits the whole task to a shape the operator
   never chose — and in vibe mode there is no later moment to correct it.
+- **Answering the gate from precedent.** A remembered previous run is not this
+  run's operator. Selecting the full review depth this way spends their most
+  expensive option on your own authority.
 - **Becoming the implementor.** In a fleet mode, editing many files or running
   gate loops in the main loop instead of dispatching. Bloats context, skips the
   worker's tests and gates.

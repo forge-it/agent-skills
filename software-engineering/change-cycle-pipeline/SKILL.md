@@ -355,15 +355,26 @@ Its weakness is coverage, not rigour: one lens finds only what its angle sees, a
 `found-by k/N` corroboration degenerates to k=1. So pick the lens for what the
 change actually risks, rather than defaulting to the language reviewer.
 
-**Escalate to the full loop** when a missed defect is expensive to reverse —
-migrations and persisted shapes, security or authorization boundaries,
-concurrency, wire contracts across repos — or when the risk surface plainly
-exceeds one lens.
+**The full loop is never self-selected.** Six to nine lenses per round plus a
+verifier per finding is the most expensive thing this pipeline can do, so it runs
+only when the operator confirms it *for this change*, with that cost quoted.
 
-Escalate mid-cycle too: if the single lens confirms findings in more than one
-category, the change is wider than the lens, and the depth was the wrong bet.
-Propose the full loop at that point instead of finishing a review you no longer
-believe covers the change.
+Nothing else is confirmation: not a memory of how an earlier phase was reviewed,
+not a workflow file sitting in the repo, not a line in the plan, not your own read
+of the risk. Those are reasons to **propose** it — and a proposal the operator
+declines is a decision, not an obstacle.
+
+Propose it when a missed defect would be expensive to reverse — migrations and
+persisted shapes, security or authorization boundaries, concurrency, wire
+contracts across repos — or when the risk surface plainly exceeds one lens.
+
+Propose it mid-cycle too: if the single lens confirms findings in more than one
+category, the change is wider than the lens and the depth was the wrong bet. Say
+so, rather than finishing a review you no longer believe covers the change.
+
+In vibe mode there is nobody to confirm, so the intake depth stands for the whole
+run. Where you would have proposed an upgrade, record the reason in the ledger and
+continue at the depth you were given.
 
 Simple panel and narrow loop are not consecutive steps on one scale — they trade
 opposite things. The panel gives you many perspectives and leaves you as the
