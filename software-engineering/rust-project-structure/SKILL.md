@@ -31,11 +31,11 @@ Do not apply when:
 
 ## Core Principles
 
-### 0. Modern Module Files: Never `mod.rs` by Default (CRITICAL)
+### 0. Modern Module Files: Never `mod.rs` (CRITICAL)
 
-`mod.rs` is legacy Rust module layout and must not be created or preserved by default. Use the modern sibling-file layout: `module_name.rs` next to `module_name/`, with submodules declared from `module_name.rs`.
+`mod.rs` is legacy Rust module layout and must never be created or preserved. Use the modern sibling-file layout: `module_name.rs` next to `module_name/`, with submodules declared from `module_name.rs`.
 
-Only use or keep `mod.rs` when the operator has made an explicit decision for that exact module. Treat any existing or proposed `mod.rs` as a structural issue that requires either conversion to `module_name.rs` or an operator decision before proceeding.
+There is no exception, including under `tests/`. A directory shared by two test crates is reached with `#[path = "common/<file>.rs"] mod <name>;` from each entry point that needs it (rust-testing Section 15) — that needs no `mod.rs`. Treat any existing or proposed `mod.rs` as a structural issue to be converted to `module_name.rs` before proceeding.
 
 ```
 # Bad — legacy module layout
@@ -451,7 +451,7 @@ None of the allowances above override principle 6. A file that contains a provid
 
 ## Anti-Patterns to Avoid
 
-1. **`mod.rs` files without an operator decision**: Creating or preserving legacy Rust module layout instead of `module_name.rs`
+1. **`mod.rs` files**: Creating or preserving legacy Rust module layout instead of `module_name.rs` — no exceptions, `tests/` included
 2. **Role-based folders**: Grouping by `services/`, `handlers/`, `repositories/` instead of business concepts
 3. **Stuttering module names**: `order/order_handler.rs` instead of `order/handler.rs`
 4. **Scattered traits**: Splitting traits for a single concept across multiple files
@@ -470,7 +470,7 @@ None of the allowances above override principle 6. A file that contains a provid
 
 ### Adding a New Concept
 
-1. Create `concept.rs` next to `concept/`; do not create `concept/mod.rs` unless the operator explicitly decided that exact module. It holds only module docs, private `mod` declarations, and `pub use <file>::*;` globs (principle 14)
+1. Create `concept.rs` next to `concept/`; never create `concept/mod.rs`. It holds only module docs, private `mod` declarations, and `pub use <file>::*;` globs (principle 14)
 2. Create a folder named after the business concept under the appropriate layer
 3. Add `port.rs` with all traits for this concept (if defining traits)
 4. Add `error.rs` with all error enums (if defining errors)

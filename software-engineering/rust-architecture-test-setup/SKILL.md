@@ -1,6 +1,6 @@
 ---
 name: rust-architecture-test-setup
-description: One-time setup of a `tests/structure/` cargo-test gate for a Rust hexagonal-architecture project, so the layering invariants (dependencies point inward — domain → application → infrastructure, and no layer imports the composition root), the project-structure conventions (`port.rs` holds traits only, file names don't stutter, `mod.rs` stays out of `src/` and `tests/` except `tests/common/`, concept module files stay glob facades in application crates, the domain stays framework-free), the composition-root wiring seam (concrete adapter assembly never escapes `src/composition/`), workspace dependency boundaries (a shared library crate stays consumer-free; a worker binary stays core-free and free of direct database drivers), and generic-machinery vocabulary (designated generic modules never name product concepts) are enforced by `cargo test` — and therefore CI — instead of by review. Use when bootstrapping a new Rust hexagonal project's architecture enforcement, or adding it to an existing one. Assumes a layered hexagonal codebase (domain/application/infrastructure under `src/`).
+description: One-time setup of a `tests/structure/` cargo-test gate for a Rust hexagonal-architecture project, so the layering invariants (dependencies point inward — domain → application → infrastructure, and no layer imports the composition root), the project-structure conventions (`port.rs` holds traits only, file names don't stutter, `mod.rs` stays out of `src/` and `tests/` entirely, concept module files stay glob facades in application crates, the domain stays framework-free), the composition-root wiring seam (concrete adapter assembly never escapes `src/composition/`), workspace dependency boundaries (a shared library crate stays consumer-free; a worker binary stays core-free and free of direct database drivers), and generic-machinery vocabulary (designated generic modules never name product concepts) are enforced by `cargo test` — and therefore CI — instead of by review. Use when bootstrapping a new Rust hexagonal project's architecture enforcement, or adding it to an existing one. Assumes a layered hexagonal codebase (domain/application/infrastructure under `src/`).
 vibe: Turns the architecture doc into a build that fails when someone crosses a layer.
 license: UNLICENSED
 metadata:
@@ -54,7 +54,9 @@ than to retrofit:
 4. **File names don't stutter** — `backup/executor.rs`, never
    `backup/backup_executor.rs`. (`rust-project-structure`, "Short Module Names".)
 5. **No legacy `mod.rs` layout** — `mod.rs` is forbidden under `src/` and `tests/`,
-   except for the shared test helper entry point `tests/common/mod.rs`.
+   with no exceptions. A helper directory shared by two test crates is reached with
+   `#[path = "common/<file>.rs"] mod <name>;` from each entry point that needs it,
+   which requires no `mod.rs`.
 6. **Concept module files are facades** — a `<name>.rs` fronting a sibling `<name>/`
    folder holds only module docs, `mod` declarations, `pub mod` for subfolders, and
    `pub use <file>::*;` globs. Layer files (`src/<layer>.rs`) and adapter-family files
@@ -588,9 +590,10 @@ it declares*.**
   dispatches, so adding a product feature never widens the generic layer.
 - **NoOp exception** — `NOOP_STUB_MARKER` lets NoOp stubs live in `port.rs` per the
   structure skill. Rename or drop it if your project doesn't use that idiom.
-- **`mod.rs` exception** — `MOD_FILE_ALLOWED_PATHS` owns the exact crate-relative
-  paths where legacy module layout remains allowed. The default exception is only
-  `tests/common/mod.rs`.
+- **`mod.rs` has no exception** — the rule takes no allowlist. If a `mod.rs`
+  seems unavoidable, the fix is `#[path]` (see rule 5), not a carve-out; an
+  allowlist constant here only lets legacy layout accumulate behind a name
+  nobody rereads.
 - **Concept-facade rule** — `ENFORCE_CONCEPT_FACADE` gates rule 6. Keep `true` for
   application crates (services, binaries, internal workspace members — set
   `publish = false` in their Cargo.toml so the intent is recorded). Set `false` when

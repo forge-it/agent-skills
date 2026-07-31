@@ -324,6 +324,8 @@ mod calculate_total {
 
 All tests must be placed in the `tests/` directory. Never use `#[cfg(test)]` modules in source files. This provides clear separation between production code and test code.
 
+Three forms are equally forbidden in `src/`: a `#[cfg(test)]`-gated item, a `#[cfg_attr(test, …)]` item, and a bare `#[test]` / `#[tokio::test]` fn. A `#[cfg(not(test))]` item is fine — that is the production branch of a swapped pair, not a test. Where a project runs the `rust-architecture-test-setup` gate, this rule is machine-enforced rather than left to review.
+
 This layout has a prerequisite: **the crate must expose a library target** (`src/lib.rs`), because external test binaries can only import a library — a binary-only crate (`src/main.rs` alone) cannot be tested from `tests/` at all. Keep `src/main.rs` a thin wrapper over the library. Everything under test must be reachable through the crate's public surface — the same `pub` visibility rule rust-project-structure defines for the concept surface (`pub` = other layers, `tests/`, downstream crates).
 
 ```
@@ -342,7 +344,8 @@ src/
 
 tests/
 ├── common/                  # Cross-category helpers shared by integration and e2e
-│   ├── mod.rs               # The only mod.rs allowed under tests/ (Section 15)
+│   │                        # No mod.rs — entry points reach these files with
+│   │                        # #[path] (Section 15). mod.rs is banned everywhere.
 │   ├── infra.rs             # #[ctor] Docker stack bring-up, TestDatabase
 │   ├── builders.rs          # Service construction (build_*)
 │   ├── factories.rs         # Cross-level domain object builders (create_*)
@@ -380,7 +383,18 @@ tests/
 
 Each test category requires a module entry point file (`unit.rs`, `integration.rs`, `e2e.rs`) that declares its submodules. This is how Rust discovers and compiles the test files.
 
-The wrapper module (`mod unit { … }`) is load-bearing: the entry point file is the crate root of its test binary, and the wrapper is what makes Rust resolve the submodule files under `tests/unit/…` instead of directly under `tests/`. Do not remove it. `mod common;` is declared without a wrapper — it resolves to `tests/common/mod.rs` — and only by the entry points that use it (integration and e2e).
+The wrapper module (`mod unit { … }`) is load-bearing: the entry point file is the crate root of its test binary, and the wrapper is what makes Rust resolve the submodule files under `tests/unit/…` instead of directly under `tests/`. Do not remove it.
+
+Cross-category helpers are declared without a wrapper, one `#[path]` line per file, by each entry point that needs them (Section 15):
+
+```rust
+#[path = "common/infra.rs"]
+mod infra;
+#[path = "common/fixtures.rs"]
+mod fixtures;
+```
+
+Each becomes a crate-root module, so support files reach them as `crate::infra`, `crate::fixtures`, and so on.
 
 ```rust
 // tests/unit.rs
@@ -399,7 +413,10 @@ mod unit {
 
 ```rust
 // tests/integration.rs
-mod common;
+#[path = "common/infra.rs"]
+mod infra;
+#[path = "common/fixtures.rs"]
+mod fixtures;
 
 mod integration {
     mod support;
@@ -416,7 +433,10 @@ mod integration {
 
 ```rust
 // tests/e2e.rs
-mod common;
+#[path = "common/infra.rs"]
+mod infra;
+#[path = "common/builders.rs"]
+mod builders;
 
 mod e2e {
     mod api {
@@ -570,22 +590,25 @@ mod salary {
 
 Test helpers live in two scopes; test files themselves contain only tests (Section 16).
 
-**Scope 1 — `tests/common/`** holds the helpers shared **across categories** (integration and e2e): infrastructure bring-up (`#[ctor]` for the Docker stack, `TestDatabase`), cross-level builders, factories, and fixtures. Its entry point is `tests/common/mod.rs` — the **only** `mod.rs` allowed under `tests/` (the architecture gate enforces exactly this exception). Entry points that use it declare `mod common;` (Section 9).
+**Scope 1 — `tests/common/`** holds the helpers shared **across categories** (integration and e2e): infrastructure bring-up (`#[ctor]` for the Docker stack, `TestDatabase`), cross-level builders, factories, and fixtures.
+
+`tests/common/` has **no `mod.rs`** — that file is banned everywhere, with no exceptions (rust-code-style Rule 6). Rust compiles each top-level file in `tests/` as a separate crate, so a directory shared by two of them cannot be reached by an ordinary `mod` declaration; each entry point that needs a helper declares it directly with `#[path]`:
 
 ```rust
-// tests/common/mod.rs
-pub mod builders;
-pub mod factories;
-pub mod fixtures;
-pub mod helpers;
-pub mod infra;
+// tests/integration.rs (and tests/e2e.rs, for the files it needs)
+#[path = "common/infra.rs"]
+mod infra;
+#[path = "common/fixtures.rs"]
+mod fixtures;
 ```
 
-**Scope 2 — per-category `support/`** modules hold category-specific helpers: `tests/unit/support/`, `tests/integration/support/`, and one per e2e subdomain (`tests/e2e/api/support/`). A category support file may re-export from common so tests have one import surface:
+This is strictly better than a `mod.rs` facade: each entry point declares only what it uses, so an unused helper is a compile warning rather than dead weight, and a facade cannot rot into declaring modules that no longer exist.
+
+**Scope 2 — per-category `support/`** modules hold category-specific helpers: `tests/unit/support/`, `tests/integration/support/`, and one per e2e subdomain (`tests/e2e/api/support/`). A category support file may re-export a `#[path]`-declared common module so tests have one import surface:
 
 ```rust
 // tests/integration/support/fixtures.rs
-pub use crate::common::fixtures::*;
+pub use crate::fixtures::*;
 
 // integration-specific fixtures are added below the re-export
 ```
@@ -780,7 +803,7 @@ mod register_endpoint {
 - Test files and test modules must never use a `_test` suffix
 - Organize into `unit/`, `integration/`, and `e2e/` subdirectories; e2e subdomains each own a `support/`
 - Mirror source directory structure: `src/domain/salaries.rs` → `tests/unit/domain/salaries.rs`; adapters: `src/infrastructure/db.rs` → `tests/integration/infrastructure/db.rs`
-- Cross-category helpers in `tests/common/` (entry `tests/common/mod.rs` — the only allowed `mod.rs`); category-specific helpers in per-category `support/` (Section 15)
+- Cross-category helpers in `tests/common/`, reached with `#[path]` from each entry point that needs them — never a `mod.rs`, which is banned everywhere; category-specific helpers in per-category `support/` (Section 15)
 - `mocks.rs` is unit-support only — an integration `support/` has no mocks
 - Test files contain only tests — every module-scope helper, factory, fixture, and constant lives in `support/` or `common/` (Section 16)
 - Import grouping in test files follows the same std / external / local convention as production code (rust-code-style)
