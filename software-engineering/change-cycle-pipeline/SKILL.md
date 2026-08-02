@@ -1,7 +1,11 @@
 ---
 name: change-cycle-pipeline
 description: >-
-  Use when a code change is being delivered through the review pipeline, after
+  STOP — if you were dispatched as a subagent to execute a briefed task, this
+  skill is not for you: it governs the orchestrator running the loop, not the
+  workers inside it. Do the task you were briefed with instead. Use when a code
+  change is being delivered
+  through the review pipeline, after
   agent-fleet-orchestration's intake gate has selected a fleet mode, or a review
   depth that verifies and fixes — the default narrow loop, or the full loop.
   Symptoms it prevents: reviewing a tree
@@ -13,10 +17,16 @@ description: >-
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.1"
+  version: "0.0.2"
 ---
 
 # Change Cycle Pipeline
+
+<SUBAGENT-STOP>
+If you were dispatched as a subagent to execute a specific task, stop reading and
+do not follow this skill. It is the orchestrator's view of the loop you are one
+stage in. Go do the task in your brief.
+</SUBAGENT-STOP>
 
 ## Purpose
 

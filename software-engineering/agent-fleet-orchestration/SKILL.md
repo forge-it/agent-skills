@@ -1,26 +1,37 @@
 ---
 name: agent-fleet-orchestration
 description: >-
-  Use when you are the top-level session driving a multi-step task through a
-  fleet of specialized subagents — settling how the task will run, decomposing
-  the work, and dispatching explorers, investigators, implementors, fixers, and
-  reviewers rather than editing many files or running long gate loops yourself.
-  Use ONCE at the start of a non-trivial task, before the first dispatch,
-  whatever the deliverable is: a code change, a plan, a plan review, or a code
-  review. Do NOT reload it for follow-up instructions inside a task it is already
-  governing — it stays in effect until the task ends or the deliverable changes.
-  Symptoms it prevents: committing a task to a supervision level or round cap
-  the operator never chose, the orchestrator becoming the implementor, staying
-  hands-on past the point the task is still small, serial dispatch of
-  independent work, parallel writers colliding, vague briefs, and relaying raw
-  subagent dumps.
+  STOP — if you were dispatched as a subagent to execute a briefed task, this
+  skill is not for you: it governs the top-level session only. Do the task you
+  were briefed with instead. Use when you ARE that top-level session, driving a
+  multi-step task through a fleet of specialized subagents — settling how the
+  task will run, decomposing the work, and dispatching explorers, investigators,
+  implementors, fixers, and reviewers rather than editing many files or running
+  long gate loops yourself. Use ONCE at the start of a non-trivial task, before
+  the first dispatch, whatever the deliverable is: a code change, a plan, a plan
+  review, or a code review. Never reload it: once loaded it governs the whole
+  task; re-opening the gate is a decision, not a reload. Symptoms it prevents:
+  committing to a supervision level or round cap the operator never chose, the
+  orchestrator becoming the implementor, serial dispatch of independent work,
+  parallel writers colliding, vague briefs, and relaying raw subagent dumps.
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.2"
+  version: "0.0.3"
 ---
 
 # Agent Fleet Orchestration
+
+<SUBAGENT-STOP>
+If you were dispatched as a subagent to execute a specific task, stop reading and
+discard this skill. It is the orchestrator's, and following it from inside a
+worker means asking questions nobody will answer and dispatching a fleet nobody
+asked for. Go do the task in your brief.
+
+Judge by capability, not by how you were started: if the operator can answer you
+mid-task — you converse across turns rather than returning one final message —
+you are the top-level session and this guard does not apply to you.
+</SUBAGENT-STOP>
 
 ## Purpose
 
@@ -36,6 +47,10 @@ the right specialized worker for each piece, and integrates what comes back.
 The operator can put you in an **implementer mode** for small work, where you
 execute as well. That is a choice made at the intake gate, not a licence to
 drift into it — see **The Read/Write Boundary**.
+
+Skills named in **bold** throughout are pointers, not a startup manifest. Load
+one when you reach the work it governs — loading four process skills before the
+first dispatch spends context on decisions you have not made yet.
 
 ## You Are the Main Loop, Not a Subagent
 
@@ -62,7 +77,8 @@ is complex are answered by reading; supervision and cap are not.
 instruction — redirect the work, salvage a failed stage, change the scope — is
 the operator steering the task you are already running; carry the existing
 answers forward. Re-open the gate only when the deliverable itself changes (a
-code change becomes a plan review), or when the operator changes an answer.
+code change becomes a plan review), or when the operator changes an answer — and
+re-open it from context, never by reloading this skill.
 
 | Axis | Options | Skip when |
 |------|---------|-----------|
