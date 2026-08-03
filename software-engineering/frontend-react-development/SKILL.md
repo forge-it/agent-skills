@@ -237,7 +237,7 @@ export default defineConfig({
 
 ### Step 4: Testing and Quality Assurance
 - Write comprehensive unit and integration tests
-- Assert accessibility in tests: `jest-axe` under Vitest for components, `@axe-core/playwright` in e2e flows
+- Assert accessibility in tests: `axe-core` directly under Vitest for components (not `jest-axe`, which ships no types, and not `vitest-axe`, which is unmaintained), and `@axe-core/playwright` in e2e flows — see `frontend-react-testing` for the typed matcher and the jsdom project it runs in
 - Test cross-browser compatibility and responsive behavior
 - Implement end-to-end testing for critical user flows
 
