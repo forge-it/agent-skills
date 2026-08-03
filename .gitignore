@@ -2,3 +2,4 @@ CLAUDE.md
 compilations
 compilations/**
 .claude/worktrees/
+.claude/cycles/
