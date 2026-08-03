@@ -1,6 +1,10 @@
 ---
 name: parallel-worktrees-general
 description: >-
+  STOP — if you were dispatched as a subagent to execute a briefed task, this
+  skill is not for you: it governs the dispatching orchestrator only, and the
+  mode and path rules you need are already in your brief. Do the task you were
+  briefed with instead.
   Use whenever the user asks to dispatch, launch, spawn, fan out, or delegate
   work to an agent, subagent, worker, or coding agent in a separate git
   worktree — phrasing like "dispatch a subagent", "launch an agent", "fan out
@@ -17,10 +21,22 @@ description: >-
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.3"
+  version: "0.0.4"
 ---
 
 # Parallel Worktrees
+
+<SUBAGENT-STOP>
+If you were dispatched as a subagent to execute a specific task, stop reading and
+discard this skill. It teaches the orchestrator how to hand work out; following
+it from inside a worker means dispatching a fleet nobody asked for, into a
+checkout you were told to be the only writer in. Your dispatch mode, worktree
+path, and path scope are already in your brief. Go do the task in your brief.
+
+Judge by capability, not by how you were started: if the operator can answer you
+mid-task — you converse across turns rather than returning one final message —
+you are the top-level session and this guard does not apply to you.
+</SUBAGENT-STOP>
 
 Use git worktrees to isolate file edits, not to skip coordination. The roles
 follow separation of concerns: the orchestrator owns assignment, integration,
@@ -115,7 +131,13 @@ Do not create or enter a worktree. Do not use isolation: "worktree" for
 this worker or any nested worker. Do not create or switch branches.
 Do not stage, commit, push, merge, reset, restore, or revert unless the
 operator explicitly authorizes it. Leave changes unstaged for orchestrator
-review. Do not start parallel workers.
+review.
+
+You are the single writer in this checkout. Do not dispatch any worker
+that edits files — not in parallel and not sequentially. A nested native
+worker inherits this same CWD, git index, branch, and build directory,
+which is exactly the collision Mode D exists to prevent. Read-only
+explorers are the only dispatch permitted.
 ```
 
 Mode-D worker rules:
@@ -151,6 +173,8 @@ Your worktree is <repo-root>/.claude/worktrees/<slug>.
 First run: cd <repo-root>/.claude/worktrees/<slug> && pwd && git status --short --branch && git branch --show-current
 Use absolute paths under that worktree for every Read, Write, Edit, and Bash operation.
 Do not use isolation: "worktree" for this worker or any nested worker.
+You are the single writer in this worktree: do not dispatch any worker
+that edits files. Read-only explorers are the only dispatch permitted.
 The orchestrator checkout and other worktrees are off-limits.
 ```
 

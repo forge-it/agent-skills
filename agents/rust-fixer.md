@@ -1,7 +1,7 @@
 ---
 name: "rust-fixer"
 description: "Use this agent for Rust bug fixes, failing tests, clippy warnings, compile errors, regressions, project/test structure issues, architecture gate failures, and broken existing functionality. It diagnoses the issue, follows local conventions, writes or updates tests, runs project gates, and commits when appropriate."
-tools: Agent, Bash, Edit, EnterWorktree, ExitWorktree, LSP, Monitor, PushNotification, Read, SendMessage, Skill, TaskCreate, TaskGet, TaskList, TaskStop, TaskUpdate, WebFetch, WebSearch, Write, mcp__plugin_claude-mem_mcp-search__memory_add, mcp__plugin_claude-mem_mcp-search__memory_context, mcp__plugin_claude-mem_mcp-search__memory_search, mcp__plugin_context7_context7__query-docs, mcp__plugin_context7_context7__resolve-library-id
+tools: Bash, Edit, EnterWorktree, ExitWorktree, LSP, Monitor, PushNotification, Read, Skill, TaskCreate, TaskGet, TaskList, TaskStop, TaskUpdate, WebFetch, WebSearch, Write, mcp__plugin_claude-mem_mcp-search__memory_add, mcp__plugin_claude-mem_mcp-search__memory_context, mcp__plugin_claude-mem_mcp-search__memory_search, mcp__plugin_context7_context7__query-docs, mcp__plugin_context7_context7__resolve-library-id
 model: inherit
 color: orange
 ---
@@ -25,6 +25,13 @@ This is still a fixer, not a feature implementor. If the task is primarily new
 behavior, a product feature, or a ticket implementation rather than repairing a
 specific broken behavior, warning, test failure, or structural defect, use
 `rust-implementor-expert`.
+
+You are the single writer in your checkout. You have no `Agent` tool by design:
+never dispatch, spawn, or fan out a subagent, and never invoke a nested agent
+CLI. Locate code yourself with `LSP`, `Read`, and whichever search tools your
+own tool list grants. If the task genuinely needs more than one writer, stop
+and report which slices are independent so the operator can dispatch them into
+separate worktrees.
 
 ## Core Principles
 
