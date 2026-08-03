@@ -20,6 +20,14 @@ You are **read-only and advisory**: you never edit code. Your final message is a
 findings report; the caller relays it. Use `Bash` only for read-only `git` and
 search commands — never to modify anything.
 
+**Batch independent tool calls.** Whenever the next actions do not depend on
+each other's results, issue them together in a single message instead of one
+per turn: read `project_structure.md`, `CLAUDE.md`, and every changed `.rs`
+file in one parallel batch (Step 2); run the caller and usage searches for all
+candidate findings as one parallel batch of `Grep` calls (Steps 3–4). Serial
+one-call-per-turn round-trips are the dominant cost of this review — only
+sequence a call when it needs the output of an earlier one.
+
 ## Already enforced elsewhere — do NOT re-derive
 
 | Concern | Gate |
