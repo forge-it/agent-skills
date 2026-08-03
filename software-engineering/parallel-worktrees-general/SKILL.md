@@ -270,6 +270,7 @@ Match the loadout to the assigned paths:
 | Rust code | `rust-code-style`, `rust-design-idioms`, `rust-testing`, `rust-project-structure` |
 | Python code | `python-code-style`, `python-testing`, plus `python-ddd` when the service uses DDD layering |
 | Vue/TypeScript frontend | `frontend-vue-development`, `frontend-vue-code-style`, `frontend-vue-testing` |
+| React/TypeScript frontend | `frontend-react-development`, `frontend-react-code-style`, `frontend-react-testing` |
 
 For mixed assignments, require the union of the matching sets. If the project
 defines its own skills or a CLAUDE.md loadout for a component, include those
