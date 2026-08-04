@@ -5,14 +5,14 @@ vibe: Keeps React codebases predictable, traceable, and free of spaghetti.
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.1"
+  version: "0.0.2"
 ---
 
 # React Code Style — Patterns & Conventions
 
 A living collection of patterns that every component, hook, and store in this codebase must follow. When in doubt, check here first.
 
-This is the React sibling of `frontend-vue-code-style`; Patterns 1–12 cover the same concerns under the same numbers, Patterns 13–14 are React-specific.
+This is the React sibling of `frontend-vue-code-style`; Patterns 1–12 cover the same concerns under the same numbers, Patterns 13–14 are React-specific, and Pattern 15 mirrors Vue's Pattern 13 (closed sets are enum objects) — numbers diverge past 12 because they are stable identifiers and are never renumbered.
 
 **Stack assumptions:** React 19.2+ with function components only, TypeScript in strict mode with typescript-eslint `strictTypeChecked` and `eslint-plugin-react-hooks` v7+, Vite SPA (no SSR framework), TanStack Query for server state, Zustand for global client state, TanStack Router for routing, React Compiler enabled. Where a different stack choice changes a rule, the pattern names the fallback.
 
@@ -27,10 +27,12 @@ This is the React sibling of `frontend-vue-code-style`; Patterns 1–12 cover th
 ```tsx
 // ✅ CORRECT — child reports, parent decides
 // BackupRow.tsx
+import type { BackupStatus } from './constants'
+
 interface BackupRowProps {
   id: string
   name: string
-  status: 'active' | 'archived' | 'failed'
+  status: BackupStatus
   onArchive: (id: string) => void
   onDelete: (id: string) => void
 }
@@ -220,7 +222,13 @@ export function BackupList() {
 // ✅ src/features/auth/AuthContext.tsx — typed, throwing hook, raw context stays private
 import { createContext, use, useState, type ReactNode } from 'react'
 
-export type UserRole = 'admin' | 'viewer' | 'editor'
+export const UserRole = {
+  Admin: 'admin',
+  Viewer: 'viewer',
+  Editor: 'editor',
+} as const
+
+export type UserRole = (typeof UserRole)[keyof typeof UserRole]
 
 interface AuthValue {
   userRole: UserRole
@@ -234,7 +242,7 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
-  const [userRole, setUserRole] = useState<UserRole>('viewer')
+  const [userRole, setUserRole] = useState<UserRole>(UserRole.Viewer)
   return <AuthContext value={{ userRole, setUserRole }}>{children}</AuthContext>
 }
 
@@ -251,7 +259,7 @@ export function useAuth(): AuthValue {
 // ✅ Consumer — anywhere deeper, no prop drilling
 function DeleteServerButton() {
   const { userRole } = useAuth()
-  if (userRole !== 'admin') {
+  if (userRole !== UserRole.Admin) {
     return null
   }
   return <button>Delete Server</button>
@@ -260,7 +268,7 @@ function DeleteServerButton() {
 
 ```tsx
 // ❌ WRONG — fake default; a missing provider becomes a silent bug instead of a crash
-const AuthContext = createContext<AuthValue>({ userRole: 'viewer', setUserRole: () => {} })
+const AuthContext = createContext<AuthValue>({ userRole: UserRole.Viewer, setUserRole: () => {} })
 
 // ❌ WRONG — exporting the raw context invites unguarded use(AuthContext) everywhere
 export const AuthContext = createContext<AuthValue | null>(null)
@@ -290,7 +298,7 @@ Every consumer re-renders when the context value's identity changes. Without the
 ```tsx
 // ✅ CORRECT — focused, object return, derives during render
 import { useState } from 'react'
-import { BACKUP_STATUS_ARCHIVED } from '../constants'
+import { BackupStatus } from '../constants'
 import type { Backup } from '../types'
 
 export function useBackupSearch(backups: Backup[]) {
@@ -301,7 +309,7 @@ export function useBackupSearch(backups: Backup[]) {
     const matchesSearch = backup.name
       .toLowerCase()
       .includes(searchQuery.toLowerCase())
-    const matchesStatus = showArchived || backup.status !== BACKUP_STATUS_ARCHIVED
+    const matchesStatus = showArchived || backup.status !== BackupStatus.Archived
     return matchesSearch && matchesStatus
   })
 
@@ -465,12 +473,12 @@ Wrapping a genuinely external mutable source (a browser API, a non-React library
 
 ```tsx
 // ✅ CORRECT — callback and event parameters are descriptive
-backups.filter(backup => backup.status !== 'archived')
+backups.filter(backup => backup.status !== BackupStatus.Archived)
 notifications.filter(notification => notification.id !== id)
 <input onChange={(event) => setSearchQuery(event.target.value)} />
 
 // ❌ WRONG — single-letter or abbreviated parameters
-backups.filter(b => b.status !== 'archived')
+backups.filter(b => b.status !== BackupStatus.Archived)
 notifications.filter(n => n.id !== id)
 <input onChange={(e) => setSearchQuery(e.target.value)} />
 ```
@@ -502,7 +510,8 @@ const [loading, setLoading] = useState(false)  // "loading" is ambiguous — loa
 // src/features/backups/stores/useBackupUiStore.ts
 import { create } from 'zustand'
 
-type BackupViewMode = 'table' | 'grid'
+const BackupViewMode = { Table: 'table', Grid: 'grid' } as const
+type BackupViewMode = (typeof BackupViewMode)[keyof typeof BackupViewMode]
 
 interface BackupUiState {
   selectedBackupIds: string[]
@@ -514,7 +523,7 @@ interface BackupUiState {
 
 export const useBackupUiStore = create<BackupUiState>()(set => ({
   selectedBackupIds: [],
-  viewMode: 'table',
+  viewMode: BackupViewMode.Table,
   selectBackup: id =>
     set(state => ({ selectedBackupIds: [...state.selectedBackupIds, id] })),
   clearSelection: () => set({ selectedBackupIds: [] }),
@@ -576,7 +585,8 @@ export const useBackupStore = create<BackupState>()(set => ({
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
-type ThemeName = 'light' | 'dark'
+const ThemeName = { Light: 'light', Dark: 'dark' } as const
+type ThemeName = (typeof ThemeName)[keyof typeof ThemeName]
 
 interface PreferencesState {
   theme: ThemeName
@@ -588,7 +598,7 @@ interface PreferencesState {
 export const usePreferencesStore = create<PreferencesState>()(
   persist(
     set => ({
-      theme: 'light',
+      theme: ThemeName.Light,
       sidebarCollapsed: false,
       tablePageSize: 20,
       setTheme: theme => set({ theme }),
@@ -635,28 +645,25 @@ export const useBackupUiStore = create<BackupUiState>()(
 ```tsx
 // ✅ CORRECT — single source of truth in the feature that owns the concept
 // src/features/backups/constants.ts
-export const BACKUP_STATUS_ACTIVE = 'active' as const
-export const BACKUP_STATUS_FAILED = 'failed' as const
-export const BACKUP_STATUS_ARCHIVED = 'archived' as const
-
+export const BACKUP_FILTERS_STORAGE_KEY = 'syneto.backups.filters'
 export const MAX_BACKUP_RETENTION_DAYS = 90
 
-// src/features/backups/hooks/useBackupSearch.ts
-import { BACKUP_STATUS_ARCHIVED } from '../constants'
+// src/features/backups/hooks/useBackupFilters.ts
+import { BACKUP_FILTERS_STORAGE_KEY } from '../constants'
 
-const visibleBackups = backups.filter(backup => backup.status !== BACKUP_STATUS_ARCHIVED)
+const savedFilters = localStorage.getItem(BACKUP_FILTERS_STORAGE_KEY)
 ```
 
 ```tsx
 // ❌ WRONG — same string hardcoded in multiple places
-// hooks/useBackups.ts
-backups.filter(backup => backup.status !== 'archived')
+// hooks/useBackupFilters.ts
+localStorage.getItem('syneto.backups.filters')
 
 // hooks/useBackupSearch.ts
-const matchesStatus = showArchived || backup.status !== 'archived'  // duplicate!
+localStorage.setItem('syneto.backups.filters', serialized)  // duplicate!
 
-// components/BackupBadge.tsx
-const badgeClass = status === 'archived' ? 'bg-gray-400' : 'bg-green-500'  // duplicate!
+// components/BackupToolbar.tsx
+localStorage.removeItem('syneto.backup.filters')  // duplicate — and a silent typo!
 ```
 
 ```tsx
@@ -669,6 +676,8 @@ const POLLING_INTERVAL_MS = 30_000
 setTimeout(poll, POLLING_INTERVAL_MS)
 setTimeout(healthCheck, POLLING_INTERVAL_MS)
 ```
+
+**Scope:** this pattern covers *standalone* literals. When the literal is one alternative in a closed set — a status, kind, or mode — a family of constants is the wrong fix; the set becomes an enum object (Pattern 15).
 
 ---
 
@@ -934,7 +943,7 @@ const { data: backups = [], isPending, error } = useQuery(backupsQuery())
 
 const { data: activeBackupCount } = useQuery({
   ...backupsQuery(),
-  select: allBackups => allBackups.filter(backup => backup.status === 'active').length,
+  select: allBackups => allBackups.filter(backup => backup.status === BackupStatus.Active).length,
 })
 
 // ✅ CORRECT — mutations invalidate through the same key factory
@@ -974,3 +983,73 @@ useEffect(() => {
 ```
 
 **The boundary in one sentence:** server state (data you don't own — the backend's truth, snapshotted) belongs to the query cache; client state (data you own — UI mode, filters, drafts, selections) belongs to `useState`, context, or a Zustand store.
+
+---
+
+## Pattern 15: Closed Sets Are Enum Objects, Not Loose Strings (CRITICAL)
+
+**Why:** A status, kind, mode, or state has a fixed set of legal values. Left as raw `'archived'` literals across components, hooks, and stores, nothing in the code says the set exists — a typo passes `tsc`, and adding a fourth value means grepping and hoping. A flat family of constants (`BACKUP_STATUS_ACTIVE`, `BACKUP_STATUS_FAILED`, …) names each *value* but never names the *set*, so the prop or parameter stays typed `string` and still accepts anything.
+
+**Rule:** Model the set **once** as an `as const` object plus a type derived from it, in the module that owns the concept. The object gives named members and a runtime list to iterate; the derived type is the literal union, which is exactly what generated API clients, TanStack Router's `validateSearch`, and form schemas already speak — so it crosses boundaries without casts. Never use TypeScript's `enum` keyword: its members are nominal, so every value arriving from the wire needs a cast, and it emits runtime code rather than erasing (breaking `erasableSyntaxOnly` and Node type-stripping).
+
+**A bare literal-union alias** — `export type UserRole = 'admin' | 'viewer' | 'editor'` — is the halfway house. It names the set but produces no members and nothing to iterate, so it holds up only while no member is referenced by name and no code needs the value list. The moment either happens — a `=== 'admin'` comparison, a dropdown built from the set — convert it to the pair below. Give the object the alias's existing name and every annotation keeps working unchanged; only the declaration and the literals move.
+
+No linter catches a violation of this pattern — `tsc` is satisfied by any string, and `@typescript-eslint/no-unsafe-enum-comparison` only governs the `enum` keyword this rule bans. It is caught in review or not at all.
+
+```tsx
+// ✅ CORRECT — one declaration pair names the set and its members
+// src/features/backups/constants.ts
+export const BackupStatus = {
+  Active: 'active',
+  Failed: 'failed',
+  Archived: 'archived',
+} as const
+
+export type BackupStatus = (typeof BackupStatus)[keyof typeof BackupStatus]
+
+// src/features/backups/hooks/useBackupSearch.ts
+import { BackupStatus } from '../constants'
+
+const status: BackupStatus = backup.status            // API literal union — no cast
+const activeBackups = backups.filter(backup => backup.status === BackupStatus.Active)
+```
+
+Per-value data belongs in a `Record` keyed by the union, not in a ternary chain repeated per component. This is where the type earns its keep: add a member to the object and the `Record` stops compiling until it is handled.
+
+```tsx
+// ✅ CORRECT — exhaustive by construction
+const STATUS_BADGE_CLASS: Record<BackupStatus, string> = {
+  [BackupStatus.Active]: 'bg-green-500',
+  [BackupStatus.Failed]: 'bg-red-500',
+  [BackupStatus.Archived]: 'bg-gray-400',
+}
+
+interface BackupBadgeProps {
+  status: BackupStatus
+}
+
+export function BackupBadge({ status }: BackupBadgeProps) {
+  return <span className={STATUS_BADGE_CLASS[status]}>{status}</span>
+}
+
+// ✅ CORRECT — the object is also the runtime list: filter dropdowns, tabs, tests
+const statusOptions = Object.values(BackupStatus)
+```
+
+```tsx
+// ❌ WRONG — inline literals: the set is invisible, the typo is silent
+const badgeClass = status === 'archived' ? 'bg-gray-400' : 'bg-green-500'
+const isDone = backup.status === 'arcived'            // compiles if `status` is `string`
+
+// ❌ WRONG — constant family: names each value, but no type names the set
+export const BACKUP_STATUS_ACTIVE = 'active' as const
+export const BACKUP_STATUS_FAILED = 'failed' as const
+
+// ❌ WRONG — `enum` keyword: emits runtime code, nominal members need casts
+export enum BackupStatus { Active = 'active', Failed = 'failed' }
+```
+
+**When NOT to apply:**
+- The set isn't closed — values come from the server, a config file, or user input (tenant names, tag keys, feature-flag names).
+- A single standalone literal with no siblings — a storage key, a poll interval, an API path. That's Pattern 9.
+- A presentational prop variant written inline at every call site (`size: 'sm' | 'md' | 'lg'`, used as `<Button size="sm">`). A bare literal union is right there: the prop type is the single source of truth and the attribute documents itself. Those repeated attribute values are exempt from Pattern 9 too — do not extract `'sm'` into a constant. Promote to an enum object the moment the value gets stored, compared in more than one module, or iterated.

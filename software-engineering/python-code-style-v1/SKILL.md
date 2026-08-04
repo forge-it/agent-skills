@@ -4,7 +4,7 @@ description: Defines code style conventions for Python. Use whenever writing, re
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "1.0.0"
+  version: "1.1.0"
 ---
 
 # Python Code Style Skill
@@ -42,14 +42,16 @@ Constants are `UPPERCASE_WITH_UNDERSCORES`, defined at the top of the module dir
 A literal value that appears in more than one place across the codebase must become a named constant defined once — in the module that owns the concept — and imported everywhere else. Never re-define the raw literal:
 
 ```python
-# node_models.py — owns the concept, defines the constant
-NODE_MODEL_NAME_MEDIUM = "s1.medium"
+# presentation/http.py — owns the concept, defines the constant
+IDEMPOTENCY_KEY_HEADER = "Idempotency-Key"
 
-# datacenter_settings.py — imports it, never repeats the literal
-from vulcan.infrastructure.startup.node_models import NODE_MODEL_NAME_MEDIUM
+# presentation/routers/backups.py — imports it, never repeats the literal
+from vulcan.presentation.http import IDEMPOTENCY_KEY_HEADER
 
-DEFAULT_NODE_MODEL_NAME = NODE_MODEL_NAME_MEDIUM
+idempotency_key = request.headers.get(IDEMPOTENCY_KEY_HEADER)
 ```
+
+This covers *standalone* literals. When the literal is one alternative in a closed set — a status, kind, or mode — a family of constants is the wrong fix; the set becomes an enum (Rule 16).
 
 ### 7. Absolute Imports (HIGH)
 
@@ -98,3 +100,29 @@ All filesystem operations go through `pathlib.Path` — never `os.path`, `os.mak
 ### 15. Minimal Comments (HIGH)
 
 Comments exist only for what the code cannot say: a constraint, an invariant, a non-obvious why. Never comment what the code already says, and keep comments to a minimum overall.
+
+### 16. Closed Sets Are Enums (CRITICAL)
+
+When a value can only be one of a fixed set of alternatives — a status, kind, mode, state, direction, or unit — the set is an `enum.StrEnum` (`IntEnum` for numeric codes, plain `Enum` when the value is opaque). Never a `str` annotation with a family of sibling constants beside it (`BACKUP_STATUS_ACTIVE = "active"`, …), and never bare string literals compared inline. A constant family names each *value* but never the *set*: the annotation stays `str`, so a typo or a stale fourth value type-checks, and nothing points at the branches a new alternative must reach. Close every `match` on the set with `typing.assert_never` in a `case _:` arm — that arm is what turns an added member into a type-check failure.
+
+```python
+class BackupStatus(StrEnum):
+    ACTIVE = "active"
+    FAILED = "failed"
+    ARCHIVED = "archived"
+
+def retention_days(status: BackupStatus) -> int:
+    match status:
+        case BackupStatus.ACTIVE:
+            return 30
+        case BackupStatus.FAILED:
+            return 7
+        case BackupStatus.ARCHIVED:
+            return 365
+        case _:
+            assert_never(status)             # a new member fails type-checking here
+```
+
+Compare with `==` (`status == BackupStatus.ARCHIVED`), never `is` and never `.value`. Members are strings, so they serialize as their value and pass anywhere a `str` is expected — but a value that arrived as a raw string (a plain text column, a JSON payload) is only *equal* to its member, never identical to it, so `is` fails silently and no type checker flags it. Coerce once at that boundary (`BackupStatus(raw_status)`) and pass members inward. Per-member behaviour belongs on the enum as a method or property, not in an `if` ladder repeated at each call site. `Literal["..."]` is acceptable only for a keyword argument that never leaves its own signature.
+
+**Not applicable** when the set isn't closed — values come from a database table, a config file, or user input (tenant names, tag keys, a catalogue that grows) — or for a single standalone value with no siblings, which is a constant (Rule 6).

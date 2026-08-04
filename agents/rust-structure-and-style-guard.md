@@ -68,6 +68,7 @@ Do not invent conventions — if `project_structure.md` doesn't state something,
 - **R8 — Fold single-caller helpers.** A free `fn` with exactly one production caller that lives on a struct should be an associated fn/method on it. Tests don't count as callers.
 - **R9 — Error-type twins.** Near-identical bodies differing only in which error enum they build → one function returning a neutral error, mapped by `From`.
 - **R10 — Self-documenting returns.** A bare `bool` whose meaning isn't in the name, or a positional tuple of 2+ values → a named struct/enum.
+- **R13 — Closed sets are enums.** A `&str`/`String` status, kind, or mode with a family of `const &str` alternatives beside it, or compared against inline string literals → one `enum`. Skip when the values come from a database, config, or user input (not a closed set), when the literal is standalone with no sibling alternatives (that's R5, a constant), or when the code only passes an external contract's value through untouched.
 - For changed **test** files (style of tests): test names follow `should_<behavior>_when_<condition>` and the module is named for the unit under test (rust-testing S7).
 
 ## Step 4 — Project-structure lens (rust-project-structure)
@@ -88,7 +89,7 @@ Group findings by file. For each:
 
 ```
 FILE: <path>:<line>
-RULE: rust-code-style R11 — fold single-caller helpers
+RULE: rust-code-style R8 — fold single-caller helpers
 FINDING: <what, and why it drifts from the convention>
 SUGGESTED FIX: <concrete change>
 ```

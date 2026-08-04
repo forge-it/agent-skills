@@ -4,7 +4,7 @@ description: Defines code style conventions for Python. Use whenever writing, re
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.10"
+  version: "0.0.11"
 ---
 
 # Python Code Style Skill
@@ -195,6 +195,8 @@ from vulcan.infrastructure.startup.node_models import (
 AVAILABLE_NAMES = (NODE_MODEL_NAME_SMALL, NODE_MODEL_NAME_MEDIUM, NODE_MODEL_NAME_LARGE)
 ```
 
+This applies to *standalone* literals, and to open-ended catalogues like the one above — a set of names infrastructure can grow. When the alternatives are genuinely closed and the code branches on them (a status, kind, or mode), a family of constants is the wrong fix: the set becomes an enum (Rule 15).
+
 ### 7. Absolute Imports (HIGH)
 
 Never use relative imports. Always use absolute imports. Never use function-level imports.
@@ -265,8 +267,8 @@ SUPPORTED_FORMATS = ["pdf", "docx", "html"]
 DOCKER_COMPOSE_SERVICES = ("postgres", "minio")
 SUPPORTED_FORMATS = ("pdf", "docx", "html")
 
-# Good - set when uniqueness and membership testing matter
-ALLOWED_ROLES = {"admin", "editor", "viewer"}
+# Good - set when uniqueness and membership testing matter; members, not raw strings (Rule 15)
+ALLOWED_ROLES = {UserRole.ADMIN, UserRole.EDITOR, UserRole.VIEWER}
 ```
 
 ### 11. DTOs for Dictionaries with More Than 3 Fields (CRITICAL)
@@ -391,6 +393,46 @@ if config_path.exists():
 config_path.unlink(missing_ok=True)
 ```
 
+### 15. Closed Sets Are Enums (CRITICAL)
+
+When a value can only be one of a fixed set of alternatives — a status, kind, mode, state, direction, or unit — model the set as an `enum.StrEnum` (`IntEnum` for numeric codes, plain `Enum` when the value is opaque). Never model it as a `str` parameter with a family of sibling constants beside it, and never as bare string literals compared with `==`.
+
+A constant family names each *value* but never names the *set*: the annotation stays `str`, so a typo or a stale fourth value type-checks, and nothing points at the branches a new alternative must reach. `StrEnum` members *are* strings, so they serialize as their value and pass anywhere a `str` is expected — but a value that arrived as a raw string (a plain text column, a JSON payload) is only *equal* to its member, never identical to it. Coerce once at that boundary with `BackupStatus(raw_status)` and pass members inward.
+
+```python
+from enum import StrEnum
+from typing import assert_never
+
+# Bad - the constants name the values; `status: str` names nothing
+BACKUP_STATUS_ACTIVE = "active"
+BACKUP_STATUS_FAILED = "failed"
+BACKUP_STATUS_ARCHIVED = "archived"
+
+def retention_days(status: str) -> int:      # accepts "acitve", "", anything at all
+    return 365 if status == BACKUP_STATUS_ARCHIVED else 30
+
+# Good - one type names the set, and the type checker verifies the branches are exhaustive
+class BackupStatus(StrEnum):
+    ACTIVE = "active"
+    FAILED = "failed"
+    ARCHIVED = "archived"
+
+def retention_days(status: BackupStatus) -> int:
+    match status:
+        case BackupStatus.ACTIVE:
+            return 30
+        case BackupStatus.FAILED:
+            return 7
+        case BackupStatus.ARCHIVED:
+            return 365
+        case _:
+            assert_never(status)             # a new member fails type-checking here
+```
+
+Compare with `==` (`status == BackupStatus.ARCHIVED`), never `is` and never `.value` — `is` fails silently for a value that was never coerced, and no type checker flags it. Per-member behaviour belongs on the enum as a method or property, not in an `if` ladder repeated at each call site. `Literal["..."]` is acceptable only for a keyword argument that never leaves its own signature; anything stored, returned, or persisted gets an enum.
+
+**Not applicable** when the set isn't closed — values come from a database table, a config file, or user input (tenant names, tag keys, a catalogue that grows) — or for a single standalone value with no siblings, which is a constant (Rule 6).
+
 ## Anti-Patterns to Avoid
 
 1. **Single-letter variables**: Using `x`, `i`, `p` instead of descriptive names
@@ -408,6 +450,7 @@ config_path.unlink(missing_ok=True)
 13. **Raw dicts with more than 3 fields**: Passing or returning `dict` with more than 3 keys instead of a typed dataclass DTO
 14. **Duplicate literal values**: Defining the same string, number, or tuple literal in more than one place instead of extracting it into a named constant in the authoritative module and importing it everywhere
 15. **Inheritance for shared helpers**: Creating a base class solely to share helper methods or common attributes between sibling classes — use module-level functions and direct dependency ownership instead
+16. **Stringly-typed closed sets**: A `str` status/kind/mode with a family of sibling constants, or bare string literals compared with `==`, instead of one `StrEnum`
 
 ## Guidelines
 

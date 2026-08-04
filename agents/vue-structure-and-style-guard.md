@@ -53,6 +53,7 @@ Read the project's `project_structure.md` (commonly under `docs/`), the nearest 
 - **P9 — No duplicate literals.** A route name, event name, store key, or API path repeated across the changes → a named constant in an authoritative module.
 - **P11 — Script-block order.** imports → `defineProps`/`defineEmits`/`defineModel` → composables/stores → `ref`/`reactive` → `computed` → `watch` → functions/handlers → lifecycle. Flag significant disorder.
 - **P12 — No `any`.** Any `any` (including `as any`)? Suggest: test doubles → `Partial<T>` / typed factory / `as unknown as T` / `@ts-expect-error`; unknown shape → `unknown` + narrowing; missing library types → `@ts-expect-error <reason>`.
+- **P13 — Closed sets are enum objects.** A status, kind, or mode compared against inline string literals, or backed by a family of sibling constants (`BACKUP_STATUS_*`), or declared with the `enum` keyword → an `as const` object plus a derived union type. Skip for open-ended values (server-supplied names, config keys), for a standalone literal with no sibling alternatives (that's P9, a constant), and for inline presentational prop variants (`size: 'sm' | 'md'`).
 
 ## Step 4 — Project-structure lens (frontend-vue-development)
 
