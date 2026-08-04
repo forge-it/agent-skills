@@ -4,7 +4,7 @@ description: Coding conventions and style rules for Rust. Apply when writing or 
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.10"
+  version: "0.0.11"
 ---
 
 # Rust Code Style Skill
@@ -153,20 +153,20 @@ Any literal value (string, number, etc.) that appears in more than one place acr
 ```rust
 // Bad - same string defined independently in two modules
 // handlers/backup.rs
-const BACKUP_STATUS_ACTIVE: &str = "active";
+const IDEMPOTENCY_KEY_HEADER: &str = "Idempotency-Key";
 
-// services/scheduler.rs
-const STATUS_ACTIVE: &str = "active";  // duplicate!
+// infrastructure/scheduler_client.rs
+const IDEMPOTENCY_HEADER: &str = "Idempotency-Key";  // duplicate!
 
-// Good - single definition in the authoritative module
-// domain/backup.rs
-pub const BACKUP_STATUS_ACTIVE: &str = "active";
-pub const BACKUP_STATUS_FAILED: &str = "failed";
-pub const BACKUP_STATUS_ARCHIVED: &str = "archived";
+// Good - single definition in the module that owns the concept
+// infrastructure/http.rs
+pub const IDEMPOTENCY_KEY_HEADER: &str = "Idempotency-Key";
 
 // handlers/backup.rs
-use crate::domain::backup::BACKUP_STATUS_ACTIVE;
+use crate::infrastructure::http::IDEMPOTENCY_KEY_HEADER;
 ```
+
+This rule governs **standalone** literals. When the literal is one alternative in a closed set — a status, kind, or mode — a family of `const &str`s is the wrong fix: model the set as an `enum` (Rule 13).
 
 ### 6. Modern Module Convention (HIGH)
 
@@ -467,6 +467,61 @@ F4 requires no special permission — shrinking a coordinator's collaborator lis
 
 **Rationale:** A coordinator that both orders steps and implements some inline has two reasons to change — the flow, and each embedded step. The reader must switch between "what happens next" and "how this branch normalizes data" mid-function. This is the SRP violation that stays invisible to size-based checks: an 80-line fn with two inline steps is guiltier than a 130-line fn of pure named calls.
 
+### 13. Closed Sets Are Enums, Not Strings (CRITICAL)
+
+When a value can only be one of a fixed set of alternatives — a status, kind, mode, state, direction, or unit — model the set as an `enum`. Never represent it as a `&str`/`String` carrying a family of `const &str` values beside it, and never as bare inline literals compared with `==`.
+
+A constant family names each *value* but never names the *set*. The signature still says `&str`, so a typo, an empty string, or a stale fourth value all type-check, and the compiler cannot point at the places a new alternative needs handling. One `enum` names the set, makes the invalid value unrepresentable, and turns "did I cover every case?" into a compile error.
+
+```rust
+// Bad - stringly-typed set: constants name the values, the type names nothing
+pub const BACKUP_STATUS_ACTIVE: &str = "active";
+pub const BACKUP_STATUS_FAILED: &str = "failed";
+pub const BACKUP_STATUS_ARCHIVED: &str = "archived";
+
+fn retention_days(status: &str) -> u32 {      // accepts "acitve", "", anything at all
+    if status == BACKUP_STATUS_ARCHIVED { 365 } else { 30 }
+}
+
+// Good - one type names the set; every alternative is accounted for
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BackupStatus {
+    Active,
+    Failed,
+    Archived,
+}
+
+fn retention_days(status: BackupStatus) -> u32 {
+    match status {                            // no catch-all arm: a new variant
+        BackupStatus::Active => 30,           // fails the build right here
+        BackupStatus::Failed => 7,
+        BackupStatus::Archived => 365,
+    }
+}
+```
+
+Per-variant behaviour belongs on the enum, not in a `match` ladder repeated at every call site:
+
+```rust
+impl BackupStatus {
+    pub fn is_terminal(self) -> bool {
+        matches!(self, Self::Failed | Self::Archived)
+    }
+}
+```
+
+**Strings live only at the boundary.** Derive serde, or write `as_str()` and `FromStr`, and convert exactly once where the value enters or leaves the process — an HTTP payload, a database column, a CLI argument. Everything inward of that boundary passes the enum, never its string form.
+
+**When NOT to apply:**
+- The set isn't closed — values come from a database table, a config file, or user input (tenant names, tag keys, node models a catalogue can grow). Those stay strings, or become a newtype when they carry an invariant (rust-design-idioms Idiom 1).
+- A single standalone value with no siblings — a URL, a timeout, a header name. That's a constant (Rule 5).
+- An external contract whose values the code neither branches on nor owns, and passes straight through unchanged.
+
+Rule 10 covers this shape in return position (name the outcomes of a function); this rule covers it everywhere else — parameters, struct fields, and stored state.
+
+**Rationale:** A stringly-typed set pushes validation to runtime and spreads it across every call site, where it is applied inconsistently or forgotten. The enum moves that check to the type — and each added variant surfaces as a list of compiler errors naming exactly the code that must change, instead of a grep for a literal.
+
 ## Anti-Patterns to Avoid
 
 1. **Single-letter variables** — `x`, `i`, `p` in closures or anywhere else instead of descriptive names (Rule 1)
@@ -484,3 +539,4 @@ F4 requires no special permission — shrinking a coordinator's collaborator lis
 13. **Opaque return shapes** — a tuple of primitives or a bare `bool` instead of a named struct/enum (Rule 10)
 14. **Gratuitous `unsafe`** — `unsafe` for convenience or to silence the borrow checker (Rule 11)
 15. **Inline step implementations in coordinators** — a service/orchestrator fn implementing a step in a multi-line block instead of naming it as a call (Rule 12)
+16. **Stringly-typed closed sets** — a `&str` status/kind/mode with a family of `const &str` alternatives, or bare string literals compared with `==`, instead of one `enum` (Rule 13)

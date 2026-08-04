@@ -66,6 +66,12 @@ do not flag it.
 - **Constants.** A literal (string, number, path) repeated across the changed
   files, or duplicating an existing one, should be a named constant in the
   authoritative module.
+- **Closed sets are enums.** A `str`-annotated status, kind, or mode with a
+  family of sibling constants beside it, or compared against inline string
+  literals, should be a `StrEnum` (`IntEnum` for numeric codes). Skip when the
+  values are open-ended (database rows, config, user input), when the literal is
+  standalone, and for a `Literal[...]` keyword argument that never leaves its
+  own signature.
 - **Type annotations.** Public functions and methods should have parameter and
   return type annotations. Flag missing annotations on new/changed signatures
   unless they're trivially inferable test helpers.

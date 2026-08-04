@@ -5,7 +5,7 @@ vibe: Keeps Vue codebases predictable, traceable, and free of spaghetti.
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.7"
+  version: "0.0.8"
 ---
 
 # Vue Code Style — Patterns & Conventions
@@ -23,10 +23,12 @@ A living collection of patterns that every component, composable, and store in t
 <!-- ✅ CORRECT — child reports, parent decides -->
 <!-- BackupRow.vue -->
 <script setup lang="ts">
+import type { BackupStatus } from '@/features/backups/constants'
+
 const props = defineProps<{
   id: string
   name: string
-  status: 'active' | 'archived' | 'failed'
+  status: BackupStatus
 }>()
 
 const emit = defineEmits<{
@@ -173,7 +175,13 @@ onMounted(fetchBackups)
 // ✅ src/keys.ts — typed, Symbol-based, single source of truth
 import type { InjectionKey, Ref } from 'vue'
 
-export type UserRole = 'admin' | 'viewer' | 'editor'
+export const UserRole = {
+  Admin: 'admin',
+  Viewer: 'viewer',
+  Editor: 'editor',
+} as const
+
+export type UserRole = (typeof UserRole)[keyof typeof UserRole]
 
 export const userRoleKey: InjectionKey<Ref<UserRole>> = Symbol('userRole')
 ```
@@ -182,9 +190,9 @@ export const userRoleKey: InjectionKey<Ref<UserRole>> = Symbol('userRole')
 <!-- App.vue -->
 <script setup lang="ts">
 import { provide, ref } from 'vue'
-import { userRoleKey, type UserRole } from '@/keys'
+import { userRoleKey, UserRole } from '@/keys'
 
-const userRole = ref<UserRole>('admin')
+const userRole = ref<UserRole>(UserRole.Admin)
 provide(userRoleKey, userRole)
 </script>
 ```
@@ -193,13 +201,13 @@ provide(userRoleKey, userRole)
 <!-- ServerRow.vue -->
 <script setup lang="ts">
 import { inject } from 'vue'
-import { userRoleKey } from '@/keys'
+import { userRoleKey, UserRole } from '@/keys'
 
 const userRole = inject(userRoleKey)
 </script>
 
 <template>
-  <button v-if="userRole === 'admin'">Delete Server</button>
+  <button v-if="userRole === UserRole.Admin">Delete Server</button>
 </template>
 ```
 ```typescript
@@ -227,7 +235,7 @@ const role = inject('userRole')      // type is unknown
 ```typescript
 // ✅ CORRECT — focused, ref in / ref out, cleanup, object return
 import { ref, computed, onMounted, onUnmounted, type Ref } from 'vue'
-import { BACKUP_STATUS_ARCHIVED } from '@/features/backups/constants'
+import { BackupStatus } from '@/features/backups/constants'
 
 export function useBackupSearch(backups: Ref<Backup[]>) {
   const searchQuery = ref('')
@@ -238,7 +246,7 @@ export function useBackupSearch(backups: Ref<Backup[]>) {
       const matchesSearch = backup.name
         .toLowerCase()
         .includes(searchQuery.value.toLowerCase())
-      const matchesStatus = showArchived.value || backup.status !== BACKUP_STATUS_ARCHIVED
+      const matchesStatus = showArchived.value || backup.status !== BackupStatus.Archived
       return matchesSearch && matchesStatus
     })
   )
@@ -370,12 +378,12 @@ export function useItems() {
 
 ```typescript
 // ✅ CORRECT — callback parameters are descriptive
-backups.value.filter(backup => backup.status !== 'archived')
+backups.value.filter(backup => backup.status !== BackupStatus.Archived)
 notifications.value.filter(notification => notification.id !== id)
 users.map(user => user.email)
 
 // ❌ WRONG — single-letter or abbreviated callback parameters
-backups.value.filter(b => b.status !== 'archived')
+backups.value.filter(b => b.status !== BackupStatus.Archived)
 notifications.value.filter(n => n.id !== id)
 users.map(u => u.email)
 ```
@@ -408,6 +416,7 @@ const loading = ref(false)  // "loading" is ambiguous — loading what?
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { getBackups } from '../api/backupApi'
+import { BackupStatus } from '../constants'
 import type { Backup } from '../types'
 
 export const useBackupStore = defineStore('backups', () => {
@@ -416,7 +425,7 @@ export const useBackupStore = defineStore('backups', () => {
   const error = ref<string | null>(null)
 
   const activeBackups = computed(() =>
-    backups.value.filter(backup => backup.status === 'active')
+    backups.value.filter(backup => backup.status === BackupStatus.Active)
   )
 
   async function fetchBackups(): Promise<void> {
@@ -452,7 +461,7 @@ export const useBackupStore = defineStore('backups', () => {
 // src/features/backups/composables/useBackupSearch.ts
 import { computed, ref } from 'vue'
 import { storeToRefs } from 'pinia'
-import { BACKUP_STATUS_ARCHIVED } from '../constants'
+import { BackupStatus } from '../constants'
 import { useBackupStore } from '../stores/useBackupStore'
 
 export function useBackupSearch() {
@@ -467,7 +476,7 @@ export function useBackupSearch() {
       const matchesSearch = backup.name
         .toLowerCase()
         .includes(searchQuery.value.toLowerCase())
-      const matchesStatus = showArchived.value || backup.status !== BACKUP_STATUS_ARCHIVED
+      const matchesStatus = showArchived.value || backup.status !== BackupStatus.Archived
       return matchesSearch && matchesStatus
     })
   )
@@ -557,11 +566,12 @@ export const useAuthStore = defineStore('auth', () => {
 
 ```typescript
 // ✅ CORRECT — preferences are durable, so persisting the whole store is reasonable
-type ThemeName = 'light' | 'dark'
+const ThemeName = { Light: 'light', Dark: 'dark' } as const
+type ThemeName = (typeof ThemeName)[keyof typeof ThemeName]
 
 export const usePreferencesStore = defineStore('preferences', () => {
   const sidebarCollapsed = ref(false)
-  const theme = ref<ThemeName>('light')
+  const theme = ref<ThemeName>(ThemeName.Light)
   const tablePageSize = ref(20)
 
   function setTheme(nextTheme: ThemeName): void {
@@ -610,30 +620,25 @@ export const useBackupStore = defineStore('backups', () => {
 ```typescript
 // ✅ CORRECT — single source of truth in the feature that owns the concept
 // src/features/backups/constants.ts
-export const BACKUP_STATUS_ACTIVE = 'active' as const
-export const BACKUP_STATUS_FAILED = 'failed' as const
-export const BACKUP_STATUS_ARCHIVED = 'archived' as const
-
+export const BACKUP_FILTERS_STORAGE_KEY = 'syneto.backups.filters'
 export const MAX_BACKUP_RETENTION_DAYS = 90
 
-// src/features/backups/composables/useBackups.ts
-import { BACKUP_STATUS_ARCHIVED } from '../constants'
+// src/features/backups/composables/useBackupFilters.ts
+import { BACKUP_FILTERS_STORAGE_KEY } from '../constants'
 
-const filteredBackups = computed(() =>
-  backups.value.filter(backup => backup.status !== BACKUP_STATUS_ARCHIVED)
-)
+const savedFilters = localStorage.getItem(BACKUP_FILTERS_STORAGE_KEY)
 ```
 
 ```typescript
 // ❌ WRONG — same string hardcoded in multiple places
-// composables/useBackups.ts
-backups.value.filter(backup => backup.status !== 'archived')
+// composables/useBackupFilters.ts
+localStorage.getItem('syneto.backups.filters')
 
 // composables/useBackupSearch.ts
-const matchesStatus = showArchived.value || backup.status !== 'archived'  // duplicate!
+localStorage.setItem('syneto.backups.filters', serialized)  // duplicate!
 
-// components/BackupBadge.vue
-const badgeClass = props.status === 'archived' ? 'bg-gray-400' : 'bg-green-500'  // duplicate!
+// components/BackupToolbar.vue
+localStorage.removeItem('syneto.backup.filters')  // duplicate — and a silent typo!
 ```
 
 ```typescript
@@ -646,6 +651,10 @@ const POLLING_INTERVAL_MS = 30_000
 setTimeout(poll, POLLING_INTERVAL_MS)
 setTimeout(healthCheck, POLLING_INTERVAL_MS)
 ```
+
+**Scope:** this pattern covers *standalone* literals. When the literal is one alternative in a closed set — a status, kind, or mode — a family of constants is the wrong fix; the set becomes an enum object (Pattern 13).
+
+---
 
 ## Pattern 10: Route Organization — Named Routes, Lazy Loading, Typed Meta, Reactive Params
 
@@ -693,12 +702,13 @@ const router = createRouter({
 // ✅ CORRECT — type RouteMeta globally
 // src/app/router.d.ts
 import 'vue-router'
+import type { UserRole } from '@/keys'
 
 declare module 'vue-router' {
   interface RouteMeta {
     requiresAuth?: boolean
     title?: string
-    requiredRole?: 'admin' | 'viewer' | 'editor'
+    requiredRole?: UserRole
   }
 }
 ```
@@ -816,3 +826,67 @@ const response = await fetchUser() as any
 ```
 
 **Enforcement:** this is enforced by `@typescript-eslint/no-explicit-any` (`error`) in both app and test files — see [[frontend-vue-eslint-setup]]. The escape hatches above (`as unknown as T`, `@ts-expect-error`) are deliberately *not* `any`, so they pass the rule while staying explicit and local.
+
+---
+
+## Pattern 13: Closed Sets Are Enum Objects, Not Loose Strings (CRITICAL)
+
+**Why:** A status, kind, mode, or state has a fixed set of legal values. Left as raw `'archived'` literals across components, composables, and stores, nothing in the code says the set exists — a typo passes `vue-tsc`, and adding a fourth value means grepping and hoping. A flat family of constants (`BACKUP_STATUS_ACTIVE`, `BACKUP_STATUS_FAILED`, …) names each *value* but never names the *set*, so the prop or parameter stays typed `string` and still accepts anything.
+
+**Rule:** Model the set **once** as an `as const` object plus a type derived from it, in the module that owns the concept. The object gives named members and a runtime list to iterate; the derived type is the literal union, which is exactly what the API layer, router, and validation schemas already speak — so it crosses boundaries without casts. Never use TypeScript's `enum` keyword: its members are nominal, so every value arriving from the wire needs a cast, and it emits runtime code rather than erasing (breaking `erasableSyntaxOnly` and Node type-stripping).
+
+**A bare literal-union alias** — `export type UserRole = 'admin' | 'viewer' | 'editor'` — is the halfway house. It names the set but produces no members and nothing to iterate, so it holds up only while no member is referenced by name and no code needs the value list. The moment either happens — a `=== 'admin'` comparison, a dropdown built from the set — convert it to the pair below. Give the object the alias's existing name and every annotation keeps working unchanged; only the declaration and the literals move.
+
+No linter catches a violation of this pattern — `vue-tsc` is satisfied by any string. It is caught in review or not at all.
+
+```typescript
+// ✅ CORRECT — one declaration pair names the set and its members
+// src/features/backups/constants.ts
+export const BackupStatus = {
+  Active: 'active',
+  Failed: 'failed',
+  Archived: 'archived',
+} as const
+
+export type BackupStatus = (typeof BackupStatus)[keyof typeof BackupStatus]
+
+// src/features/backups/composables/useBackups.ts
+import { BackupStatus } from '../constants'
+
+const status: BackupStatus = backup.status            // API literal union — no cast
+const activeBackups = computed(() =>
+  backups.value.filter(backup => backup.status === BackupStatus.Active)
+)
+```
+
+Per-value data belongs in a `Record` keyed by the union, not in a ternary chain repeated per component. This is where the type earns its keep: add a member to the object and the `Record` stops compiling until it is handled.
+
+```typescript
+// ✅ CORRECT — exhaustive by construction
+const STATUS_BADGE_CLASS: Record<BackupStatus, string> = {
+  [BackupStatus.Active]: 'bg-green-500',
+  [BackupStatus.Failed]: 'bg-red-500',
+  [BackupStatus.Archived]: 'bg-gray-400',
+}
+
+// ✅ CORRECT — the object is also the runtime list: filter dropdowns, tabs, tests
+const statusOptions = Object.values(BackupStatus)
+```
+
+```typescript
+// ❌ WRONG — inline literals: the set is invisible, the typo is silent
+const badgeClass = props.status === 'archived' ? 'bg-gray-400' : 'bg-green-500'
+const isDone = backup.status === 'arcived'            // compiles if `status` is `string`
+
+// ❌ WRONG — constant family: names each value, but no type names the set
+export const BACKUP_STATUS_ACTIVE = 'active' as const
+export const BACKUP_STATUS_FAILED = 'failed' as const
+
+// ❌ WRONG — `enum` keyword: emits runtime code, nominal members need casts
+export enum BackupStatus { Active = 'active', Failed = 'failed' }
+```
+
+**When NOT to apply:**
+- The set isn't closed — values come from the server, a config file, or user input (tenant names, tag keys, feature-flag names).
+- A single standalone literal with no siblings — a storage key, a poll interval, an API path. That's Pattern 9.
+- A presentational prop variant written inline at every call site (`size: 'sm' | 'md' | 'lg'`, used as `<AppButton size="sm">`). A bare literal union is right there: the prop type is the single source of truth and the attribute documents itself. Those repeated attribute values are exempt from Pattern 9 too — do not extract `'sm'` into a constant. Promote to an enum object the moment the value gets stored, compared in more than one module, or iterated.
