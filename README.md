@@ -46,6 +46,7 @@ Organisation-specific skills. These assume Syneto's repositories, trackers, and 
 |-------|-------------|
 | [syneto-rest-api-design](software-engineering/syneto-rest-api-design/SKILL.md) | Syneto's REST API conventions (RFD0003) for Syneto OS services |
 | [syneto-release-notes](software-engineering/syneto-release-notes/SKILL.md) | Zero-argument Central release notes: discover contributing repos, enrich tickets, publish to Confluence |
+| [syneto-release-promote](software-engineering/syneto-release-promote/SKILL.md) | Ship an accepted release: preflight the fleet, merge dev into prod, push |
 
 ### Greenfield Project Setup
 

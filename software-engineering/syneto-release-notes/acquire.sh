@@ -34,6 +34,10 @@ fetch_concurrency=12
 # Repositories that still carry central-<N>.<N> refs but have left the release
 # train. Excluded from discovery and REPORTED — never silently dropped, because
 # a wrongly-excluded repository is invisible in the finished release notes.
+#
+# Kept in sync BY HAND with the identical list in
+# ../syneto-release-promote/promote.sh. The two skills must agree on what is out
+# of the release; if you change one, change the other in the same commit.
 retired_repositories=("central-vat-searcher")
 
 is_retired() {
