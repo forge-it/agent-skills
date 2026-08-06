@@ -152,6 +152,52 @@ one workflow, a facade can own one stable entry boundary, an aggregate can own
 the invariants of one domain concept, and a data structure can carry the state
 of one concept. State why such an explanation does or does not hold.
 
+### Multi-port concrete types
+
+This trigger applies only where traits serve as consumer-facing capability
+boundaries — a ports-and-adapters or layered design, detected per Principle 7.
+Skip it where they do not: in a systems crate, a parser, a CLI, or a published
+library whose traits *are* the public API, "port" is not the local vocabulary and
+counting trait impls proves nothing.
+
+Where it does apply: one concrete type implementing two or more traits that are
+genuine ports is an **adjudication trigger, not a verdict**. Exclude plumbing —
+the std derivables and markers (including `Drop`), the conversion, comparison and
+operator families, iteration (`Iterator`, `IntoIterator`, `Extend`,
+`FromIterator`), serde, async IO, and framework glue. Ports and responsibilities
+are not one-to-one: a port describes the narrow capability one consumer needs,
+while a concrete type owns a mechanism, state, or invariant. Assign every
+triggered type to exactly one of three outcomes, and say which:
+
+- **Cohesive (no finding).** The ports are different views, or directional
+  capabilities, of *one* mechanism or one jointly-owned invariant — evidenced by
+  pure delegation from a secondary impl to the primary, by every port operating
+  on the same synchronized state to preserve one stated invariant, or by their
+  being directions (read/write, import/export) of one named mechanism sharing its
+  lifecycle and helpers. Splitting would add wrappers or spread shared state
+  without creating an independent change boundary. Report it under compliant
+  boundaries worth preserving, with the reason.
+- **A real violation (finding).** The ports represent independent reasons to
+  change: materially disjoint collaborator subsets, different transaction,
+  lifecycle, failure, or ownership boundaries, or distinct policy families
+  sharing only a generic dependency such as a connection pool. Sharing a cheap
+  handle — an `Arc`, a pool, a clock, an event bus — is not a cohesion argument.
+  Recommend responsibility-specific types, each owning its behavior and only its
+  relevant collaborators; never behavior-free wrappers around the same object.
+- **Uncertain (open question).** The evidence establishes neither. State which
+  evidence you *already read* that failed to settle it, and name only what lies
+  outside the audited scope or outside code entirely — out-of-scope call sites and
+  wiring, runtime transaction semantics, undocumented product intent. In-scope
+  impl bodies and collaborators are never the missing evidence: you have read
+  them, and if you have not, the audit is incomplete rather than uncertain. Do not
+  guess, and do not default to "split" because splitting sounds safer.
+
+Where the project mechanizes this as a gate with a permission ledger, supply the
+adjudication rather than the grant: the exact type, the exact sorted port set, and
+a rationale naming the shared mechanism or invariant. A rationale that would still
+read as true after an unrelated port was added is not specific enough — an
+approval for two ports must not silently authorize a third.
+
 Tests are part of the audit when they fall within scope. Evaluate whether a test
 module or support type mixes independently changing fixture construction,
 environment management, domain scenarios, assertion DSLs, protocol setup, or
@@ -329,6 +375,8 @@ Do not report:
   occurrences;
 - a preferred alternative design without a proven violation;
 - an architecture rule the project does not use;
+- several trait impls on one type as standalone SRP evidence, without the
+  adjudication the multi-port trigger requires;
 - uncertain intent as fact;
 - out-of-scope code as a finding; or
 - a merge verdict, diff attribution, or pre-existing-context demotion.
@@ -493,7 +541,7 @@ separately listed for a finding.
 - <deduplicated pattern with finding IDs and evidence>
 
 ## Compliant Boundaries Worth Preserving
-- `path:line` — <why this unit has one coherent reason to change>
+- `path:line` — <why this unit has one coherent reason to change; for a multi-port type, the sorted port set and the shared mechanism or invariant>
 
 ## Recommended Remediation Sequence
 1. <incremental boundary, dependencies, and stopping point>

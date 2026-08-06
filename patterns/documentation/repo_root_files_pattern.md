@@ -10,7 +10,7 @@ description: >-
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.1"
+  version: "0.0.2"
 ---
 
 # Repo Root Files Pattern
@@ -22,8 +22,9 @@ rule for where each file lives. Without one, per-component configuration leaks
 to the root, the root carries component-specific detail, and contributors cannot
 tell which files they must create locally to run anything.
 
-**In one line:** the repo root describes the *whole product*; each component
-directory owns its own documentation, task runner, and environment files.
+**In one line:** the repo root describes the *whole product* and owns the one
+command surface contributors call; each component directory owns its own
+documentation, manifests, exclusions, and environment files.
 
 > **Core principle (separation of concerns / single responsibility):** root
 > files answer "what is this product and how is it organised?" — one set of
@@ -48,9 +49,16 @@ and nowhere else.
 | `.dockerignore` | Build-context exclusions for Docker. For workspace builds (backend Dockerfiles built from the repo root), this file governs the whole context — excludes `target/`, `.git/`, unrelated components (`web/`), and all `**/.env*` patterns. | When any component is containerised |
 | `Cargo.toml` / `pyproject.toml` / `package.json` | Workspace manifest (language-specific). | Language-dependent |
 | `justfile` | Root task runner: dev-stack up/down, per-component lint/test/build invocations. Recipes read per-component env files. See `justfile-setup`. | Recommended |
+| `just/` | Responsibility-split recipe files the root `justfile` pulls in with `import` — `env.just`, `dev.just`, `test.just`, `deploy.just`, `format.just`, `tools.just` are a representative set, not a frozen list. Appears once the root file crosses 350 lines, or earlier if a change benefits. See `justfile-setup`. | When the root justfile has outgrown one file |
 | `rust-toolchain.toml` | Pins the Rust toolchain version for the whole workspace. | Rust workspace |
 | `CLAUDE.md` | AI agent instructions: project layout, key decisions, tooling commands. See [`claude_md_pattern.md`](claude_md_pattern.md). | When using AI agents |
 | `AGENTS.md` | Alternative or supplementary agent instructions (mirrors `CLAUDE.md` for non-Claude agents). | When using AI agents |
+
+**`just/` is root-owned, and that is what distinguishes it.** Its files share one
+flat recipe namespace with the root `justfile` and are always invoked from the
+root as `just <recipe>`, so they organize one command surface by responsibility
+rather than adding a second entry point. Components own their manifests and
+toolchains (`cargo`, `uv`, `pnpm`); root recipes delegate to those.
 
 ### Per-component files
 
@@ -66,7 +74,7 @@ describe and configure that one service only.
 | `.env.template` | Checked-in scaffold: every variable name, its dev default, and a comment explaining each one. No real secrets. | Yes |
 | `.env.deploy.local` | Checked-in local-prod values: variable values suitable for `docker compose up` against local containers (e.g. service hostnames instead of `localhost`, real or realistic SMTP credentials). **May contain low-sensitivity real values for a dev cluster.** | When the component is containerised |
 | `.gitignore` | Component-level exclusion: `/target/` or `/node_modules/`, `/.env`, `/.env.*` with explicit negations for `.env.template` and `.env.deploy.local`. | Yes |
-| `Makefile.toml` / `Cargo.toml` / `package.json` | Component build manifest. | Language-dependent |
+| `Cargo.toml` / `pyproject.toml` / `package.json` | Component build manifest. Note what is *not* here: a component task runner. The root `justfile` is the single command surface and delegates to each component's toolchain — see the anti-pattern below. | Language-dependent |
 
 ## The Three Environment Files
 
@@ -186,7 +194,7 @@ the reader already knows what the product is.
   `ROADMAP.md`)
 - Cross-cutting exclusions (`.gitignore`, `.dockerignore`)
 - Workspace build manifest and toolchain pin
-- Root task runner (`justfile`)
+- Root task runner (`justfile`, plus `just/` once it outgrows one file)
 - Agent instructions for the whole codebase (`CLAUDE.md`, `AGENTS.md`)
 
 **Each component owns:**
@@ -214,6 +222,13 @@ is the checked-in local-prod override with container hostnames.
 - **Root `.gitignore` carrying per-component env exclusions.** The root file
   cannot enumerate every future component. Each component's `.gitignore` owns
   its own env exclusions.
+- **A second task runner inside a component directory** — a component `justfile`,
+  or a `Makefile.toml`/`Makefile` carrying tasks. It splits "how do I run this
+  project" across locations, gives the same action two names, and makes
+  contributors learn which directory to stand in. The root `justfile` — with
+  `just/` once it outgrows one file — is the single command surface, and it
+  delegates to each component's toolchain (`cargo`, `uv`, `pnpm`). A recipe that
+  must run inside a component does `cd <component> && …`.
 - **A root README that describes only one component.** The root README should
   describe the product; component detail belongs in the component README.
 - **Per-component DESIGN.md / root ROADMAP.md entries that span the whole

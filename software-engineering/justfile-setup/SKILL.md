@@ -1,10 +1,10 @@
 ---
 name: justfile-setup
-description: Use when bootstrapping a new monorepo that mixes Rust, Python, and/or Vue components and has no task-runner yet — or when a project already has ad-hoc scripts scattered across components and needs a single root-level entry point. Also use when CI keeps drifting out of sync with local commands, when contributors ask "how do I run the dev stack?", or when a new component is added and the existing dev/test/lint/prod recipe set needs extending.
+description: Use when bootstrapping a new monorepo that mixes Rust, Python, and/or Vue components and has no task-runner yet — or when a project already has ad-hoc scripts scattered across components and needs a single root-level entry point. Also use when CI keeps drifting out of sync with local commands, when contributors ask "how do I run the dev stack?", when a new component is added and the existing dev/test/lint/prod recipe set needs extending, or when the root justfile has grown past 350 lines and needs the responsibility-based split into `just/*.just` imports.
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.1"
+  version: "0.0.2"
 ---
 
 # Justfile Setup
@@ -20,7 +20,10 @@ responsibility**: either it delegates to a component's own toolchain (`cargo`,
 do both, it breaks the first principle — split it.
 
 Run this skill once when a new monorepo is created. After the root `justfile`
-exists, extend it by adding new recipes; do not re-run the skill.
+exists, extend it by adding new recipes; do not re-run the skill — with one
+exception: when the root file crosses 350 lines, come back for
+[When the root justfile outgrows one file](#when-the-root-justfile-outgrows-one-file),
+which is a mandatory refactor rather than an optional cleanup.
 
 ## When to use
 
@@ -29,6 +32,8 @@ exists, extend it by adding new recipes; do not re-run the skill.
 - **Existing project with ad-hoc scripts** — consolidate scattered `Makefile`
   targets, `package.json` scripts called from the root, and bare `cargo`/`uv`
   commands into a single authoritative entry point.
+- **Root justfile past 350 lines** — perform the responsibility-based split into
+  `just/*.just` imports; the contributor whose change crosses the line owns it.
 - **New component added** — extend the existing `justfile` with the new
   component's dev/test/lint/prod recipes following the taxonomy below.
 
@@ -362,6 +367,140 @@ Replace all `<project>`, `<component>`, `<package_name>`, `<core-crate-name>`,
 `<worker-crate-name>`, `<core-http-port>` tokens with the actual names before
 committing.
 
+## When the root justfile outgrows one file
+
+The template above already lands in the low 200s of lines, so the threshold below
+is not far off. Decide the mechanism now, while there is nothing to migrate —
+and nothing forbids splitting earlier if a change already benefits from it.
+
+### The trigger: 350 physical lines
+
+Measured with `wc -l justfile`, comments and blank lines included — deliberately,
+so the trigger is obvious from the file itself and needs no definition of what
+counts as code. Crossing means reaching line 351; landing exactly on 350 does
+not trigger it.
+
+**The contributor whose change first crosses the threshold owns the split, in
+that same change.** Not a follow-up ticket, not the next contributor — a deferred
+rule guarantees that whoever next touches the file inherits unrelated cleanup.
+
+### Use `import`, not `mod`
+
+`just` has two composition mechanisms, and only one preserves your command
+surface:
+
+```just
+set shell := ["bash", "-cu"]
+
+import 'just/env.just'
+import 'just/dev.just'
+import 'just/test.just'
+import 'just/deploy.just'
+import 'just/format.just'
+import 'just/tools.just'
+
+default:
+  @just --list
+```
+
+`import` loads definitions into one flat namespace, so `just dev-up`,
+`just test-all`, and `just local-deploy-up` keep working untouched. `mod` would
+namespace them into `just dev::up` and `just test::all`, changing every command
+in your docs, CI, and READMEs, and adding module working-directory semantics to
+reason about.
+
+Recipe names are a public interface — referenced by CI, READMEs, and every
+contributor's muscle memory — so file organization must never force a command
+migration. That is why the choice is made at commit 1, before any name exists to
+migrate.
+
+Imports are explicit and required. Do not use the optional form (`import?`) for
+repository-owned command files — a missing command group is a broken checkout and
+should fail visibly. Imported files must not form cycles.
+
+### What lives where after the split
+
+The root keeps only repository-wide composition: global `set` directives, the
+imports, the default recipe, and — exceptionally — a cross-cutting entrypoint
+that belongs to no single responsibility. Executable implementation detail,
+component lifecycle commands, and private helpers all move out.
+
+Imported files live under `just/` with the `.just` suffix, one per operational
+responsibility:
+
+| File | Responsibility | Representative recipes |
+|---|---|---|
+| `just/env.just` | component env-file creation | `<component>-env` |
+| `just/dev.just` | dev and test-stack lifecycle | `dev-up`, `dev-down`, `dev-<component>-up` |
+| `just/test.just` | focused checks and the canonical gate | `dev-<component>-test`, `<component>-check`, `test-all` |
+| `just/deploy.just` | local-prod deployment and image builds | `local-deploy-*`, `prod-<component>-build` |
+| `just/format.just` | formatting entrypoints | `fmt`, `fmt-rust`, `fmt-web` |
+| `just/tools.just` | operator utilities and host-tool installation | key generation, client installs |
+
+That table is organizational guidance, not a frozen list. Add a file for a
+coherent responsibility, never to even out line counts. There is no 350-line
+limit on an imported file — one that becomes hard to navigate gets divided along
+a real responsibility boundary. Moving the monolith wholesale into one giant
+imported file does not satisfy the rule; the purpose is cohesion, not shrinking
+the root.
+
+After the split:
+
+- **one owning file per recipe**, chosen by what the recipe does. Callers may
+  invoke recipes owned by another file, but definitions are never duplicated.
+- **keep orchestration with the responsibility it serves** — `test-all` stays
+  with the test recipes even though it drives both Rust and web tooling.
+- **mark implementation-only recipes `[private]`** rather than exposing an
+  accidental command-line API.
+- **each global `set` stays in the root, exactly once.** This is not a style
+  preference: repeating a setting in an imported file is a *parse error*
+  (``Setting `shell` … is redefined``) that breaks every command, including the
+  `just --summary` you are about to validate with. Copying the monolith's header
+  into each new `.just` file is the natural instinct and it does not work. An
+  imported file may carry a `set` the root does not.
+- **paths stay relative to the repository root**, preserving current behavior.
+- **a recipe moves with everything attached to it** — its leading `#` doc comment
+  (which `just --list` shows), its attributes, and its `# ── Section ──` banner if
+  it had one.
+- **a `[private]` helper used by two responsibility files** stays with the
+  responsibility that owns its subject; it reaches the root only if it is
+  genuinely cross-cutting. Duplicating it is not an option — `just` rejects a
+  redefined recipe name outright.
+
+### Validate it as a command-surface-preserving change
+
+The public recipe list must be identical before and after. `just --summary` emits
+every public name on one line, so split it before diffing or the diff just says
+"the line changed":
+
+```bash
+just --summary | tr ' ' '\n' | sort > /tmp/recipes-before.txt
+# …perform the split…
+just --summary | tr ' ' '\n' | sort > /tmp/recipes-after.txt
+diff /tmp/recipes-before.txt /tmp/recipes-after.txt
+```
+
+Expect no output. The one legitimate difference is a recipe you deliberately
+marked `[private]` — `--summary` and `--list` both exclude private and
+`_`-prefixed recipes — so name each of those in the change description rather
+than letting it hide in the diff.
+
+`--summary` is also the load-bearing structural check, not just a name list: a
+missing import, an import cycle, a duplicated recipe name, and a redefined `set`
+all fail there. Run it first.
+
+Then dry-run one recipe per imported file (`just --dry-run <recipe>`) to confirm
+each file is reachable — note that `--dry-run` prints a recipe's `just …` lines
+without recursing, so it proves the recipe resolves, not its callees. For the
+working-directory-sensitive recipes, execute only the safe ones (`<component>-env`,
+`<component>-check`, `fmt-*`); the stack recipes (`dev-up`, `local-deploy-up`)
+start containers and background processes, so inspect their printed script from
+`--dry-run` instead of running them.
+
+The split is organizational: unless the threshold-crossing feature itself
+requires behavioral changes, unrelated recipe renames, command rewrites, and
+workflow changes are outside its scope.
+
 ## How recipes orchestrate per-component tooling
 
 | Component type | Dev command | Test command | Lint/check command |
@@ -471,6 +610,12 @@ Do not create `core/justfile`, `web/justfile`, etc. A centralized root justfile
 is the single source of truth for "how do I run this project". Per-component
 files split that truth across multiple locations and require contributors to know
 which directory to `cd` into before calling `just`.
+
+This is not what the `just/*.just` split does, and the distinction is the whole
+point: those files are root-owned, share one flat namespace, and are always
+invoked from the root as `just <recipe>`. There is no second entry point and no
+`cd`. A *per-component* justfile is a second source of truth; a root-owned
+responsibility file is one source of truth organized by concern.
 
 **7. Putting Docker Compose logic inside component toolchain scripts**
 

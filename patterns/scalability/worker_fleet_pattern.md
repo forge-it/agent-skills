@@ -15,7 +15,7 @@ description: >-
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.1"
+  version: "0.0.2"
 ---
 
 # Worker Fleet Pattern
@@ -162,6 +162,14 @@ first worker ships is an afternoon.
 - **Platform-derived worker names**; never a fixed container name.
 - **Disablement is the only non-self-healing state**, and it is an explicit
   operator decision.
+- **Identity is not authorization.** A handshake proves the peer holds the
+  private key for an enrolled name — a certificate by itself is public material
+  and proves nothing. Every privileged call then re-validates two further things
+  independently: **registration admission** (that name is still enrolled and
+  enabled) and **work authorization** (lease ownership, fencing token). Skip the
+  first and disablement above becomes decorative — a disabled worker keeps
+  running until its certificate expires. Derive the principal from the
+  authenticated channel, never from a field in the request.
 
 ## Anti-Patterns to Avoid
 

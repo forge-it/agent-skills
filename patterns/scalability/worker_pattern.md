@@ -14,7 +14,7 @@ description: >-
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.1"
+  version: "0.0.2"
 ---
 
 # Scalable Worker Pattern
@@ -495,6 +495,25 @@ runtime.run(shutdown).await?;
   database driver. Enforce it with the manifest dependency gate
   (`rust-architecture-test-setup`) so the boundary survives every future
   contributor.
+- **A system task is not a user-facing job.** The task is execution-control
+  mechanics — lease, attempt, retry, broker delivery. A *job* is the
+  user-visible execution and progress history the API exposes. Keep them as
+  separate types with separate lifecycles: work may be queued, deferred, and
+  retried for admission reasons with no job to show a user at all. Whether one
+  job spans the whole task or each admitted attempt gets its own is a decision
+  per operation kind — make it deliberately, once. Conflating the two puts
+  scheduling noise in the user's history and costs a schema migration to undo.
+- **No secret material on the dispatch path.** The broker message, the durable
+  task row, the log line, and the worker's parent environment carry the task's
+  non-secret identity and payload — never credentials or key material. Those are
+  resolved and handed over only through the authenticated control-plane channel
+  (see the [worker fleet pattern](worker_fleet_pattern.md) for what
+  authenticates it), to a worker already holding a live lease, and are never
+  persisted with the task. Prefer a `0600` credential file over a child
+  process's environment, and use a per-child environment variable only where a
+  tool offers no file mechanism. A broker is not a secret store, and on Linux
+  `/proc/<pid>/cmdline` is world-readable by default, so argv is not private
+  either.
 
 ## Anti-Patterns to Avoid
 

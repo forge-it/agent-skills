@@ -35,8 +35,21 @@ sequence a call when it needs the output of an earlier one.
 | Formatting | `cargo fmt --check` |
 | Unused vars, dead code, common bugs | `cargo clippy -D warnings` |
 | Layer-direction (incl. composition-seam imports), `port.rs`-traits-only, file-name stutter, framework-free domain, concrete-adapter assembly outside composition, manifest dependency boundaries, generic-module vocabulary | the project's architecture gate (e.g. a `tests/structure/` cargo test), if it has one |
+| Function/file line budgets, argument-count allowances confined to composition, a concrete type implementing several ports | the project's architecture gate, **if** it carries those rules — some projects mechanize these SRP symptoms, most do not |
 
-Flag one of these only if you suspect the gate has a gap, or the project has no such gate.
+Flag one of the first three rows only if you suspect the gate has a gap, or the
+project has no such gate.
+
+**The SRP-symptom row is different: those are never yours, even where nothing
+mechanizes them.** Deciding whether a long function or a type with several ports
+is actually a violation needs the whole unit, its collaborators, and its call
+sites — not a diff. If you notice one, say so in a single closing line and point
+at a whole-scope SRP audit (`rust-code-auditor`); do not adjudicate it here.
+
+What *is* yours either way: **size is a symptom, altitude is the defect.** A
+size-based gate counts lines; it cannot see that a coordinator implements two of
+its own steps inline. So R12 below is in scope even where every budget is gated —
+and a 130-line function of pure named calls is not a finding for you.
 
 ## Step 1 — Compute the diff
 
@@ -68,6 +81,7 @@ Do not invent conventions — if `project_structure.md` doesn't state something,
 - **R8 — Fold single-caller helpers.** A free `fn` with exactly one production caller that lives on a struct should be an associated fn/method on it. Tests don't count as callers.
 - **R9 — Error-type twins.** Near-identical bodies differing only in which error enum they build → one function returning a neutral error, mapped by `From`.
 - **R10 — Self-documenting returns.** A bare `bool` whose meaning isn't in the name, or a positional tuple of 2+ values → a named struct/enum.
+- **R12 — Uniform altitude in coordinators.** A coordinating function — application service method, orchestrator, use-case entry point — should read as a table of contents: every step is **one named call**. Flag an *inline step implementation*: a multi-line block that *does* a step instead of *naming* it. Three recurring shapes — a `match`/`if` ladder over input shapes computing a derived value; inline normalization or transformation; error discrimination by string comparison or tuple decoding. Count inline implementations, **not** touched concerns: validating, persisting, and publishing through one named call each is uniform altitude however many concerns the flow spans. Cite Rule 12's fix menu, first that fits: F1 extract a named step (the default), F2 push it into the type that owns the data, F3 a scoped error enum, F4 a step object owning one phase's collaborators. **Do not flag:** single-expression derivations, leaf functions that *are* the implementation (an adapter's SQL, a parser, a probe body), or a trailing `match` that is the fn's entire dispatch.
 - **R13 — Closed sets are enums.** A `&str`/`String` status, kind, or mode with a family of `const &str` alternatives beside it, or compared against inline string literals → one `enum`. Skip when the values come from a database, config, or user input (not a closed set), when the literal is standalone with no sibling alternatives (that's R5, a constant), or when the code only passes an external contract's value through untouched.
 - For changed **test** files (style of tests): test names follow `should_<behavior>_when_<condition>` and the module is named for the unit under test (rust-testing S7).
 
