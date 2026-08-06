@@ -22,6 +22,18 @@ internal jargon.
 `https://syneto.atlassian.net/wiki/spaces/CEN/pages/3932848142/Release+notes+-+plan`
 cloudId `syneto.atlassian.net`, pageId `3932848142`.
 
+## Position in the Release
+
+```
+syneto-release-notes  →  operator reviews the page  →  syneto-release-promote
+```
+
+This skill runs **first**, while the release is still unmerged. Promotion merges dev
+into prod and empties the `prod..dev` range, after which the release can no longer
+be described from git — `acquire.sh` reports every range as 0 and exits 1. That is
+why the page is titled "Release notes - **plan**". Shipping is
+`syneto-release-promote`, never this skill.
+
 ## When to Apply
 
 Apply when asked to create, write, generate, or publish release notes for Syneto
@@ -183,8 +195,8 @@ Three traps, all handled by `acquire.sh` and all worth knowing:
 Discovery has one real blind spot: a contributing repository carrying **no**
 `central-<N>.<N>` refs at all cannot be found. `bi-tool` is the precedent — it is
 bracketed in the published 2026-03-02 entry but holds only `origin/dev` and
-`origin/master`. If work ships from such a repository the operator has to name it;
-nothing in the scan will. Do not read R3 as a completeness guarantee.
+`origin/master`. **`bi-tool` is out of scope** for both skills by decision; do not
+add it, and do not treat R3 as a completeness guarantee for other such repositories.
 
 `central` is the exception: the IaaC repository, no `central-2.x` branches, pair
 fixed at `origin/production-on-prem..origin/dev-on-prem`, entries tagged
