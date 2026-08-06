@@ -22,7 +22,7 @@ use super::constants::{
     ADAPTER_IMPLEMENTATION_PATHS, COMPOSITION_ONLY_CONSTRUCTION_MARKERS,
     COMPOSITION_ONLY_TYPE_MARKERS, COMPOSITION_PATHS, CRATE_PATH_PREFIX, DOMAIN_LAYER,
     ENFORCE_CONCEPT_FACADE, GENERIC_MODULE_FORBIDDEN_MARKERS, GENERIC_MODULE_PATHS,
-    MOD_FILE_ALLOWED_PATHS, MOD_FILE_NAME, MOD_FILE_SEARCH_ROOTS, NOOP_STUB_MARKER,
+    MOD_FILE_NAME, MOD_FILE_SEARCH_ROOTS, NOOP_STUB_MARKER,
     PORT_FILE_NAME, USE_KEYWORD,
 };
 use super::source::{SourceLine, SourceTree};
@@ -131,29 +131,29 @@ impl Rule {
         }
     }
 
-    /// `mod.rs` is the legacy Rust module layout. It is forbidden under `src/`
-    /// and `tests/` except for explicitly allowed shared test-helper entry
-    /// points such as `tests/common/mod.rs`.
-    pub fn mod_files_are_limited_to_allowed_paths() -> Self {
+    /// `mod.rs` is the legacy Rust module layout, forbidden under `src/` and
+    /// `tests/` with no allowlist. A module two test crates share is reached
+    /// with `#[path = "common/<file>.rs"] mod <name>;` from each entry point,
+    /// which needs no `mod.rs` at all.
+    pub fn mod_files_are_forbidden() -> Self {
         Self {
-            description: "mod.rs files are forbidden except in allowed paths".to_string(),
+            description: "mod.rs files are forbidden".to_string(),
             check: Box::new(|source_tree| {
-                let mut violations = Vec::new();
-                let allowed_paths = MOD_FILE_ALLOWED_PATHS.join(", ");
-                for file in source_tree.rust_files_in_roots(MOD_FILE_SEARCH_ROOTS) {
-                    if file.file_name().and_then(|name| name.to_str()) != Some(MOD_FILE_NAME) {
-                        continue;
-                    }
-                    let relative_file = source_tree.relative_unix(&file);
-                    if MOD_FILE_ALLOWED_PATHS.contains(&relative_file.as_str()) {
-                        continue;
-                    }
-                    violations.push(Violation::in_file(
-                        &relative_file,
-                        &format!("`mod.rs` is only allowed at {allowed_paths}"),
-                    ));
-                }
-                violations
+                source_tree
+                    .rust_files_in_roots(MOD_FILE_SEARCH_ROOTS)
+                    .into_iter()
+                    .filter(|file| {
+                        file.file_name().and_then(|name| name.to_str()) == Some(MOD_FILE_NAME)
+                    })
+                    .map(|file| {
+                        Violation::in_file(
+                            &source_tree.relative_unix(&file),
+                            "`mod.rs` is the legacy module layout; declare the module from a \
+                             sibling `<module_name>.rs` file, or reach a cross-test-crate module \
+                             with `#[path = \"...\"]`",
+                        )
+                    })
+                    .collect()
             }),
         }
     }

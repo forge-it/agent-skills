@@ -378,9 +378,10 @@ invocations in CI so new members are automatically included.
 
 ## Cross-references
 
-- **rust-project-setup** — toolchain pinning and `cargo-make` build automation for
-  single-crate projects; the `rust-toolchain.toml` section applies unchanged to
-  workspaces.
+- **rust-project-setup** — toolchain pinning, which applies unchanged to a
+  workspace. Its `cargo-make` section does **not**: a workspace's task runner is
+  `just` at the repository root (`justfile-setup`), because a project gets one
+  command surface and only a language-agnostic runner can own a polyglot one.
 - **rust-project-structure** — module, file, and folder conventions inside a member
   crate.
 - **rust-hexagonal-architecture** — layering (domain / application / infrastructure)

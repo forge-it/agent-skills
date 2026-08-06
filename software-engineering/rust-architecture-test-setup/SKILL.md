@@ -1,11 +1,11 @@
 ---
 name: rust-architecture-test-setup
-description: One-time setup of a `tests/structure/` cargo-test gate for a Rust hexagonal-architecture project, so the layering invariants (dependencies point inward — domain → application → infrastructure, and no layer imports the composition root), the project-structure conventions (`port.rs` holds traits only, file names don't stutter, `mod.rs` stays out of `src/` and `tests/` entirely, concept module files stay glob facades in application crates, the domain stays framework-free), the composition-root wiring seam (concrete adapter assembly never escapes `src/composition/`), workspace dependency boundaries (a shared library crate stays consumer-free; a worker binary stays core-free and free of direct database drivers), and generic-machinery vocabulary (designated generic modules never name product concepts) are enforced by `cargo test` — and therefore CI — instead of by review. Use when bootstrapping a new Rust hexagonal project's architecture enforcement, or adding it to an existing one. Assumes a layered hexagonal codebase (domain/application/infrastructure under `src/`).
+description: One-time setup of a `tests/structure/` cargo-test gate for a Rust hexagonal-architecture project, so the layering invariants (dependencies point inward — domain → application → infrastructure, and no layer imports the composition root), the project-structure conventions (`port.rs` holds traits only, file names don't stutter, `mod.rs` stays out of `src/` and `tests/` entirely, concept module files stay glob facades in application crates, the domain stays framework-free), the composition-root wiring seam (concrete adapter assembly never escapes `src/composition/`), workspace dependency boundaries (a shared library crate stays consumer-free; a worker binary stays core-free and free of direct database drivers), generic-machinery vocabulary (designated generic modules never name product concepts), and the decidable SRP symptoms (function and file line budgets, argument-count allowances confined to composition, multi-port types carrying an explicit cohesion decision) are enforced by `cargo test` — and therefore CI — instead of by review. Use when bootstrapping a new Rust hexagonal project's architecture enforcement, or adding it to an existing one. On a workspace with two or more members this skill supplies the rule catalogue while `rust-conventions-crate-setup` supplies the packaging. Assumes a layered hexagonal codebase (domain/application/infrastructure under `src/`).
 vibe: Turns the architecture doc into a build that fails when someone crosses a layer.
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.1.0"
+  version: "0.2.0"
 ---
 
 # Rust Architecture Test Setup
@@ -25,9 +25,14 @@ this skill is the pragmatic single-crate gate.)
 
 ## When to use
 
-- Bootstrapping a **new** Rust hexagonal service → every rule hard-fails from the
-  first commit (a greenfield codebase has zero violations, so there is nothing to
-  ratchet).
+- **On a Cargo workspace with two or more members → read this skill for the rule
+  catalogue, then stop and run `rust-conventions-crate-setup` for the packaging.**
+  Everything below about the in-crate `tests/structure/support/` tree is the
+  single-crate layout; building it here first means extracting it again. See
+  [Multi-crate workspaces](#multi-crate-workspaces-stop-here-and-package-the-rules-as-a-library).
+- Bootstrapping a **new** single-crate Rust hexagonal service → every rule
+  hard-fails from the first commit (a greenfield codebase has zero violations, so
+  there is nothing to ratchet).
 - Adding the gate to an **existing** project → run it, see what it surfaces, then
   decide per rule: fix the few real violations, or mark a pervasive-but-accepted
   rule advisory (`#[ignore]`) and ratchet it to hard-fail later. See
@@ -37,7 +42,7 @@ Run this once. After `tests/structure/` exists, you do not re-run the skill.
 
 ## What it enforces
 
-Ten rules. Rules 1–6 come from the two architecture skills; rules 7–10 come from
+Fourteen rules. Rules 1–6 come from the two architecture skills; rules 7–10 come from
 the composition-root wiring seam and the workspace boundaries that emerged once
 the reference codebase grew a worker fleet and shared library crates (its
 ADR-R06/ADR-R11 era) — decisions that are far cheaper to enforce from commit 1
@@ -90,6 +95,61 @@ than to retrofit:
     never widens the generic layer. Driven by path/marker lists that start
     empty (inert until populated).
 
+Rules 11–14 are different in kind: they mechanize the **decidable symptoms of an
+SRP violation**, scanning `src/` only. SRP itself — "one reason to change" — is
+not machine-decidable and stays with review (`rust-code-style` Rule 12 and the
+`rust-code-auditor` agent). These four catch the shapes that review reliably
+misses, because review is diff-scoped while the violation is a whole-unit
+property: a reviewer sees 40 defensible added lines, and the violation is the
+600-line unit they joined.
+
+11. **Production functions stay within a line budget** — a `fn` (free, method,
+    or trait default) spans ≤ 100 lines, counted from the `fn` token through the
+    closing brace, multiline signatures included; attributes and doc comments do
+    not count. One exemption: a body whose every leading statement is a plain
+    `let` and whose tail expression is a `match` with two or more arms is a
+    dispatch table, whose length is its arm count rather than mixed
+    responsibility. That exemption **raises** the budget (to 300) rather than
+    removing it, so wrapping an arbitrary body in a single `match` arm is not a
+    loophole. `let … else` disqualifies, and so does a semicolon-terminated
+    `match`. Because the check walks the AST, blank lines and comments inside the
+    body are invisible to it by construction.
+12. **Multi-port concrete types carry an explicit cohesion decision** — a
+    concrete type implementing two or more *non-plumbing* traits must either be
+    split or carry an operator-approved grant naming the exact sorted port set
+    and a durable reason. **Only explicit `impl Trait for Type` blocks count — a
+    `#[derive(...)]` list is never a port**, so the near-universal
+    `#[derive(Debug, Clone, PartialEq)]` is invisible here. Plumbing traits are
+    excluded by a private list that names them individually: the std derivables
+    and markers, the conversion, comparison and operator families, iteration,
+    serde, async IO, and HTTP-framework glue. This rule **demands a decision
+    rather than guessing one**:
+    one cohesive adapter may correctly serve several consumer-specific ports
+    (interface segregation), while another accumulates unrelated ones. Syntax
+    cannot tell those apart.
+13. **Argument-count allowances are confined to composition** —
+    `#[allow(clippy::too_many_arguments)]` (and `#[expect(…)]`) is legal only
+    inside the composition root, which `COMPOSITION_PATHS` defines as
+    `src/composition.rs` and `src/composition/` — its job is to be wide.
+    Anywhere else it is a written confession of collaborator sprawl.
+14. **Production files stay within a line budget** — a source file spans ≤ 1000
+    lines. The remedy is the sub-concept split: `model.rs` grows
+    `model/<concept>.rs` siblings behind the facade it already has (rule 6).
+
+Findings from 11–14 cite the fix menu in `rust-code-style` Rule 12 (F1 extract a
+named step, F2 push logic into the type owning the data, F3 a scoped error enum,
+F4 extract a step object), so every violation arrives with its remedy. F4 needs
+no permission.
+
+**On a green-field project these four land green at commit 1 and stay there** —
+the whole reason to adopt them at setup. Their exceptions live in `GRANTED_*`
+ledgers that **start empty**: exact keys, the diff that adds one *is* the
+permission request, and a grant whose violation disappears fails as stale. A
+long wiring factory or process entrypoint is the archetypal legitimate entry —
+its single responsibility genuinely is "wire the graph", so granting it is the
+ledger working, not a baseline. What is never legitimate is bulk-filling a ledger
+to turn an existing tree green in one pass.
+
 It assumes the canonical hexagonal layers `domain/`, `application/`,
 `infrastructure/` under `src/`, plus the `composition` wiring root. Adapt the
 layer set in `constants.rs` (see [Customization](#customization-knobs)).
@@ -118,13 +178,16 @@ tests/
     ├── layering.rs              # tests-only: dependency-direction rules (incl. composition seam)
     ├── naming.rs                # tests-only: file-name stutter + mod.rs rules
     ├── ports.rs                 # tests-only: port.rs-traits-only rule
+    ├── srp_discipline.rs        # tests-only: the four SRP proxy rules (11–14)
     ├── vocabulary.rs            # tests-only: generic-machinery-stays-concept-free rule
     ├── workspace_deps.rs        # tests-only: manifest dependency-boundary rule (workspace projects)
+    ├── support.rs               # the support facade: `pub mod` per support file
     └── support/
         ├── constants.rs         # layer names, forbidden lists, marker lists, magic strings
+        ├── ledgers.rs           # GRANTED_* permission ledgers for rules 11–14 (start empty)
         ├── manifest.rs          # Cargo.toml dependency-gate scanner (TOML-backed)
-        ├── source.rs            # SourceTree + SourceLine (scanning primitives)
         ├── rules.rs             # the Rule type + the named invariants
+        ├── source.rs            # SourceTree + SourceLine (scanning primitives)
         └── violation.rs         # the Violation finding type
 ```
 
@@ -138,6 +201,13 @@ dependencies (verify the current version on crates.io before pinning):
 # Cargo.toml
 [dev-dependencies]
 toml = "0.9"
+# Rules 11, 12, and 14 parse Rust. `span-locations` is what makes syn spans
+# carry real line numbers outside a proc-macro context — without it every
+# violation reports line 0. `[dev-dependencies]` is correct here because this
+# gate is a test target; the sibling conventions crate puts the same crates in
+# `[dependencies]`, which is correct there because its rules are library code.
+syn = { version = "2", features = ["full", "visit"] }
+proc-macro2 = { version = "1", features = ["span-locations"] }
 ```
 
 On a single-crate project with no workspace boundaries to guard, omit
@@ -159,6 +229,7 @@ mod structure {
     mod layering;
     mod naming;
     mod ports;
+    mod srp_discipline;
     mod vocabulary;
     mod workspace_deps;
 }
@@ -172,6 +243,7 @@ mod structure {
 //! type, and constants live here.
 
 pub mod constants;
+pub mod ledgers;
 pub mod manifest;
 pub mod rules;
 pub mod source;
@@ -196,7 +268,17 @@ Covered by `references/support-scanning-primitives.md` (see `constants.rs` above
 
 ### `tests/structure/support/rules.rs`
 
-**Before writing `tests/structure/support/rules.rs`, read `references/support-rules-implementation.md`** — it contains the complete `Rule` type, all named constructors, the rule-logic helpers, and the `enforce()` method.
+**Before writing `tests/structure/support/rules.rs`, read `references/support-rules-implementation.md`** — it contains the complete `Rule` type, the constructors for rules 1–10, the rule-logic helpers, and the `enforce()` method.
+
+The four SRP constructors (rules 11–14) live in a second reference, because they
+also add constants and a new support module: **read
+`references/support-srp-rules.md`** and append them to the same `rules.rs`.
+
+### `tests/structure/support/ledgers.rs`
+
+The `GRANTED_*` permission ledgers for rules 11–14, the cohesion-grant type, and
+stale-grant detection. Covered by `references/support-srp-rules.md` (see
+`rules.rs` above). They start empty; keep them empty until a case earns an entry.
 
 ### `tests/structure/layering.rs`
 
@@ -259,8 +341,8 @@ mod module_files {
     use super::*;
 
     #[test]
-    fn should_allow_mod_rs_only_in_tests_common() {
-        Rule::mod_files_are_limited_to_allowed_paths().enforce();
+    fn should_not_use_the_legacy_mod_file_layout() {
+        Rule::mod_files_are_forbidden().enforce();
     }
 }
 ```
@@ -359,6 +441,63 @@ mod assembly_rule_logic {
 }
 ```
 
+### `tests/structure/srp_discipline.rs`
+
+The four SRP proxy rules (11–14), complete in `references/support-srp-rules.md`
+along with their constants and ledgers. Ledger keys in an in-crate gate are the
+crate-relative path `SourceTree::relative_unix` yields — `src/order/service.rs::place`
+for a function, `src/order/service.rs` for a whole file, `src/order/service.rs::OrderService`
+for a type. (`rust-conventions-crate-setup`'s `references/ledger-and-grants.md`
+describes the same protocol for a *shared* library, where keys carry a crate
+prefix and stale detection is scoped by it. Here there is one crate, so that
+scoping is dropped — the reference below has the in-crate form.)
+
+```rust
+use super::support::rules::Rule;
+
+mod production_functions {
+    use super::*;
+
+    #[test]
+    fn should_stay_within_the_line_budget() {
+        Rule::production_functions_stay_within_the_line_budget().enforce();
+    }
+}
+
+mod production_files {
+    use super::*;
+
+    #[test]
+    fn should_stay_within_the_line_budget() {
+        Rule::production_files_stay_within_the_line_budget().enforce();
+    }
+}
+
+mod argument_count_allowances {
+    use super::*;
+
+    #[test]
+    fn should_be_confined_to_composition() {
+        Rule::argument_count_allowances_are_confined_to_composition().enforce();
+    }
+}
+
+mod multi_port_types {
+    use super::*;
+
+    #[test]
+    fn should_have_explicit_cohesion_decisions() {
+        Rule::multi_port_concrete_types_have_explicit_cohesion_decisions().enforce();
+    }
+}
+```
+
+These four scan `src/` only — the test tree is governed by `rust-testing`'s own
+rules. Rule 12 needs the AST (which traits a concrete type implements), so it
+wants a parser rather than the line-based `SourceLine` helpers; see the
+"Anatomy of a rule" section in `rust-conventions-crate-setup` for the `syn`
+shape.
+
 ### `tests/structure/vocabulary.rs`
 
 Inert until `GENERIC_MODULE_PATHS` / `GENERIC_MODULE_FORBIDDEN_MARKERS` in
@@ -381,7 +520,7 @@ mod generic_machinery {
 
 Workspace projects only. Each crate that owns a dependency boundary gets this
 test with its own forbidden list — see
-[Multi-crate workspaces](#multi-crate-workspaces-where-each-gate-lives) for
+[Multi-crate workspaces](#multi-crate-workspaces-stop-here-and-package-the-rules-as-a-library) for
 which crate owns which boundary:
 
 ```rust
@@ -426,24 +565,26 @@ structure:
 check: format clippy structure test
 ```
 
-or with `cargo-make`:
-
-```toml
-# Makefile.toml
-[tasks.structure]
-description = "Enforce architecture/layering invariants"
-command = "cargo"
-args = ["test", "--test", "structure"]
-
-[tasks.check]
-dependencies = ["format", "clippy", "structure", "test"]
-```
+On a single-crate, Rust-only project that runs cargo-make instead (see the scope
+gate in `rust-project-setup`), the equivalent is a `[tasks.structure]` entry with
+`command = "cargo"` and `args = ["test", "--test", "structure"]`, added to that
+project's `check` task dependencies.
 
 `cargo test` exits non-zero on a failing assertion, so once it's in CI a violation
-blocks the merge. Without that CI step the rules only report locally. On a
-workspace, `cargo test --workspace --test structure` fails if any member lacks
-the target, so run each crate's gate via its own recipe line (or plain
-`cargo test --workspace`, which runs every discovered test target).
+blocks the merge. Without that CI step the rules only report locally.
+
+On a workspace, use `cargo test --workspace --test structure` — but know exactly
+what it does and does not prove. Cargo treats `--test` as a filter satisfied when
+*any* selected package matches, so a member with **no** `tests/structure.rs` is
+silently skipped and the command still reports `ok` and exits 0. It runs every
+gate that exists; it does not tell you a gate is missing. (An earlier version of
+this skill claimed the invocation fails in that case. It does not.)
+
+Closing that hole needs a rule that asks Cargo which packages are members and
+asserts each one owns a gate — see `rust-conventions-crate-setup`, which ships
+one. (Asking Cargo rather than parsing `[workspace] members` is load-bearing: a
+path dependency inside the workspace is a member whether or not that list names
+it.)
 
 ## Step 4 — Verify it works
 
@@ -462,7 +603,7 @@ For the `mod.rs` rule, probe a throwaway module-layout file:
 ```bash
 mkdir -p src/__probe
 printf '' > src/__probe/mod.rs
-cargo test --test structure   # expect: module_files::should_allow_mod_rs_only_in_tests_common fails
+cargo test --test structure   # expect: module_files::should_not_use_the_legacy_mod_file_layout fails
 rm -r src/__probe
 ```
 
@@ -491,6 +632,40 @@ tests still prove the scanners work. For the manifest rule, temporarily add one
 of the forbidden packages to `[dev-dependencies]` and confirm
 `manifest_dependency_boundary::should_not_declare_forbidden_dependencies` fails,
 then remove it.
+
+The SRP rules are probed the same way. Probe all four — rule 12 especially, since
+it is the only one needing a parser, so a visitor that never fires looks exactly
+like a clean codebase:
+
+```bash
+# rule 13 — an allowance outside composition
+printf '#[allow(clippy::too_many_arguments)]\nfn probe() {}\n' > src/__probe.rs
+cargo test --test structure   # expect: argument_count_allowances … fails
+rm src/__probe.rs
+
+# rule 12 — two non-plumbing ports on one concrete type
+printf 'struct Probe;\ntrait Alpha {}\ntrait Beta {}\nimpl Alpha for Probe {}\nimpl Beta for Probe {}\n' > src/__probe.rs
+cargo test --test structure   # expect: multi_port_types … fails, naming Alpha and Beta
+rm src/__probe.rs
+
+# rule 14 — a file past the budget
+{ printf '//! probe\n'; for _ in $(seq 1 1001); do printf '// filler\n'; done; } > src/__probe.rs
+cargo test --test structure   # expect: production_files … fails
+rm src/__probe.rs
+
+# rule 11 — a function past the budget
+{ printf 'fn probe() {\n'; for _ in $(seq 1 101); do printf '    let _ = 0;\n'; done; printf '}\n'; } > src/__probe.rs
+cargo test --test structure   # expect: production_functions … fails
+```
+
+While the rule-11 probe is still in place, verify the **ledger** as well — that
+is the part no scanner test covers:
+
+With that probe still in place, add its exact key to `GRANTED_LONG_FUNCTIONS` and
+re-run: the gate must now pass. Then delete `src/__probe.rs` and re-run *without*
+removing the ledger entry — the gate must fail again, this time reporting a stale
+grant. A ledger that does not fail on a stale entry is a write-only list that
+outlives the code it was granted for. Remove the entry when done.
 
 On a **new** project the suite then passes clean. On an **existing** project it now
 prints exactly where the codebase diverges — this is your conformance report.
@@ -525,6 +700,17 @@ prints exactly where the codebase diverges — this is your conformance report.
   lists start empty, so they enforce nothing until you designate the first
   composition-only type, forbidden dependency, or generic module — designate them
   one at a time as you clean each one up.
+
+  The SRP rules (11–14) are the opposite: they fire immediately on any tree that
+  has grown into them, and there is no marker list to keep them quiet. Two honest
+  moves, and one tempting mistake. Clean the violations to zero and land the rule
+  — the default, and cheap where the remedy is mechanical. Or, where the remedy
+  is genuine design work, land the rule **red by explicit decision**: a real,
+  un-`#[ignore]`d failing test, on the reasoning that a red gate still blocks new
+  violations while the backlog is worked, which review demonstrably does not.
+  The mistake is going green by filling the ledger — that converts a decision
+  record into a debt baseline and permanently blurs what "clean" means. A grant
+  is for a case someone understood and approved, one at a time.
 
 ## How it works (the scan)
 
@@ -600,33 +786,58 @@ it declares*.**
   the crate is published to a registry: the module hierarchy is then legitimately
   public API (rust-project-structure, principle 14 "Crate scope"). On an existing
   codebase, prefer the `#[ignore]` ratchet over a wholesale enable.
+- **SRP budgets and ledgers** — `FUNCTION_LINE_BUDGET` (100),
+  `FILE_LINE_BUDGET` (1000), and the plumbing-trait exclusion list are private
+  constants in `constants.rs`; the `GRANTED_*` ledgers live in `ledgers.rs`.
+  Changing a budget is a policy change for the whole crate, made in one reviewed
+  diff — never a parameter at a call site. A ledger entry is the operator
+  permission request: exact key, no globs, and a grant whose violation has
+  disappeared must fail as stale so the permission is handed back.
 - **New rules** — add a `Rule::*` constructor + a one-line test. The `SourceTree`/
   `SourceLine` primitives cover most "scan files / inspect lines" checks.
 
-## Multi-crate workspaces: where each gate lives
+## Multi-crate workspaces: stop here and package the rules as a library
 
-On a workspace (see `rust-workspace-setup`), the gate is **per crate**, and each
-crate carries only the rules that guard a boundary it owns:
+Everything above is the **single-crate** gate: the rules and the scanning
+machinery live together in one crate's `tests/structure/` tree. On a workspace
+that layout stops being right, and the fix is not to repeat it per crate.
 
-- **Every layered binary crate** (the API core, the worker) gets the full
-  `tests/structure/` target described above, each with its own constants —
-  the worker's manifest gate forbids the core crate and every direct database
-  driver (the worker is stateless and owns no persistence; see
-  `patterns/scalability/worker_pattern.md`), while the core's gate carries the
-  layering, assembly, and facade rules.
-- **Every shared library crate that must stay consumer-free** (an execution
-  library both the core and the worker call into, a wire-contracts crate) gets
-  at least an in-crate `tests/structure/` with the manifest gate, forbidding its
-  consumers — that is what keeps the dependency direction `core → library`
-  permanent instead of aspirational.
-- **The in-crate gate is the source of truth** for a crate's forbidden list. A
-  consumer crate may *mirror* the same list in its own gate for
-  defense-in-depth; if it does, document that the two lists must stay identical
-  and which file is authoritative.
+**Do not copy this `tests/structure/support/` tree into a second crate.** Two
+copies of a non-trivial scanner drift silently — one crate's exemption list grows,
+the other's does not, and nobody notices for months. Nor should one crate's gate
+scan its siblings: a violation in the worker then fails the *core* crate's gate,
+`cargo test -p worker` stays green, and the finding has two owners.
 
-This is how the reference codebase runs it: the core, the worker, and the shared
-execution crate each carry their own `tests/structure/` target, and
-`cargo test --workspace` runs all of them.
+Instead, the rules become a dev-only library crate that every member consumes,
+with each member's gate instantiating the rules it adopts against its own tree.
+**Invoke `rust-conventions-crate-setup`** for that packaging — it owns the crate
+layout, the zero-knob constructor convention, the permission ledgers, the
+per-rule fixture tests, and the workspace-coverage rule that catches a member
+with no gate at all. Read `patterns/conventions/rust.md` for why the packaging
+takes that shape.
+
+The division of labour: **this skill decides which invariants a project
+enforces** (the catalogue above); that skill decides **how the rules are
+packaged and instantiated**.
+
+What stays crate-local either way, built on the shared library's `Rule::new`
+rather than a second copy of the machinery:
+
+- **Layering, assembly confinement, port purity, facade, and vocabulary rules**
+  for a layered crate. They encode that crate's own policy, and a leaf
+  primitives crate has no use for them.
+- **Each crate's manifest forbidden list.** A worker binary forbids the core
+  crate and every direct database driver (it is stateless and owns no
+  persistence — see `patterns/scalability/worker_pattern.md`); a shared library
+  crate forbids its consumers, which is what keeps the direction
+  `core → library` permanent rather than aspirational. The **in-crate gate is
+  the source of truth** for that crate's list. A consumer may *mirror* the list
+  for defence in depth; if it does, record which file is authoritative and that
+  the two must stay identical.
+
+A constants file inside a crate's own gate tree is crate-local policy and stays
+fine. The zero-knob rule in the conventions pattern binds the constructors the
+*shared library* exports — not a crate's private policy.
 
 ## Stronger enforcement: crate-per-layer (optional)
 

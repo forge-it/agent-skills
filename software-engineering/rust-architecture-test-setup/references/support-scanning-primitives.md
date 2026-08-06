@@ -59,15 +59,13 @@ pub const INFRASTRUCTURE_CRATES: &[&str] = &[
 /// File name that, by convention, holds a concept's trait definitions (ports).
 pub const PORT_FILE_NAME: &str = "port.rs";
 
-/// Legacy Rust module-layout file name. It is forbidden except at explicitly
-/// allowed paths.
+/// Legacy Rust module-layout file name, forbidden everywhere with no allowlist:
+/// a module shared across test crates is reached with
+/// `#[path = "common/<file>.rs"] mod <name>;`, which needs no `mod.rs`.
 pub const MOD_FILE_NAME: &str = "mod.rs";
 
 /// Roots scanned by the legacy `mod.rs` layout rule.
 pub const MOD_FILE_SEARCH_ROOTS: &[&str] = &["src", "tests"];
-
-/// Exact crate-relative paths where `mod.rs` remains allowed.
-pub const MOD_FILE_ALLOWED_PATHS: &[&str] = &["tests/common/mod.rs"];
 
 /// Marker identifying NoOp stub types, which may live next to their trait.
 pub const NOOP_STUB_MARKER: &str = "NoOp";

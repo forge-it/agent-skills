@@ -32,7 +32,7 @@ Each skill includes:
 | [rust-code-style](software-engineering/rust-code-style/SKILL.md) | Rust code style with hexagonal architecture |
 | [rust-design-principles](software-engineering/rust-design-principles/SKILL.md) | SOLID, KISS, and design patterns for Rust |
 | [rust-design-idioms](software-engineering/rust-design-idioms/SKILL.md) | Rust design idioms including newtype pattern and error handling |
-| [rust-project-setup](software-engineering/rust-project-setup/SKILL.md) | Rust project setup with toolchain and cargo-make |
+| [rust-project-setup](software-engineering/rust-project-setup/SKILL.md) | Rust toolchain pinning, plus cargo-make for single-crate Rust-only projects (monorepos use `just`) |
 | [rust-hexagonal-architecture](software-engineering/rust-hexagonal-architecture/SKILL.md) | Hexagonal architecture (ports and adapters) for Rust |
 | [rust-testing](software-engineering/rust-testing/SKILL.md) | Rust testing best practices using cargo test |
 

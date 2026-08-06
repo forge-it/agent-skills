@@ -1,13 +1,17 @@
 ---
 name: rust-project-setup
-description: Guidelines for bootstrapping a Rust project with consistent toolchain pinning and build automation. Use when starting a new Rust project or adding a task runner.
+description: Guidelines for bootstrapping a Rust project with consistent toolchain pinning, plus cargo-make task automation for single-crate Rust-only projects. Use when starting a new Rust project. For a monorepo or any project with a non-Rust component, the task runner is `just` — see `justfile-setup`; this skill then owns only the toolchain pin.
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.2"
+  version: "0.1.0"
 ---
 
 # Rust Project Setup
+
+This skill owns two things, and only the first applies to every Rust project:
+**toolchain pinning** (always), and **cargo-make task automation** (only for a
+single-crate, Rust-only project — see the scope note on that section).
 
 ## rust-toolchain.toml (CRITICAL)
 
@@ -52,7 +56,32 @@ targets = ["wasm32-unknown-unknown"]
 
 ---
 
-## Cargo Make (HIGH)
+## Cargo Make (HIGH — single-crate, Rust-only projects only)
+
+> **Scope gate — read this before adopting anything below.** Use cargo-make
+> **only** when the project is a single crate with no non-Rust component. The
+> moment there is a second component — a frontend, a Python service, a worker
+> binary, anything a `cargo` task cannot drive — **the task runner is `just` at
+> the repository root** (`justfile-setup`), and this section does not apply.
+>
+> Why: a task runner is a *command surface*, and a project gets one. Two runners
+> means two vocabularies for the same actions, contributors learning which
+> directory to stand in, and documentation that has to explain the split. `just`
+> is language-agnostic, so it can own the whole surface; cargo-make is
+> Rust-centric and cannot. `just` also finds the root justfile from any
+> subdirectory, so the "I'm already inside the crate" ergonomics that favour
+> `cargo make` largely disappear.
+>
+> What cargo-make genuinely does better, conceded: `install_crate` auto-installs
+> a missing tool (`cargo-llvm-cov`, `sqlx-cli`) before a task runs; its
+> `condition`, profile, and platform-variant support express things `just`
+> cannot; and it needs no POSIX shell, which matters on Windows. If a
+> single-crate project wants those, this section is the right answer. A polyglot
+> monorepo pays a permanent second-surface cost for them.
+>
+> On a project that uses `just`, tasks needing to run inside a crate use a
+> recipe that changes directory (`cd core && cargo sqlx prepare`) — not a second
+> runner.
 
 Use cargo-make as a task runner for build automation, testing, and deployment workflows.
 

@@ -8,11 +8,13 @@ description: >-
   or laying the foundation an agent fleet (including parallel git-worktree
   agents) will build on. Symptoms it prevents: wiring blobs in main, the
   application layer importing infrastructure, ad-hoc scripts, advisory-only
-  lints, port collisions across worktrees, a worker bolted on months too late.
+  lints, port collisions across worktrees, conventions enforced only by prose
+  that review cannot hold, a workspace member whose gate nobody runs, a worker
+  bolted on months too late.
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.1"
+  version: "0.0.2"
 ---
 
 # Greenfield Project Setup (Orchestrator)
@@ -70,21 +72,36 @@ name; *pattern* = read the doc), and the gate that proves it is live.
 | 0 | Stack + repo init | — | monorepo dirs (`core/` rust, `web/` vue, `worker/`, `crates/`, or a python pkg) + `git` initialized |
 | 1 | Workspace + toolchain | SKILL `rust-workspace-setup` + `rust-project-setup`; python: `uv` init | `cargo build` / `uv sync` succeeds |
 | 2 | Component skeletons | SKILL `rust-hexagonal-architecture` + `rust-project-structure` / `python-ddd` / `frontend-vue-development` | each component compiles |
-| 3 | Architecture invariant gates | SKILL `rust-architecture-test-setup` / `python-import-linter-setup` / `frontend-vue-eslint-setup` | the gate **passes clean AND fails on a planted violation** |
+| 3 | Architecture invariant gates | rust workspace: *read* `rust-architecture-test-setup` (catalogue only) → SKILL `rust-conventions-crate-setup`; rust single crate: SKILL `rust-architecture-test-setup`; SKILL `python-import-linter-setup` / `frontend-vue-eslint-setup` | the gate **passes clean AND fails on a planted violation** — in the owning crate's gate and no other; every member has a gate |
 | 4 | Backend wiring + lifecycle | *composition_pattern* → *bootstrap_pattern* → *runtime_pattern* | app boots; workers drain on SIGTERM |
-| 5 | Task runner | SKILL `justfile-setup` | `just` recipes (dev / local-prod / prod / lint / test-all) run |
+| 5 | Task runner | SKILL `justfile-setup` | `just` recipes (dev / local-prod / prod / lint / test-all) run, **plus one recipe per gate family** — on a Rust workspace `cargo test --workspace --test structure` |
 | 6 | Local infra + parallel test isolation | *local_port_allocation_pattern* + *parallel_test_isolation_pattern* | integration tests pass **in parallel**, no collisions |
 | 7 | Scalability (opt-in, default-on for SaaS) | *worker_pattern* + *worker_fleet_pattern* + the shared task-contracts crate (`rust-workspace-setup`) | worker boots and consumes a test task |
-| 8 | Day-1 cross-cutting decisions (ADRs) | *observability_posture_pattern*; *frontend_api_type_mirroring_pattern* (if vue+backend); *worker_fleet_pattern* topology + identity ADRs (if worker); port allocation (phase 6) | each decision recorded as an ADR in `docs/decisions/` |
+| 8 | Day-1 cross-cutting decisions (ADRs) | *observability_posture_pattern*; *frontend_api_type_mirroring_pattern* (if vue+backend); *worker_fleet_pattern* topology + identity ADRs (if worker); port allocation (phase 6); the convention-enforcement policy and its permission protocol (phase 3); the task-runner growth mechanism (`import`, never `mod`) | each decision recorded as an ADR in `docs/decisions/` |
 | 9 | Navigation + docs | *claude_md_pattern* + *docs_artifact_layout_pattern* + *repo_root_files_pattern* | root + per-component `CLAUDE.md` and `docs/` trees exist; root files present |
-| 10 | Automation gates | SKILL `agent-hooks-setup` + `ci-setup`; *dependency_audit_pattern* | hooks fire locally; CI is green on a trial PR; audit command runs |
+| 10 | Automation gates | SKILL `agent-hooks-setup` + `ci-setup`; *dependency_audit_pattern* | hooks fire locally; CI is green on a trial PR **and invokes the task runner, never a hand-listed crate set**; audit command runs |
 | 11 | Continuous practices (wire in, not one-shot) | SKILL `rust-testing` / `python-testing`, `*-code-style`, `rust-design-principles` / `rust-design-idioms`, `rest-api-design`, `reconcile-docs` | referenced by `CLAUDE.md`, enforced by phase-10 hooks + CI |
 | 12 | Final verification sweep | — | **every** gate green together (see Quick Reference) |
 
 Pattern docs live under `../../patterns/`; e.g. `composition_pattern` is
 `../../patterns/project_structure/composition_pattern.md`, the lifecycle ones are
 in `../../patterns/lifecycle/`, and the rest under `../../patterns/{documentation,
-decisions,testing,automation,scalability}/`.
+decisions,testing,automation,scalability,conventions}/`.
+
+### Phase 3 on a Rust workspace is two sub-steps, in one order
+
+**Read** `rust-architecture-test-setup` for the rule catalogue — which invariants
+this project enforces — but do not install its single-crate `tests/structure/`
+tree. Then **invoke** `rust-conventions-crate-setup` for the packaging. A
+single-crate project does the reverse: invoke the first skill and stop, since the
+conventions crate buys a locality it does not yet need.
+
+Skipping the second step on a workspace is what leaves one crate's gate scanning
+its siblings, or the scanner copied per crate — both refactors later.
+
+Note the phase boundary: phase 3 **installs** the gates; phases 5 and 10 are what
+make them **reachable**. The task-runner recipe and the CI step belong there, not
+here.
 
 ### Why this order
 
@@ -105,7 +122,7 @@ Which phases apply to which components (✓ = applies, — = skip):
 |-------|:---:|:---:|:---:|:---:|
 | 1 workspace/toolchain | ✓ | ✓ (uv) | ✓ (node) | ✓ (rust) |
 | 2 skeleton | ✓ hexagonal | ✓ DDD | ✓ feature-arch | ✓ hexagonal |
-| 3 invariant gate | ✓ structure-test | ✓ import-linter | ✓ eslint | ✓ structure-test |
+| 3 invariant gate | ✓ structure-test (+ conventions crate on a workspace) | ✓ import-linter | ✓ eslint | ✓ per-crate gate, shared conventions crate |
 | 4 wiring/lifecycle | ✓ | ✓ | — | ✓ |
 | 6 test isolation | ✓ | ✓ | partial | ✓ |
 | 7 worker | — | — | — | ✓ |
@@ -122,7 +139,12 @@ once at the root and fan in.
 The foundation is live only when **all** of these pass together:
 
 - [ ] every component builds (`cargo build`, `uv sync`/build, web build)
-- [ ] architecture gates pass **and** fail on a planted violation (structure test / `lint-imports` / eslint)
+- [ ] architecture gates pass **and** fail on a planted violation (structure test / `lint-imports` / eslint) — failing the gate of the crate the violation lives in **and no other member's gate**
+- [ ] every workspace member owns a gate, proven by the conventions crate's coverage rule; `cargo test --workspace --test structure` passes when a gate is missing, so it proves nothing here
+- [ ] every gate is reachable from the task runner, and CI invokes the runner instead of a hand-listed crate set
+- [ ] every convention rule has a `should_flag`/`should_pass` fixture pair, and they actually run
+- [ ] no gate test is `#[ignore]`d or landed red — `grep -rn '#\[ignore' --include='*.rs' .` returns nothing
+- [ ] every `GRANTED_*` permission ledger is still empty — `grep -rn 'GRANTED_' --include='*.rs' .` shows only empty collections
 - [ ] `rustfmt --check`, `clippy -D warnings`, type checks clean
 - [ ] unit + integration tests pass **in parallel** (isolation works)
 - [ ] `just test-all` (the single CI entry recipe) runs locally
@@ -145,28 +167,37 @@ The foundation is live only when **all** of these pass together:
   have no shared home and dependencies are duplicated per crate.
 - **Advisory-only enforcement.** Stopping at phase 3 (local gates) without phase
   10 (CI makes them blocking). Local gates an agent can bypass are not invariants.
+  The same failure in a second disguise: per-crate gates plus a hand-maintained
+  crate list in CI, so every member added later is silently unenforced until
+  someone remembers the list. Let CI invoke the task runner, and let a coverage
+  rule prove every member owns a gate.
 - **Hardcoded ports / shared test DB.** Skipping phase 6 kills parallel-worktree
   productivity — the exact thing the setup is meant to enable.
+- **Duplicating the rule scanner per crate.** Two copies of a non-trivial walker
+  drift apart quietly, and one crate's gate policing its siblings reports a
+  violation against the wrong owner. Rules belong in one shared library that each
+  crate instantiates against its own tree (phase 3).
 
 ## What This Skill Orchestrates (index)
 
 **Setup skills (executable):** `rust-workspace-setup`, `rust-project-setup`,
-`rust-architecture-test-setup`, `python-import-linter-setup`,
-`frontend-vue-eslint-setup`, `justfile-setup`, `ci-setup`, `agent-hooks-setup`.
+`rust-architecture-test-setup`, `rust-conventions-crate-setup`,
+`python-import-linter-setup`, `frontend-vue-eslint-setup`, `justfile-setup`,
+`ci-setup`, `agent-hooks-setup`.
 
 **Architecture/knowledge skills:** `rust-hexagonal-architecture`,
 `rust-project-structure`, `python-ddd`, `frontend-vue-development`,
 `rust-design-principles`, `rust-design-idioms`, `rest-api-design`,
-`rust-testing`, `python-testing`, `rust-code-style`, `python-code-style`,
+`rust-testing`, `python-testing`, `rust-code-style`, `python-code-style-v1`,
 `frontend-vue-code-style`, `reconcile-docs`.
 
 **Patterns (read the doc):** project_structure/`composition_pattern`;
 lifecycle/`bootstrap_pattern`, `runtime_pattern`; scalability/`worker_pattern`,
 `worker_fleet_pattern`; testing/`parallel_test_isolation_pattern`;
-decisions/`local_port_allocation_pattern`, `frontend_api_type_mirroring_pattern`,
-`observability_posture_pattern`; documentation/`claude_md_pattern`,
-`docs_artifact_layout_pattern`, `repo_root_files_pattern`;
-automation/`dependency_audit_pattern`.
+conventions/`rust`; decisions/`local_port_allocation_pattern`,
+`frontend_api_type_mirroring_pattern`, `observability_posture_pattern`;
+documentation/`claude_md_pattern`, `docs_artifact_layout_pattern`,
+`repo_root_files_pattern`; automation/`dependency_audit_pattern`.
 
 **Continuous guards (installed in phase 10):** `rust-structure-and-style-guard`,
 `vue-structure-and-style-guard`, `python-structure-and-style-guard` — dispatched
