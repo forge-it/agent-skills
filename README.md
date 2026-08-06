@@ -38,6 +38,15 @@ Each skill includes:
 
 > **Note:** the table above lists the core workflow and language skills. The repository also contains setup skills, structure-and-style guard skills, `parallel-worktrees-general`, Python DDD, and React/Vue skills not yet enumerated here.
 
+### Syneto
+
+Organisation-specific skills. These assume Syneto's repositories, trackers, and Confluence spaces, and are not portable to other projects.
+
+| Skill | Description |
+|-------|-------------|
+| [syneto-rest-api-design](software-engineering/syneto-rest-api-design/SKILL.md) | Syneto's REST API conventions (RFD0003) for Syneto OS services |
+| [syneto-release-notes](software-engineering/syneto-release-notes/SKILL.md) | Zero-argument Central release notes: discover contributing repos, enrich tickets, publish to Confluence |
+
 ### Greenfield Project Setup
 
 Start a new project with [`greenfield-project-setup`](software-engineering/greenfield-project-setup/SKILL.md) — a thin orchestrator that brings up a python+vue, rust+vue, or combination monorepo correctly from commit 1. It detects the stack, walks an ordered phase sequence, delegates each phase to the skill or pattern that owns it, and runs a verification gate after each so a missing invariant fails at setup rather than months later.
