@@ -4,7 +4,7 @@ description: Use when bootstrapping CI for a new monorepo with Rust, Python, and
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.2"
+  version: "0.0.3"
 ---
 
 # CI Setup
@@ -43,7 +43,7 @@ Run this once. After the workflow exists and passes, you do not re-run the skill
 | Rust | `rust-clippy` | `cargo clippy --all-targets -- -D warnings` |
 | Rust | `rust-structure` | `cargo test --test structure` (hexagonal layering) |
 | Vue | `web-eslint` | `npm run lint` (feature-architecture boundary rules) |
-| Python | _(add when present)_ | `lint-imports` + `ruff` + `mypy` |
+| Python | `python-lint` | `ruff format --check` + `ruff check` + `mypy` + `lint-imports` + `pytest tests/architecture` (conventions gate: gate coverage and the interpreter floor) |
 
 The structure gate (`rust-structure`) is documented in `rust-architecture-test-setup`.
 The ESLint boundary rules are documented in `frontend-vue-eslint-setup`.
@@ -53,9 +53,10 @@ These three skills install the local check; this skill makes it a build-breaker.
 
 ## Workflow template
 
-The template below is a reference for a Rust + Vue monorepo. Adapt job names,
-package names (`-p <your-crate>`), and working-directory prefixes to match your
-project.
+The template below is a reference for a Rust + Python + Vue monorepo. Adapt job
+names, package names (`-p <your-crate>`), and working-directory prefixes to match
+your project, and delete the jobs for components your repository does not have —
+that applies equally to all three stacks.
 
 ```yaml
 name: CI
@@ -186,33 +187,53 @@ jobs:
         # rules at "warn" are advisory until flipped to "error" after cleanup.
         run: npm run lint
 
-  # ── Python (add when a Python component is present) ───────────────────────
-  #
-  # python-lint:
-  #   name: python lint
-  #   runs-on: ubuntu-latest
-  #   defaults:
-  #     run:
-  #       working-directory: service
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: astral-sh/setup-uv@v8
-  #       with:
-  #         working-directory: service
-  #         enable-cache: true
-  #       # No python-version input: the action reads the pin from
-  #       # service/.python-version, so the interpreter is a property of the
-  #       # repository rather than of this workflow file.
-  #     - run: uv sync --locked
-  #       # --locked fails the job if uv.lock no longer matches the manifests.
-  #       # Never `pip install -e ".[dev]"`: dev tooling is not an extra, and
-  #       # pip writes into an environment the lockfile is meant to describe.
-  #       # See python-project-setup.
-  #     - run: uv run ruff check .
-  #     - run: uv run mypy
-  #     - run: uv run lint-imports
-  #       # lint-imports enforces the DDD layering contracts from
-  #       # python-import-linter-setup. Exits non-zero on any breach.
+  # ── Python ────────────────────────────────────────────────────────────────
+
+  python-lint:
+    name: python lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: service
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8
+        with:
+          working-directory: service
+          enable-cache: true
+        # No python-version input: the action reads the pin from
+        # service/.python-version, so the interpreter is a property of the
+        # repository rather than of this workflow file.
+
+      - name: Install dependencies
+        # --locked fails the job if uv.lock no longer matches the manifests.
+        # Never `pip install -e ".[dev]"`: dev tooling is not an extra, and pip
+        # writes into an environment the lockfile is meant to describe.
+        # See python-project-setup.
+        run: uv sync --locked
+
+      - name: Format and lint (ruff)
+        run: uv run ruff format --check . && uv run ruff check .
+
+      - name: Type check (mypy)
+        # No path argument: `[tool.mypy] files` in pyproject.toml owns the scope,
+        # and an explicit path silently overrides it. See python-project-setup.
+        run: uv run mypy
+
+      - name: Enforce DDD layering (import-linter contracts)
+        # Installed by python-import-linter-setup. Exits non-zero on any breach,
+        # including transitive ones a per-file scan cannot see.
+        run: uv run lint-imports
+
+      - name: Enforce conventions (architecture gate)
+        # The conventions package from patterns/conventions/python.md. Asserts
+        # that every workspace member carries this gate, and that every member
+        # declares requires-python at or above the greenfield floor — so the
+        # floor is one constant in that library, never a version literal here.
+        run: uv run pytest tests/architecture
 ```
 
 ## Dependency caching
@@ -342,7 +363,7 @@ Template for a new component job:
 | `rust-clippy` | push / PR | yes | `cargo clippy -- -D warnings` or `just clippy` |
 | `rust-structure` | push / PR | yes | `cargo test --test structure` or `just structure` |
 | `web-eslint` | push / PR | yes (error-level rules) | `npm run lint` or `just web-lint` |
-| `python-lint` | push / PR | yes | `ruff check . && mypy && lint-imports` |
+| `python-lint` | push / PR | yes | `ruff format --check . && ruff check . && mypy && lint-imports && pytest tests/architecture` |
 | integration tests | tag push (release) | yes (gates image build) | `just test-integration` with Docker stack |
 
 ## Cross-references

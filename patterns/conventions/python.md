@@ -17,7 +17,7 @@ description: >-
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.4"
+  version: "0.0.5"
 ---
 
 # Python Convention Enforcement Pattern
@@ -64,9 +64,10 @@ imports.** In Python, the gate *is* the boundary.
 
 > **Greenfield baseline:** every new Python project requires **CPython 3.14 or
 > newer**. This is a floor, not a preference — no new work declares `>=3.13` or
-> lower. The implementation below uses `Path.rglob(..., recurse_symlinks=True)`
-> (available from 3.13); do not copy it into an older project without adapting
-> the traversal.
+> lower, and `requires_python_meets_baseline()` below makes it a rule rather than
+> a request, failing in each member's own suite. The implementation below uses
+> `Path.rglob(..., recurse_symlinks=True)` (available from 3.13); do not copy it
+> into an older project without adapting the traversal.
 
 ## The ArchUnit Pattern (general view)
 
@@ -264,9 +265,10 @@ packages/ironbox-conventions/
   src/ironbox_conventions/
     __init__.py        # public surface: rule constructors + package_root, nothing else
     py.typed           # consumers type-check their gate files against real types
-    _machinery.py      # Violation, Rule, package_root, uv.lock reading — no policy
-    layout.py          # the day-1 test-layout rules
-    workspace.py       # the coverage rule: every member carries a gate
+    _machinery.py      # Violation, Rule, package_root, manifest + uv.lock reading — no policy
+    layout.py          # policy about module shape: the day-1 test-layout rules
+    workspace.py       # policy declared in manifests and the lockfile: gate
+                       # coverage, and the interpreter floor every member declares
   tests/               # fixture source trees proving each rule fires / stays quiet
 ```
 
@@ -287,11 +289,16 @@ from ironbox_conventions import (
     modules_contain_only_tests,
     package_root,
     pytest_references_use_canonical_names,
+    requires_python_meets_baseline,
 )
 
 
 def test_members_carry_convention_gates():
     members_carry_convention_gates().enforce(package_root(__file__))
+
+
+def test_requires_python_meets_baseline():
+    requires_python_meets_baseline().enforce(package_root(__file__))
 
 
 def test_modules_contain_only_tests():
@@ -399,6 +406,7 @@ Machinery — mechanics only, no policy:
 # src/ironbox_conventions/_machinery.py
 from __future__ import annotations
 
+import re
 import tomllib
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -439,6 +447,34 @@ def package_root(marker: str) -> Path:
         if (candidate / "pyproject.toml").is_file():
             return candidate
     raise RuntimeError(f"no pyproject.toml above {marker}")
+
+
+def declared_python_floor(package_directory: Path) -> tuple[int, int] | None:
+    """The lowest Python version this package's manifest claims to support.
+
+    `None` only when the manifest declares no `requires-python` at all. The first
+    dotted version in the specifier is the floor in every form this pattern
+    prescribes (`>=3.14`, `>=3.14,<4`, `==3.14.*`, `~=3.14`) and in the
+    upper-bound-first form (`<4,>=3.14`), because a bare `4` has no dot. A
+    specifier whose first dotted version is *not* the floor — `<3.20,>=3.14` —
+    would need a real specifier parser; raise rather than guess.
+    """
+    manifest = tomllib.loads(
+        (package_directory / "pyproject.toml").read_text(encoding="utf-8")
+    )
+    requirement = manifest.get("project", {}).get("requires-python")
+    if requirement is None:
+        return None
+    if re.match(r"^\s*<", requirement) and re.search(r"<\s*\d+\.\d+", requirement):
+        raise RuntimeError(
+            f"requires-python {requirement!r} leads with a dotted upper bound; "
+            f"this rule reads the first dotted version as the floor and cannot "
+            f"parse that form — declare the lower bound first"
+        )
+    floor = re.search(r"(\d+)\.(\d+)", requirement)
+    if floor is None:
+        raise RuntimeError(f"requires-python {requirement!r} names no version")
+    return int(floor.group(1)), int(floor.group(2))
 
 
 def enclosing_workspace_directory(package_directory: Path) -> Path:
@@ -874,11 +910,53 @@ from pathlib import Path
 from ._machinery import (
     Rule,
     Violation,
+    declared_python_floor,
     enclosing_workspace_directory,
     locked_member_directories,
 )
 
 CONVENTION_GATE_RELATIVE_PATH = Path("tests") / "architecture" / "test_conventions.py"
+MINIMUM_PYTHON_VERSION = (3, 14)
+
+
+def requires_python_meets_baseline() -> Rule:
+    """Every member declares the greenfield interpreter floor, or newer."""
+    return Rule(
+        description=(
+            f"every member must declare requires-python >= {_baseline_text()}; an "
+            "older floor silently forfeits stdlib these patterns depend on"
+        ),
+        check=_check_requires_python_meets_baseline,
+    )
+
+
+def _baseline_text() -> str:
+    return ".".join(str(part) for part in MINIMUM_PYTHON_VERSION)
+
+
+def _check_requires_python_meets_baseline(package_directory: Path) -> list[Violation]:
+    """Takes the caller's own package root: each member owns its own manifest."""
+    manifest_path = package_directory / "pyproject.toml"
+    floor = declared_python_floor(package_directory)
+    if floor is None:
+        return [
+            Violation(
+                manifest_path,
+                1,
+                f'no `[project] requires-python`; declare ">={_baseline_text()}"',
+            )
+        ]
+    if floor < MINIMUM_PYTHON_VERSION:
+        declared = ".".join(str(part) for part in floor)
+        return [
+            Violation(
+                manifest_path,
+                1,
+                f"requires-python floor is {declared}; the greenfield baseline is "
+                f"{_baseline_text()} and older floors are banned on new work",
+            )
+        ]
+    return []
 
 
 def members_carry_convention_gates() -> Rule:
@@ -1162,10 +1240,11 @@ Pin it at `0.1.0`, never touch it, and let the lockfile be the contract.
    keeping pytest references syntactic rather than alias-resolved. Resist
    seeding any *additional* style rule; each one is code you own forever. No
    public name may start with `test`. Add `workspace.py` with
-   `members_carry_convention_gates()` in the same commit (plus
-   `enclosing_workspace_directory` and `locked_member_directories` in
-   `_machinery.py`): it is not a style rule, so the restraint above does not
-   cover it, and step 6 needs it. Export `package_root` and no other root helper.
+   `members_carry_convention_gates()` and `requires_python_meets_baseline()` in
+   the same commit (plus `enclosing_workspace_directory`,
+   `locked_member_directories`, and `declared_python_floor` in `_machinery.py`):
+   neither is a style rule, so the restraint above does not cover them, and step
+   6 needs the first. Export `package_root` and no other root helper.
 4. **Give it its own `tmp_path` fixture tests**, both directions per rule, plus
    one fixture tree copied from your testing convention's own layout example
    that must produce **zero** violations. The coverage rule's fixture is a
@@ -1272,6 +1351,12 @@ codebase, for one rule.
   conventions package, executed by every package against its own tree, from
   inside that package's directory — with exactly one exception, the coverage rule
   below, whose subject is the workspace rather than any one package's tree.
+- **Every member declares `requires-python` at or above the greenfield floor**
+  (currently 3.14), asserted by a rule reading that member's own manifest — so a
+  banned floor fails the member that declared it, not a sibling. The baseline is
+  a library constant, so weakening it is one diffable line rather than a habit.
+  Interpreter *pinning* is a different concern and stays with
+  `python-project-setup`; this rule only judges the declared floor.
 - **Every member carries the gate file** — the conventions package included — and
   a *rule* asserts it, not the recipe. It lives in the library because the
   property is the workspace's; it takes `package_root(__file__)` like every other
