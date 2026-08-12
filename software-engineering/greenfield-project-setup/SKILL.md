@@ -14,7 +14,7 @@ description: >-
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.3"
+  version: "0.0.4"
 ---
 
 # Greenfield Project Setup (Orchestrator)
@@ -106,13 +106,14 @@ what Python cannot enforce by construction. Then **read** conventions/`python` a
 install the conventions package it specifies. Same ordering as Rust, different
 mechanics.
 
-Two asymmetries to know going in. The Rust conventions crate carries a **coverage
-rule** that fails when a workspace member owns no gate; the Python pattern has no
-such rule, so a member added later is silently ungated until a human notices — the
-phase-12 sweep item is the only thing holding it. And `lint-imports` runs one
-root-level contract set, so unlike the conventions gate its findings are not
-member-local; do not expect the "fails in the owning component and no other"
-half of the phase gate from it.
+One asymmetry to know going in: `lint-imports` runs one root-level contract set,
+so unlike the conventions gate its findings are not member-local — do not expect
+the "fails in the owning component and no other" half of the phase gate from it.
+Gate *coverage*, by contrast, is mechanized on both stacks: each conventions
+library carries a **coverage rule** that fails when a member owns no gate. The
+Python one reads `[manifest] members` from `uv.lock` — uv's own list, never
+inferred from source kinds, since an out-of-glob path dependency with
+`[tool.uv] package = false` also locks as `virtual`.
 
 Note the phase boundary: phase 3 **installs** the gates; phases 5 and 10 are what
 make them **reachable**. The task-runner recipe and the CI step belong there, not
@@ -139,7 +140,7 @@ Which phases apply to which components (✓ = applies, — = skip):
 | 2 skeleton | ✓ hexagonal | ✓ DDD | ✓ feature-arch | ✓ hexagonal |
 | 3 invariant gate | ✓ structure-test (+ conventions crate on a workspace) | ✓ import-linter (+ conventions package on a uv workspace) | ✓ eslint | ✓ own gate + the shared conventions crate/package |
 | 4 wiring/lifecycle | ✓ | ✓ | — | ✓ |
-| 6 test isolation | ✓ | ✓ (the isolation pattern is Rust-worked — port its mechanics to pytest fixtures) | partial | ✓ |
+| 6 test isolation | ✓ | ✓ pytest fixtures + xdist worker identity | partial | ✓ |
 | 7 worker | — | — | — | ✓ |
 | 8 day-1 ADRs | ✓ | ✓ | ✓ (type-mirroring consumer) | ✓ (fleet topology + identity) |
 | 9 docs + CLAUDE.md | ✓ | ✓ | ✓ | ✓ |
@@ -155,7 +156,7 @@ The foundation is live only when **all** of these pass together:
 
 - [ ] every component builds (`cargo build`, `uv sync` **plus a real import of each Python package**, web build)
 - [ ] architecture gates pass **and** fail on a planted violation (structure test / `lint-imports` / eslint) — the member-local gate failing in the component the violation lives in **and no other member's gate**
-- [ ] every workspace member owns a gate. On Rust the conventions crate's coverage rule proves it; `cargo test --workspace --test structure` passes when a gate is missing, so it proves nothing here. On a uv workspace nothing mechanizes this yet — count the gate files against `[tool.uv.workspace] members` by hand
+- [ ] every workspace member owns a gate, proven by the conventions library's coverage rule on both stacks — note `cargo test --workspace --test structure` passes when a gate is missing, so it proves nothing here, and both rules assert the gate *file* exists, not that it calls every rule
 - [ ] every gate is reachable from the task runner, and CI invokes the runner instead of a hand-listed crate/member set
 - [ ] every convention rule has a `should_flag`/`should_pass` fixture pair, and they actually run
 - [ ] no gate test is disabled or landed red — `grep -rn '#\[ignore' --include='*.rs' .` returns nothing, and `grep -rn '\(@pytest\.mark\|pytestmark = pytest\.mark\)\.\(skip\|xfail\)' --include='*.py' */tests/architecture` returns nothing (scoped to gate directories: a `skipif` in an ordinary suite is legitimate, so a repo-wide grep here only teaches you to wave the check through)
@@ -184,10 +185,9 @@ The foundation is live only when **all** of these pass together:
   10 (CI makes them blocking). Local gates an agent can bypass are not invariants.
   The same failure in a second disguise: per-component gates plus a hand-maintained
   crate/member list in CI, so every member added later is silently unenforced until
-  someone remembers the list. Let CI invoke the task runner, and — where the
-  ecosystem allows it — let a coverage rule prove every member owns a gate. The
-  Rust conventions crate has one; the Python conventions pattern does not yet, so
-  on a uv workspace this stays a human check (phase 3).
+  someone remembers the list. Let CI invoke the task runner, and let a coverage
+  rule prove every member owns a gate — the Rust conventions crate and the Python
+  conventions package each carry one (phase 3).
 - **Hardcoded ports / shared test DB.** Skipping phase 6 kills parallel-worktree
   productivity — the exact thing the setup is meant to enable.
 - **Duplicating the rule scanner per component.** Two copies of a non-trivial

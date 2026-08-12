@@ -17,7 +17,7 @@ description: >-
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.1"
+  version: "0.0.3"
 ---
 
 # Python Convention Enforcement Pattern
@@ -261,29 +261,36 @@ uv build --package ironbox-shared    # build a distribution for one member
 packages/ironbox-conventions/
   pyproject.toml
   src/ironbox_conventions/
-    __init__.py        # public surface: re-exports rule constructors + package_root
+    __init__.py        # public surface: rule constructors + package_root, nothing else
     py.typed           # consumers type-check their gate files against real types
-    _machinery.py      # Violation, Rule, package_root — no policy
-    layout.py          # the first (and, on day 1, only) rule
+    _machinery.py      # Violation, Rule, package_root, uv.lock reading — no policy
+    layout.py          # the day-1 test-layout rules
+    workspace.py       # the coverage rule: every member carries a gate
   tests/               # fixture source trees proving each rule fires / stays quiet
 ```
 
-Additional topic modules (`shape.py`, `vocabulary.py`, …) appear **later, one
-rule at a time** — never on day 1. Two layers, and the split is the whole
-design: `_machinery.py` holds **mechanics** (scanning, violation rendering,
-assertion), the topic modules hold **policy** (what is allowed). Consumers only
-ever touch the rule constructors.
+Additional *style*-topic modules (`shape.py`, `vocabulary.py`, …) appear **later,
+one rule at a time** — never on day 1. `workspace.py` is the exception: its single
+rule is what makes every other rule reach every member, so it ships with the
+gates. Two layers, and the split is the whole design: `_machinery.py` holds
+**mechanics** (scanning, violation rendering, assertion), the topic modules hold
+**policy** (what is allowed). Consumers only ever touch the rule constructors.
 
 The per-package gate is a one-liner, identical in every member:
 
 ```python
 # services/api/tests/architecture/test_conventions.py
 from ironbox_conventions import (
+    members_carry_convention_gates,
     module_filenames_follow_canonical_pattern,
     modules_contain_only_tests,
     package_root,
     pytest_references_use_canonical_names,
 )
+
+
+def test_members_carry_convention_gates():
+    members_carry_convention_gates().enforce(package_root(__file__))
 
 
 def test_modules_contain_only_tests():
@@ -316,7 +323,11 @@ Four properties of this shape are load-bearing:
   to the nearest `pyproject.toml`, which in a workspace is the *member*, not
   the workspace root. It is *identity*, not configuration — the one argument a
   rule may take. (Frame inspection could make the call truly zero-argument;
-  don't — a gate must be obvious, not clever.)
+  don't — a gate must be obvious, not clever.) **It is the only root helper the
+  package exports, and every rule takes it** — including the workspace-scoped
+  coverage rule, which derives the workspace from it internally. A second
+  `*_root(__file__)` helper would be indistinguishable at the call site and one
+  copy-paste away from a silent vacuous pass — see *Coverage* below.
 - **The gate file satisfies its own rule** — imports plus one test function.
   The pattern dogfoods.
 
@@ -387,9 +398,13 @@ Machinery — mechanics only, no policy:
 # src/ironbox_conventions/_machinery.py
 from __future__ import annotations
 
+import tomllib
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+
+LOCKFILE_NAME = "uv.lock"
+MEMBER_SOURCE_KEYS = ("editable", "virtual")
 
 
 @dataclass(frozen=True)
@@ -423,6 +438,68 @@ def package_root(marker: str) -> Path:
         if (candidate / "pyproject.toml").is_file():
             return candidate
     raise RuntimeError(f"no pyproject.toml above {marker}")
+
+
+def enclosing_workspace_directory(package_directory: Path) -> Path:
+    """The uv workspace owning a package — nearest `uv.lock` at or above it.
+
+    Deliberately NOT re-exported from `__init__.py`: gate files pass
+    `package_root(__file__)` only, and the one workspace-scoped rule calls this.
+    The candidate list starts with `package_directory` itself, because in the
+    `editable = "."` topology the root package *is* the workspace directory.
+    """
+    for candidate in (package_directory, *package_directory.parents):
+        if (candidate / LOCKFILE_NAME).is_file():
+            return candidate
+    raise RuntimeError(
+        f"no {LOCKFILE_NAME} at or above {package_directory} — a workspace-wide "
+        f"rule must never pass vacuously; commit the lockfile before wiring this gate"
+    )
+
+
+def locked_member_directories(workspace_directory: Path) -> list[Path]:
+    """Members as uv itself recorded them: the names in `[manifest] members`.
+
+    Source kinds are only the name → directory mapping: `editable` and `virtual`
+    packages own a tree, `directory` (an in-repo path dependency) and `registry`
+    (a third-party distribution) do not. Source kind never decides membership —
+    an out-of-glob path dependency with `[tool.uv] package = false` also locks as
+    `virtual`, and it is not a member.
+    """
+    lockfile = workspace_directory / LOCKFILE_NAME
+    if not lockfile.is_file():
+        raise RuntimeError(f"{workspace_directory} has no {LOCKFILE_NAME}; run `uv lock`")
+    locked_workspace = tomllib.loads(lockfile.read_text(encoding="utf-8"))
+    member_names = locked_workspace.get("manifest", {}).get("members")
+    if member_names is None:
+        raise RuntimeError(
+            f"{lockfile} has no `[manifest] members`: this is a single-package "
+            f"project, not a uv workspace, so this rule has no subject — delete "
+            f"the members_carry_convention_gates() call from this gate file"
+        )
+    directory_by_member_name = {
+        locked_package["name"]: locked_package["source"][source_key]
+        for locked_package in locked_workspace.get("package", [])
+        for source_key in MEMBER_SOURCE_KEYS
+        if source_key in locked_package.get("source", {})
+    }
+    member_directories: list[Path] = []
+    for member_name in member_names:
+        if member_name not in directory_by_member_name:
+            raise RuntimeError(
+                f"{lockfile} names member `{member_name}` in `[manifest] members`, "
+                f"but no [[package]] entry gives its directory; run `uv lock`"
+            )
+        relative_directory = directory_by_member_name[member_name]
+        member_directory = workspace_directory / relative_directory
+        if not member_directory.is_dir():
+            raise RuntimeError(
+                f"stale {LOCKFILE_NAME}: member `{member_name}` is locked at "
+                f"{relative_directory!r}, absent under {workspace_directory}; "
+                f"run `uv lock`"
+            )
+        member_directories.append(member_directory)
+    return sorted(set(member_directories))
 ```
 
 Policy — the archetypal first rule, **test modules contain only tests**:
@@ -516,8 +593,8 @@ def _tests_dir(root: Path) -> Path:
     if not tests_dir.is_dir():
         raise RuntimeError(
             f"{root} has no {TESTS_DIR_NAME}/ directory — a gate that cannot fail is "
-            f"worse than no gate; either create it, or drop this member's gate call "
-            f"with a tracking note until the tree exists"
+            f"worse than no gate; create it. (The coverage rule makes this branch "
+            f"near-unreachable: the gate file itself lives under {TESTS_DIR_NAME}/.)"
         )
     return tests_dir
 
@@ -777,6 +854,103 @@ These details generalise to every rule you add:
   the serious one. libcst is concrete-syntax, lossless, and has a codemod
   framework — which is also your **auto-fix** story.
 
+### Coverage: the rule that keeps every gate reachable
+
+Per-member gates create one new failure mode: **a member with no gate at all.**
+`uv sync` succeeds, every gated member passes, CI is green — and every rule in the
+library is silently optional for that tree. A recipe step cannot catch that, so it
+is a rule, and it lives in the **library** because the property is the
+*workspace's*, not one tree's. Reading the lockfile is *mechanics* and stays in
+`_machinery.py`.
+
+```python
+# src/ironbox_conventions/workspace.py
+from __future__ import annotations
+
+from pathlib import Path
+
+from ._machinery import (
+    Rule,
+    Violation,
+    enclosing_workspace_directory,
+    locked_member_directories,
+)
+
+CONVENTION_GATE_RELATIVE_PATH = Path("tests") / "architecture" / "test_conventions.py"
+
+
+def members_carry_convention_gates() -> Rule:
+    """Every uv workspace member must own the gate that runs these rules on it."""
+    return Rule(
+        description=(
+            f"every uv workspace member must carry {CONVENTION_GATE_RELATIVE_PATH}; "
+            "without it every rule here is silently optional for that member's tree"
+        ),
+        check=_check_every_member_carries_the_gate,
+    )
+
+
+def _check_every_member_carries_the_gate(package_directory: Path) -> list[Violation]:
+    """Takes the caller's own package root, exactly like every other rule."""
+    workspace_directory = enclosing_workspace_directory(package_directory)
+    reporting_gate_path = package_directory / CONVENTION_GATE_RELATIVE_PATH
+    return [
+        Violation(
+            reporting_gate_path,
+            1,
+            f"workspace member `{member_directory.relative_to(workspace_directory)}` "
+            f"has no {CONVENTION_GATE_RELATIVE_PATH}; every rule here is silently "
+            f"optional for that member until it does",
+        )
+        for member_directory in locked_member_directories(workspace_directory)
+        if not (member_directory / CONVENTION_GATE_RELATIVE_PATH).is_file()
+    ]
+```
+
+**Ask uv for its own member list; never infer one.** uv has no `cargo metadata`
+equivalent (0.7.20 exposes no such subcommand), so its resolved view lives in
+`uv.lock` — written there literally, as the member *names* under `[manifest]
+members`. Source kinds are only the name → directory mapping, because inferring
+membership *from* them over-fires: an out-of-glob path dependency that sets
+`[tool.uv] package = false` also locks as `virtual`, and demanding a gate from a
+directory that never receives the conventions package (no `workspace = true`
+source reaches it) is a finding nobody can remediate. `editable = "."` is a root
+with its own `[project]`, so that root is named in `members` and needs a gate too;
+a *virtual* root has no `[project]` name, never appears in `members`, owns no
+source tree, and needs none. **`[manifest]` is absent from the lockfile of a
+single-package, non-workspace project, and may be present carrying only
+`constraints`** — both raise, telling the reader to delete the call, because this
+pattern supports single-package layouts and the alternative (treating the lone
+package as the only member) would assert only that the file making the call has a
+gate, which running it already proves: a pass carrying no information.
+
+Be accurate about why the lockfile beats expanding the `[tool.uv.workspace]`
+globs yourself: **uv does not promote path dependencies to members** — unlike
+Cargo, whose promotion is exactly why the Rust rule *must* ask Cargo rather than
+read the manifest — so glob expansion would also be correct here today. The
+lockfile wins only because asking a tool for its own answer survives that tool
+changing its rules.
+
+**Every gate calls it with `package_root(__file__)`**, like every other rule; the
+rule walks up to `uv.lock` itself. Do not expose a workspace-root helper for it:
+two identically-shaped `*_root(__file__)` calls in one gate file are one
+copy-paste from handing a *per-package* rule the workspace root, where it scans
+`<workspace>/tests/**`, never sees the member's violating file, and passes
+vacuously — and this rule's own remediation creates `<workspace>/tests/` in the
+`editable = "."` topology. Deriving the root internally costs report precision:
+the violation's path is the *reporting* member's gate, so an editor jump lands on
+that file rather than the missing one, and the message names the absent sibling
+instead. Every member reports the same finding, so each already owns "the
+workspace is incomplete"; the standing cost is a TOML parse per member and one
+failure reported N times. Its limit: it asserts the gate *file* exists, not that
+the file calls every rule — a residue that stays a visible diff, and the reason
+staged adoption below is legal.
+
+**The rule needs the whole workspace tree on disk in every member's run.** A
+narrowed per-member CI checkout or Docker context reports a correct lockfile as
+stale, and a member-local `uv.lock` stops the upward walk at that member and
+evaluates the wrong workspace — never commit one.
+
 ### Testing the rules
 
 The conventions package needs its own tests, and they must build fixture trees
@@ -809,11 +983,58 @@ def test_accepts_compliant_module(tmp_path: Path) -> None:
     modules_contain_only_tests().enforce(tmp_path)
 ```
 
-Every rule gets both directions: it fires on the violation, and it stays quiet
-on the compliant equivalent. An over-firing rule is worse than an absent one —
-and the cheapest way to catch over-firing is to run the rule against a tree
-laid out exactly as your testing convention prescribes and require zero
-violations.
+The coverage rule's fixture is a *workspace*: a hand-written `uv.lock` plus gate
+files, enforced from a *member's* package root so the upward walk is exercised.
+The lockfile literal stays inside the test body — a module-scope constant is
+exactly what `modules_contain_only_tests()` flags, and this package runs its own
+rules.
+
+```python
+# tests/test_workspace.py
+from pathlib import Path
+
+import pytest
+
+from ironbox_conventions import members_carry_convention_gates
+
+
+def test_flags_member_without_gate(tmp_path: Path) -> None:
+    (tmp_path / "uv.lock").write_text(
+        'version = 1\n'
+        '[manifest]\nmembers = ["alpha", "gamma", "root"]\n'
+        '[[package]]\nname = "root"\nsource = { editable = "." }\n'
+        '[[package]]\nname = "alpha"\nsource = { editable = "packages/alpha" }\n'
+        '[[package]]\nname = "gamma"\nsource = { virtual = "packages/gamma" }\n'
+        '[[package]]\nname = "delta"\nsource = { virtual = "outside/delta" }\n'
+        '[[package]]\nname = "beta"\nsource = { directory = "outside/beta" }\n'
+        '[[package]]\nname = "pytest"\nsource = { registry = "https://pypi.org" }\n'
+    )
+    for member_relative_path in (
+        "packages/alpha",
+        "packages/gamma",
+        "outside/delta",
+        "outside/beta",
+    ):
+        (tmp_path / member_relative_path).mkdir(parents=True)
+    for gated_relative_path in (".", "packages/alpha"):
+        gate_directory = tmp_path / gated_relative_path / "tests" / "architecture"
+        gate_directory.mkdir(parents=True)
+        (gate_directory / "test_conventions.py").write_text("")
+    with pytest.raises(AssertionError, match="packages/gamma"):
+        members_carry_convention_gates().enforce(tmp_path / "packages" / "alpha")
+```
+
+The quiet direction writes the same lockfile and adds `packages/gamma`'s gate,
+leaving `outside/delta` and `outside/beta` without one — so passing also proves
+that neither a `directory` source nor an out-of-glob `virtual` one is treated as a
+member. Three more tests forbid the vacuous passes, all `pytest.raises`: an empty
+`tmp_path` → `RuntimeError, match="uv.lock"`; a lockfile with no `[manifest]` →
+`RuntimeError, match="single-package"`; a `members` entry whose directory is
+absent → `RuntimeError, match="stale"`.
+
+Every rule gets both directions — it fires on the violation and stays quiet on
+the compliant equivalent, including against a tree laid out exactly as your
+testing convention prescribes, which is the cheapest way to catch over-firing.
 
 ## Production: shipping members that are not dev-only
 
@@ -937,21 +1158,32 @@ Pin it at `0.1.0`, never touch it, and let the lockfile be the contract.
    `pytest_references_use_canonical_names()`. Together they enforce
    `python-testing` §7's contents and `test_*.py` filename surface while
    keeping pytest references syntactic rather than alias-resolved. Resist
-   seeding any *additional* rule; each one is code you own forever. No public
-   name may start with `test`.
+   seeding any *additional* style rule; each one is code you own forever. No
+   public name may start with `test`. Add `workspace.py` with
+   `members_carry_convention_gates()` in the same commit (plus
+   `enclosing_workspace_directory` and `locked_member_directories` in
+   `_machinery.py`): it is not a style rule, so the restraint above does not
+   cover it, and step 6 needs it. Export `package_root` and no other root helper.
 4. **Give it its own `tmp_path` fixture tests**, both directions per rule, plus
    one fixture tree copied from your testing convention's own layout example
-   that must produce **zero** violations.
+   that must produce **zero** violations. The coverage rule's fixture is a
+   hand-written `uv.lock` plus gate files rather than a source tree.
 5. **Wire every member**:
    `[dependency-groups] dev = [..., "<project>-conventions"]` plus
    `[tool.uv.sources] <project>-conventions = { workspace = true }`.
 6. **Add the identical gate file** to every member under
    `tests/architecture/test_conventions.py` — including the conventions package
-   itself, so it dogfoods.
+   itself, so it dogfoods — and have every one of them call the step-3 coverage
+   rule, so the instruction is enforced rather than remembered. A member added a
+   year later with no gate then fails every existing member's suite instead of
+   passing unnoticed.
 7. **Wire the runner and CI per member**: `cd <member> && uv run pytest`, one
    recipe and one CI job each, so a violation fails that member's own run.
    Never a single job that scans everything, and never `uv run --package X
-   pytest` from the root — see the `--package` trap.
+   pytest` from the root — see the `--package` trap. The coverage rule guarantees
+   every member *has* a gate; it cannot see whether CI invokes it, so generate
+   this job list from `uv.lock` — or assert its length against the member count
+   — instead of hand-maintaining it.
 8. **Record an ADR** in `docs/decisions/`: the topology (rules as a library,
    enforcement per package), the zero-knob principle, the rejected alternatives
    (central scanner, per-package copies, frozen baselines), and — explicitly —
@@ -963,7 +1195,10 @@ Pin it at `0.1.0`, never touch it, and let the lockfile be the contract.
 The scope statement in step 8 is not boilerplate. The failure mode of a
 conventions package is a big-bang attempt to codify an entire style guide,
 producing brittle rules nobody trusts. Migrate a rule from prose to code when
-it has *demonstrably* been violated and missed.
+it has *demonstrably* been violated and missed — with one day-1 exception, the
+coverage rule, which ships unprovoked because it is what makes every other rule
+reach every member, and because the Rust sibling's history already demonstrated
+the gap it closes.
 
 ## Adopting on an Existing Codebase
 
@@ -978,8 +1213,11 @@ it has *demonstrably* been violated and missed.
 4. **Land the rule and the cleanup together**, at zero violations. No
    allowlist, no baseline file, no frozen snapshot — those make "green" stop
    meaning "clean".
-5. **A package that cannot be cleaned this cycle visibly omits the gate call**,
-   with a tracking note. Never a silent exemption.
+5. **A package that cannot be cleaned this cycle keeps its gate file and visibly
+   omits the offending rule's call**, with a tracking note. The file is not
+   optional — `members_carry_convention_gates()` requires it, and it calls that
+   rule from day one — so adoption is staged one *call* at a time inside a gate
+   that already exists. Never a silent exemption, never a deleted gate file.
 6. **Expect the rule to find more than you predicted.** That number *is* the
    argument for mechanising it.
 
@@ -998,8 +1236,9 @@ next reader calibrates correctly:
   run — in a codebase that had passed review throughout. Remediation ran in
   per-cluster batches to zero; a `syn`-based AST walk replaced an earlier text
   scan; an interim workspace-wide scanner was deliberately *retracted* in favour
-  of per-crate gates so each crate owns its violations. See the sibling
-  [rust convention pattern](rust.md).
+  of per-crate gates so each crate owns its violations — with one exception kept
+  in the library, the workspace-coverage rule, because gate presence is a property
+  of the workspace. See the sibling [rust convention pattern](rust.md).
 - **Mapped here (Python half):** the uv-workspace substrate, the tier ladder
   with `import-linter` absorbing tier 1, the `ast` rule implementation, and the
   production-packaging recipe. The topology and principles transfer unchanged;
@@ -1008,10 +1247,18 @@ next reader calibrates correctly:
   Python-specific additions with no Rust counterpart.
 - **What has actually been executed, precisely:** the two `ast` modules, on
   CPython 3.13–3.14, against compliant and violating fixture trees including
-  the layout `python-testing` prescribes; the gate file, under real pytest; and
-  the workspace and `uv sync` flag sequences, against a real multi-member uv
-  workspace. What has *not*: this stack running in anger in a production
-  repository. Verify against your tree.
+  the layout `python-testing` prescribes; the gate file, under real pytest; the
+  workspace and `uv sync` flag sequences, against a real multi-member uv
+  workspace; and the coverage rule plus its fixture tests, on CPython 3.13
+  against a `uv.lock` (`version = 1`, `revision = 2`) generated by uv 0.7.20 with
+  an `editable = "."` root, an `editable` member, a `virtual` member, a `registry`
+  dependency and two out-of-glob path dependencies — one `directory`, one
+  `virtual`, the second of which a source-kind guess wrongly calls a member while
+  `[manifest] members` correctly omits it. It fired on exactly the member without
+  a gate, went silent once every member had one, and raised on every loud path (no
+  lockfile above the caller; `[manifest]` absent, and present without `members`; a
+  locked member directory absent from disk). What has *not*: this stack running in
+  anger in a production repository. Verify against your tree.
 
 The 477-violation number is the single most useful datum in this pattern: it is
 what "the rule lives only in prose and reviewers keep missing it" costs, in one
@@ -1021,7 +1268,17 @@ codebase, for one rule.
 
 - **Rules are a library; enforcement is local.** Defined once in the
   conventions package, executed by every package against its own tree, from
-  inside that package's directory.
+  inside that package's directory — with exactly one exception, the coverage rule
+  below, whose subject is the workspace rather than any one package's tree.
+- **Every member carries the gate file** — the conventions package included — and
+  a *rule* asserts it, not the recipe. It lives in the library because the
+  property is the workspace's; it takes `package_root(__file__)` like every other
+  rule and walks up to `uv.lock` itself; and it runs from every member's gate so
+  no one member is load-bearing. Membership comes from **`[manifest] members`**,
+  uv's own list — never inferred from source kinds, since an out-of-glob path
+  dependency with `[tool.uv] package = false` also locks as `virtual`. The rule
+  asserts the gate *file* exists, not that it calls every rule: an empty file
+  satisfies it.
 - **Machine-decidable rules never belong to review.** If it can be checked,
   check it.
 - **No public name in the conventions package starts with `test`** — pytest
@@ -1035,7 +1292,8 @@ codebase, for one rule.
 - **Whitelist what is allowed**, reject the rest, and recurse into every
   container you allow.
 - **A rule that cannot fail is worse than no rule.** Vacuous passes (missing
-  directory, skipped tree, swallowed parse error) are defects.
+  directory, skipped tree, swallowed parse error, unfindable or stale `uv.lock`)
+  are defects — raise instead of returning an empty result.
 - **A rule whose remediation is impossible is a defect too**, and teaches
   suppression.
 - **The conventions package is a dev dependency group**, never a production
@@ -1045,7 +1303,9 @@ codebase, for one rule.
 - **`--no-editable` in production images**, `--frozen` then `--locked`, every
   member manifest copied, identical builder and runtime bases.
 - **Zero violations at landing.** No baselines, no allowlists, no freezes.
-- **One rule at a time.** The package earns rules; it does not start with them.
+- **One rule at a time.** The package earns rules; it does not start with them —
+  the coverage rule is the one stated day-1 exception, since it asserts that the
+  other rules are reachable at all rather than adding a convention of its own.
 - **Every rule is tested in both directions**, including against a tree laid
   out exactly as the convention prescribes.
 
@@ -1061,7 +1321,12 @@ codebase, for one rule.
 - **A central scanner that audits every package from one place.** Loses
   locality: a package's violation fails a sibling's suite (or only CI), and
   ownership becomes ambiguous. Its real advantage — no duplication — is not
-  worth that.
+  worth that. The coverage rule is not an exception to this: it inspects the
+  *workspace's* shape (which members carry a gate), never a sibling's source,
+  and a member cannot own the finding that it does not exist.
+- **A member with no gate at all.** The most expensive hole, because it reads as
+  coverage: everything passes while the whole rule set is optional for one tree.
+  Close it with a rule, never with a line in the setup recipe.
 - **Call-site knobs on universal rules.** Silent, invisible weakening. The gate
   stays green while the rule stops meaning the same thing.
 - **Baseline / freeze files.** They rot, and they redefine "green" as "no worse
