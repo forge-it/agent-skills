@@ -12,7 +12,7 @@ description: >-
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.1"
+  version: "0.0.2"
 ---
 
 # Parallel Test Isolation Pattern
@@ -362,11 +362,161 @@ What this demonstrates:
 
 ---
 
+## Mapping to Python
+
+The example above is one *implementation* of the invariants below, not the invariants
+themselves. Python keeps every one — but one structural difference reorders the work:
+Rust's harness runs tests as **threads in one process**, while `pytest` with
+`pytest-xdist` runs them in separate **worker processes**. That changes what "unique
+per test" must key on, what a shared fixture actually shares, and what survives a crash.
+
+### Structural mapping
+
+| Concern | Rust (ironbox) | Python |
+|---|---|---|
+| Stack startup, once | `#[ctor::ctor] start_docker_services()` — once per test process | a session-scoped `autouse` fixture in `tests/conftest.py` — but **once per xdist worker**, not once per run (see *Fixture scope*); the cross-process once-per-run mechanism is a file lock |
+| Readiness gating | `wait_for_postgres_ready()` etc., blocking before the first test | the same wait loops inside that fixture, one function per service — tests never call `docker compose` themselves |
+| Per-test database | `TestDatabase::new()` / `.teardown()` | a **function-scoped `yield` fixture** in `tests/integration/conftest.py` that creates, migrates, yields, and drops |
+| Unique resource names | `uuid::Uuid::now_v7()` suffix | `uuid.uuid7()` — **stdlib only from Python 3.14**; on 3.13 and earlier use the `uuid-utils` package. `uuid.uuid4()` also satisfies uniqueness, but it is not time-ordered, so it forfeits the resource *age* the orphan sweep below relies on |
+| Semantic-label helper | `unique_email(prefix)` | the same helper, in `tests/utils/helpers.py` — never defined in a test module (see `python-testing`, *Test Modules Contain Only Tests*) |
+| Serialized singletons | `#[serial(...)]` from `serial_test` | `@pytest.mark.xdist_group(name="…")` run under `--dist loadgroup`, which places every member of a group on **one** worker — the group is ordered inside that worker only, so with `-n <N>` a *single* run already has `N` processes on the stack, and a true singleton needs one stack per run |
+| Ephemeral e2e port | `app.bind("0.0.0.0:0")` | bind a `socket` to port `0`, read `getsockname()[1]`, then hand **that same socket** to the server |
+| Fixture host ports | `${VAR:-default}` in compose, default matching `dev_environment.rs` | unchanged — compose is language-neutral; the Python side reads the value from the environment through a settings object |
+| Test-process identity | not needed (one process) | the `worker_id` fixture / `PYTEST_XDIST_WORKER` — the new concern this table exists for |
+
+### Test-process identity is the foundation
+
+`pytest-xdist` supplies the identity, and it is available whether or not `-n` was passed:
+
+- The **`worker_id`** fixture is `"gw0"`, `"gw1"`, … under `-n <N>`, and `"master"`
+  when xdist is not distributing. It is session-scoped, so a session-scoped fixture
+  may depend on it.
+- **`PYTEST_XDIST_WORKER`** carries the same value in the worker's environment
+  (`PYTEST_XDIST_WORKER_COUNT` carries `<N>`), so any child process the test spawns —
+  `docker compose`, a subprocess server, a CLI under test — inherits the identity
+  without being passed it. Both variables are **absent** in a non-distributed run.
+- **`testrun_uid`** is one value shared by every worker of a single run: the only
+  identity token that means "this run" rather than "this worker".
+
+**Key every isolated resource on worker identity + test identity + a uniqueness
+suffix** — `<project>_test_<worker_id>_<uuid>`. Not on a process id: the OS reuses
+pids, and one worker process runs hundreds of tests, so a pid is neither unique per
+test nor a stable owner label. Not on a bare random value: unique but anonymous, so
+when a worker is killed nothing identifies which leftovers were its. Worker identity
+makes an orphan attributable; the suffix makes it collision-free.
+
+### Per-test database isolation — three options, one default
+
+| Option | Mechanism | Cannot isolate |
+|---|---|---|
+| **Fresh database per test** (the default) | `CREATE DATABASE <name> TEMPLATE <migrated_template>` on a connection with `isolation_level="AUTOCOMMIT"`; `DROP DATABASE … WITH (FORCE)` in teardown | nothing at the database level; costs the most (roughly an order of magnitude more per test than rollback on a local PostgreSQL 17) |
+| Fresh schema per test | one connection, `CREATE SCHEMA <name>`, per-test `search_path`; `DROP SCHEMA … CASCADE` | anything cluster-wide (roles, extensions, database settings), and any code that hardcodes a schema-qualified name escapes the boundary silently |
+| Transaction rollback | outer `connection.begin()`, `Session(bind=connection)`, rollback in teardown | see the three hard limits below |
+
+`CREATE DATABASE` **must** run on an autocommit connection — on a default SQLAlchemy
+connection it fails with `CREATE DATABASE cannot run inside a transaction block`.
+Creating from an already-migrated template keeps the per-test cost at one `CREATE`
+instead of a full migration run; the template must have no other sessions connected,
+so dispose the engine that migrated it.
+
+Rollback isolation is the cheapest and is **not equivalent**:
+
+1. **DDL is engine-dependent, not universally rollback-safe.** On PostgreSQL 17 DDL
+   inside the outer transaction does roll back. On MariaDB 11.8 a DDL statement
+   implicitly commits — and a row inserted *before* that DDL survived the outer
+   rollback. The isolation boundary is destroyed with no error.
+2. **Code that opens its own connection or engine sees nothing.** Uncommitted rows
+   are invisible outside the test's connection, so anything driven through a
+   subprocess, a background task with its own engine, or a separate server process
+   reads an empty database.
+3. **Commit visibility across connections cannot be tested at all** — the behaviour
+   under test is the thing the isolation mechanism suppresses.
+
+One breakage commonly *attributed* to rollback isolation is not real in SQLAlchemy 2.0:
+a `Session(bind=connection)` joins the outer transaction under
+`join_transaction_mode="conditional_savepoint"` (the default), so a `session.commit()`
+issued by the code under test releases a savepoint and the outer rollback still undoes
+it. Do not cite that as the reason.
+
+**Default recommendation: a fresh database per test** — the direct port of this
+pattern's invariant, and the only option with no isolation hole. Adopt rollback
+isolation later, for one measured test category, as a documented exception; never as
+the project-wide default.
+
+### Fixture scope is the correctness knob
+
+Scopes are `function`, `class`, `module`, `package`, `session`. Per-test isolation
+means the isolated resource is **`function`**-scoped (the default); anything wider is
+shared state, which is the exact failure this pattern exists to prevent.
+
+**The trap: `session` scope means "once per worker", not "once per run."** Each xdist
+worker is its own process and builds its own copy — a session fixture ran twice under
+`-n 2`. That is correct for per-worker-owned things (an engine, a connection pool, a
+readiness wait). Anything that must truly happen **once per run** — `docker compose up`,
+creating the migrated template database — needs a cross-process mechanism: take a file
+lock in `tmp_path_factory.getbasetemp().parent`, the one directory every worker of a run
+shares (each worker's own basetemp is `popen-gw<N>` beneath it), keyed on `testrun_uid`.
+
+For async suites, `pytest-asyncio` runs in strict mode by default, so an async fixture
+must use `@pytest_asyncio.fixture` — a plain `@pytest.fixture` errors. A wider-scoped
+async fixture must also declare a matching **loop** scope
+(`@pytest_asyncio.fixture(scope="session", loop_scope="session")` consumed by tests
+marked `@pytest.mark.asyncio(loop_scope="session")`): with the default function loop
+scope the fixture's loop is not the test's loop, so a connection opened there is bound
+to a loop that is no longer running.
+
+### Where ports come from
+
+The numbers come from
+[`../decisions/local_port_allocation_pattern.md`](../decisions/local_port_allocation_pattern.md)
+— the ADR owns them, the environment template projects them, and test code reads the
+projection. The Python-side plumbing is only that: a settings object (or `os.environ`)
+read inside a session-scoped fixture, never a literal in a test.
+
+For an end-to-end server, bind first and read back — never "find a free port, then bind
+it later", which races another worker between the two steps:
+
+```python
+# tests/api/conftest.py — inside a function-scoped yield fixture
+listening_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+listening_socket.bind(("127.0.0.1", 0))   # the kernel assigns the port
+bound_port = listening_socket.getsockname()[1]
+```
+
+Hand **that same socket** to the server — `uvicorn.Server.run(sockets=[listening_socket])`
+serves on it, and `bound_port` is what the test client connects to; the fixture's
+teardown closes it. When the test needs no real socket at all, `httpx.ASGITransport`
+runs the application in-process and no port is involved.
+
+### Cleanup that survives failure
+
+- **A `yield` fixture's teardown runs after a failing test**, so an assertion failure
+  does not leak the database. But an exception raised in *setup*, before the `yield`,
+  means the teardown half never runs — so create the resource as the last statement
+  before `yield`, and never register cleanup for something not yet created.
+- **A killed worker runs no teardown at all.** A worker that dies mid-test (`SIGKILL`,
+  an OOM kill, a cancelled CI job) leaves its database and its ports behind; xdist
+  reports `worker 'gw0' crashed while running <nodeid>` and the post-`yield` code never
+  executes. No fixture — and no `pytest_sessionfinish` in that worker — closes this hole.
+- **The practical answer is a name prefix plus a sweep.** Name every isolated resource
+  `<project>_test_<testrun_uid>_<worker_id>_<uuid7>`: the prefix makes orphans findable
+  (`SELECT datname FROM pg_database WHERE datname LIKE '<project>_test_%'`), the run
+  segment tells a sweep which names belong to a *live* run, and a time-ordered UUIDv7
+  gives each name an age. Drop with `WITH (FORCE)` — a plain `DROP DATABASE` fails with
+  `database … is being accessed by other users` whenever a leaked connection survives.
+- **Make the sweep an explicit operator command** (a `just` recipe), never an automatic
+  start-of-session step: a prefix sweep cannot tell a leaked database from a concurrent
+  run's live one, and at session start it would drop the other worktree's databases out
+  from under it.
+
+---
+
 ## Quick Reference — Invariants
 
-- **Each test creates and destroys its own database.** Use `TestDatabase::new()`
-  / `teardown()` at the start and end of every database test. Never reuse a
-  database across tests.
+- **Each test creates and destroys its own database.** Acquire it at the start
+  and release it at the end of every database test — `TestDatabase::new()` /
+  `teardown()` in the Rust example, a function-scoped `yield` fixture in Python.
+  Never reuse a database across tests.
 - **Every resource name includes a UUIDv7 suffix.** Database names, object
   keys, entity names with unique constraints — all of them. Never use a
   static, shared, mutable name.
@@ -379,11 +529,13 @@ What this demonstrates:
   Use `docker compose exec <service>` instead of `docker exec
   <literal-container-name>` so the same helper works against any stack
   instance.
-- **Every `#[serial(...)]` group is documented.** It marks a cross-test
-  shared singleton. Record it in the integration-testing knowledge base
-  alongside the singleton it guards.
-- **`serial_test` is process-local.** It does not protect against two separate
-  `cargo test` processes running against the same shared stack.
+- **Every serialized-test group is documented.** (`#[serial(...)]` in the Rust
+  example.) It marks a cross-test shared singleton. Record it in the
+  integration-testing knowledge base alongside the singleton it guards.
+- **Serialization is local to one test process.** `serial_test` orders tests
+  within a single `cargo test` process and does not protect against two separate
+  processes running against the same shared stack. Where the runner is itself
+  multi-process, that limit bites inside a single run — see *Mapping to Python*.
 
 ---
 
@@ -425,8 +577,15 @@ What this demonstrates:
   parallel stacks. Read this before adding a new service to the fixture stack.
 - **`rust-testing`** — Rust-specific test conventions; applies inside the
   isolation boundary established here (naming, assertion style, module layout).
-- **`python-testing`** — Python-specific test conventions; the same isolation
-  principles apply (per-test database, UUIDv4/v7 resource names).
+- **`python-testing`, `python-project-setup`, and [Python
+  conventions](../conventions/python.md)** — the Python delegates for the mapping
+  above: the conftest layering and support-module routing the isolation fixtures
+  must follow (`python-testing`), the PEP 735 `dev` dependency group where
+  `pytest`, `pytest-xdist`, and `pytest-asyncio` are pinned
+  (`python-project-setup`), and the uv workspace layout that decides where a
+  member's `tests/` tree and its `conftest.py` hierarchy sit (Python
+  conventions). The same isolation principles apply unchanged: per-test database,
+  unique resource names, teardown that survives failure.
 - **`ci-setup`** — CI runs the integration suite; this pattern is what makes
   the suite safe to run in a CI job without serializing every test. Apply
   `ci-setup` to wire the docker-stack startup into the CI job.
