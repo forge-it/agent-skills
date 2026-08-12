@@ -14,7 +14,7 @@ description: >-
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.2"
+  version: "0.0.3"
 ---
 
 # Scalable Worker Pattern
@@ -447,14 +447,166 @@ let runtime = TaskRuntime::new(config, consumer, lifecycle_control_plane, regist
 runtime.run(shutdown).await?;
 ```
 
+## Mapping to Python
+
+The example above is one *implementation* of the invariants below, not the invariants
+themselves. Python keeps every one, but the mechanism changes — and the runtime choice
+below fixes which arrive free, which are configured, and which you still build.
+
+### Structural mapping
+
+| Concern | Rust (ironbox) | Python |
+|---------|----------------|--------|
+| Shared dispatch contract | the `ironbox-task-contracts` crate | a `packages/<project>-task-contracts/` **uv workspace member**, declared by both services via `{ workspace = true }` (see [Python conventions](../conventions/python.md), *uv Workspaces — the packaging substrate*) |
+| Typed wire envelope | `TaskEnvelope` + serde | a frozen `pydantic.BaseModel` (boundary validation comes free) or a frozen dataclass with an explicit codec — either way it carries `schema_version` |
+| Topology constants | `TASK_EXCHANGE`, `task_queue_name()` | module-level `Final[str]` constants and `def task_queue_name(task_type: str) -> str`, in that same contract package |
+| Handler port | `Arc<dyn TaskHandler>` | a `TaskHandler` `typing.Protocol` (`task_type` property + `async def execute(...)`); the registry stores instances keyed by task type |
+| Concept control-plane port | `Arc<dyn ConnectivityControlPlane>` | one `Protocol` per concept, injected into that handler's constructor — never the generic runtime port |
+| Bounded concurrency | `Semaphore` permit per delivery | `await channel.set_qos(prefetch_count=<cap>)` and nothing else: every in-flight attempt holds exactly one unacked delivery, so the prefetch window **is** the concurrency cap. An `asyncio.Semaphore` with the same cap could never suspend (the broker would have to breach the window first), and awaiting one between pulling a delivery and spawning its attempt is exactly where a shutdown cancellation would orphan an unsettled delivery |
+| In-flight set | `JoinSet<()>` | a plain `set[asyncio.Task[None]]` filled by `asyncio.create_task`, drained with `asyncio.wait(timeout=...)`, then explicitly cancelled — **not** `asyncio.TaskGroup`, whose `__aexit__` *awaits* its children on normal exit (unbounded) and cancels them all if the iterator raises (no drain at all) |
+| Shutdown / abort pair | two `CancellationToken`s | two `asyncio.Event`s — `shutdown_event` stops consuming, `abort_event` tells live attempts to settle now |
+| Composition root | `main.rs` | one `composition.py` module: config, outbound adapters, per-concept control planes, registry, consumer, runtime — and nothing else |
+| Boundary enforcement | manifest dependency gate | an import-linter forbidden contract (mandatory — see below); the package itself stays pure wire types — no ORM models, no broker client |
+
+### Choosing a runtime: framework or plain broker client
+
+Celery, arq, and dramatiq are **not** the Python equivalents of the Rust building
+blocks. Each *bundles* four decisions this pattern keeps apart — broker binding,
+message envelope, retry policy, worker runtime — and adopting one inherits all four.
+The envelope is the sharpest consequence: Celery's protocol v2 owns the headers and
+the `(args, kwargs, embed)` body, dramatiq's `Message` owns its fixed JSON fields, so
+**the publisher-stamped `schema_version` gate is not yours at the message level.**
+Keep it by publishing exactly one argument — the serialized contract envelope — and
+validating `schema_version` in the task function's first statement.
+
+| Invariant | Celery | dramatiq | arq (Redis) | plain `aio-pika` |
+|---|---|---|---|---|
+| Record before acknowledge | **Violated by default** — tasks are acknowledged *before* execution; must set `task_acks_late = True`, which Celery's own optimizing guide pairs with `worker_prefetch_multiplier = 1` (it defaults to **4**) for long tasks | Free — messages are acknowledged only after successful processing | Free by a different mechanism — "pessimistic execution": a job is not removed from the queue until it succeeds or fails | Yours — `message.ack()` explicitly, after the control plane has recorded the outcome |
+| Redelivery after losing a worker mid-task | **Narrower than it sounds** — `task_acks_late` alone *does* redeliver on whole-node loss, a `SIGKILL` of the parent, or a broker disconnect; the documented gap is a task whose **child process** was terminated (by signal or `sys.exit()`), which Celery acknowledges anyway. `task_reject_on_worker_lost` closes that one gap — and Celery's configuration docs warn it **can cause message loops**, so enable it deliberately | **Broker-dependent** — free on RabbitMQ (dramatiq's `requeue` is a no-op there: RabbitMQ itself requeues unacked deliveries when a consumer disconnects); on Redis, unacked message ids are reclaimed only by probabilistic queue maintenance, gated on a 60 s worker-heartbeat timeout *and* a 0.1 % chance per dispatch — so on an idle queue a dead worker's messages can sit unreclaimed indefinitely | Free — a cancelled job is rerun on restart or by another worker | Yours — an unacknowledged delivery is requeued when the consumer or channel drops |
+| Bounded drain, survivors requeued | Partial — `TERM` is a warm shutdown that waits for executing tasks and `QUIT` is cold (`REMAP_SIGTERM` makes `TERM` cold), but that is unconditional only while `worker_soft_shutdown_timeout` is unset: since Celery **5.5** a positive value inserts a time-limited *soft shutdown* before the cold one. The requeue half still comes only from the two settings above | Configure — actors are **not** interrupted by default (`ShutdownNotifications(notify_shutdown=False)`); set `notify_shutdown=True` and re-raise `Shutdown` to requeue | Configure — the default `handle_sig` cancels in-flight jobs immediately; a non-zero `job_completion_wait` (default `0`, **arq ≥ 0.25** — absent in 0.24) swaps in `handle_sig_wait_for_completion`, which stops picking up jobs and waits that many seconds first. Do not copy the name `wait_for_job_completion_on_signal_second` from arq's docstrings — it never shipped, and passing it raises `TypeError` | Yours, and exactly as specified — see below |
+| Typed envelope, `schema_version` gate, lease fencing | inside the framework's payload only; no fencing | inside the framework's payload only; no fencing | inside the framework's payload only; no fencing | the envelope **is** the message; fencing is still yours to build |
+| Exchange + per-task-type queue topology | framework-owned (`task_default_queue` defaults to `'celery'`; `task_queues` / `task_routes`) | framework-owned (`queue_name`, default `"default"`) | framework-owned Redis queue names | yours |
+
+**What forces a plain broker client**: the envelope being the message, ownership of the
+exchange and per-task-type queues, per-delivery *classified settlement*. If day 1 needs
+those, use `aio-pika` and port the structure above; take dramatiq only when "late acks
+plus retries" is the ceiling, Celery only when it alone provides a required integration.
+
+**On the publishing side**, `aio-pika` defaults `Exchange.publish` to
+`mandatory=True` but leaves `on_return_raises=False`, so a returned unroutable
+message is **swallowed**. Open the publishing channel with
+`publisher_confirms=True, on_return_raises=True`: that turns a return into a
+`DeliveryError` and reproduces `TaskPublishError::Unroutable`.
+
+### What no Python framework gives you: the lease/fencing control plane
+
+Task frameworks give retries. **Retries are not fencing.** Celery's `task_id`,
+dramatiq's `message_id`, and arq's `_job_id` identify a *message*; none serializes
+two concurrent executions against a persisted state machine. Under at-least-once
+delivery a redelivered task must resolve to *already leased* or *already terminal*, and
+that decision lives in the API's application service, reached over your own
+back-channel: a `TaskControlPlane` `Protocol` in the worker's `application/task/`, an
+`httpx.AsyncClient`- or `grpc.aio`-backed adapter in `infrastructure/`, and an
+`acquire_lease` returning `LeaseGranted | LeaseHeld | AlreadyTerminal` for the attempt
+to match on. Where a lease is not warranted (short, cheap, single-writer work), use the
+explicit idempotency key the *Non-idempotent task handlers* anti-pattern sanctions: in
+the envelope, behind a uniqueness constraint.
+
+### Holding the "worker owns no persistence" boundary
+
+**In a Python monorepo the API's ORM models are one `import` away and nothing fails at
+runtime** — a uv workspace installs every member into one shared `.venv`, so the worker
+can `import api` with no declaration and `uv sync` stays silent (see [Python
+conventions](../conventions/python.md), *uv Workspaces*, caveat 3). The substitute for
+Rust's manifest gate is a forbidden-import contract, and it is **not optional**:
+
+```toml
+[tool.importlinter]
+root_packages = ["api", "worker"]   # plural: the contract spans two distributions
+include_external_packages = true    # required: it names external libraries
+[[tool.importlinter.contracts]]
+name = "Worker owns no persistence and never imports the API"
+type = "forbidden"
+source_modules = ["worker"]
+forbidden_modules = ["api", "sqlalchemy", "alembic", "asyncpg", "psycopg", "aiosqlite"]
+```
+
+Set it up with `python-import-linter-setup` and run `lint-imports` in CI. Without
+`include_external_packages` the drivers are not in the graph at all, and dropping one
+from the list lets `import asyncpg` pass a green `lint-imports`.
+
+### Bounded drain on shutdown, in asyncio
+
+```python
+# worker/application/task/runtime.py  (simplified)
+class TaskRuntime:
+    async def run(self) -> None:
+        self.in_flight: set[asyncio.Task[None]] = set()   # strong references until done
+        consume_task = asyncio.create_task(self.consume())
+        shutdown_signalled = asyncio.create_task(self.shutdown_event.wait())
+        # Wait for SIGTERM (its handler only sets shutdown_event) or for the consumer to
+        # fail on its own. An `is_set()` test inside the consume loop is not enough:
+        # `__anext__` parks on an empty prefetch buffer, so on an idle queue the loop body
+        # never runs again. Shutdown has to interrupt the iterator, not just raise a flag.
+        await asyncio.wait(
+            {consume_task, shutdown_signalled}, return_when=asyncio.FIRST_COMPLETED
+        )
+        shutdown_signalled.cancel()
+        # Stop accepting: cancelling the consumer unblocks `__anext__`, which closes the
+        # iterator, which nacks its prefetched-but-unstarted deliveries with requeue.
+        consume_task.cancel()
+        await asyncio.gather(consume_task, return_exceptions=True)
+        await self.drain()          # attempts are separate tasks and are still running
+
+    async def consume(self) -> None:
+        # Nothing between the pull and `create_task` awaits, so cancelling this task
+        # can never orphan a delivery that was already pulled from the iterator.
+        async with self.queue.iterator() as deliveries:
+            async for delivery in deliveries:
+                attempt_task = asyncio.create_task(self.run_attempt(delivery))
+                self.in_flight.add(attempt_task)
+                attempt_task.add_done_callback(self.in_flight.discard)
+
+    async def drain(self) -> None:
+        still_running = set(self.in_flight)
+        if still_running:
+            _finished, still_running = await asyncio.wait(
+                still_running, timeout=self.shutdown_timeout_seconds
+            )
+        if still_running:
+            self.abort_event.set()      # each live attempt settles now: nack, requeue
+            _finished, still_running = await asyncio.wait(
+                still_running, timeout=self.abort_grace_seconds
+            )
+        for straggler in still_running:  # explicit — nothing above cancels anything
+            straggler.cancel()           # unsettled; the broker requeues on disconnect
+        await asyncio.gather(*still_running, return_exceptions=True)
+```
+
+Three rules make that structure correct, and all three are load-bearing:
+
+1. **`run_attempt` must never raise.** It owns the settlement; an escaping exception
+   leaves its delivery unsettled until the connection drops, and a plain task set has
+   no sibling to notice. Catch everything and convert it into one settlement.
+2. **Settle exactly once, and only after the control plane recorded the outcome.**
+   `message.ack()` / `reject(requeue=False)` / `nack(requeue=True)` map one-to-one
+   onto `AckDrop` / `NackDrop` / `NackRequeue`. Never `async with message.process()`:
+   it settles for you, and that settlement is the decision the attempt must own.
+3. **Terminate the iterator before the drain, and before the channel.** Both its
+   `__aexit__` and its cancellation path nack the buffered (prefetched, never started)
+   deliveries with `requeue=True` — explicit and immediate. Closing the channel first
+   loses nothing (RabbitMQ requeues unacked deliveries when the channel or connection
+   drops), but it makes that requeue implicit, waiting on the broker to reclaim them.
+
 ## Quick Reference — Invariants
 
 - **API = synchronous request handling; worker = asynchronous task execution;
   broker = the decoupling seam.** These three responsibilities live in three
   separate processes.
-- **The shared contract crate is the only code shared across the API/worker
-  boundary** for dispatch. It is a pure wire-types crate: no business logic, no
-  database drivers, no runtime wiring.
+- **The shared contract package is the only code shared across the API/worker
+  boundary** for dispatch (a workspace crate in Rust, a uv workspace member in
+  Python). It is a pure wire-types package: no business logic, no database
+  drivers, no runtime wiring.
 - **TaskEnvelope carries a schema_version** stamped by the publisher and
   validated by the worker before dispatch. A version mismatch fails the task
   terminally — never silently discards or misinterprets.
@@ -478,7 +630,8 @@ runtime.run(shutdown).await?;
 - **The worker has its own composition root, bootstrap, and runtime.** It is a
   full hexagonal application, not a library or a plugin.
 - **Adding a task type is one registration line in the composition root.** The
-  generic runtime, the consumer adapter, and `main.rs` are never touched.
+  generic runtime, the consumer adapter, and the entry point (`main.rs` in the
+  Rust example) are never touched.
 - **Vocabulary is binding: a *heartbeat* is control-plane liveness only** (a
   periodic "I am alive" that extends the lease; its failure is a stale lease).
   **A *progress report* is data-plane advancement** (cumulative counters, phase
@@ -491,10 +644,11 @@ runtime.run(shutdown).await?;
   acknowledge.** The worker reports its fenced result, the control plane
   persists the outcome, and only then does the worker ack the broker delivery.
   Acking first loses durable authority over a completed delivery.
-- **The worker owns no persistence** — no core-crate dependency, no direct
-  database driver. Enforce it with the manifest dependency gate
-  (`rust-architecture-test-setup`) so the boundary survives every future
-  contributor.
+- **The worker owns no persistence** — no dependency on the API package, no
+  direct database driver. Enforce it with a dependency gate the build runs: the
+  manifest dependency gate in Rust (`rust-architecture-test-setup`), a
+  forbidden-import contract in Python (`python-import-linter-setup`), so the
+  boundary survives every future contributor.
 - **A system task is not a user-facing job.** The task is execution-control
   mechanics — lease, attempt, retry, broker delivery. A *job* is the
   user-visible execution and progress history the API exposes. Keep them as
@@ -525,11 +679,14 @@ runtime.run(shutdown).await?;
 - **An untyped or informally typed queue.** Publishing a bare JSON blob with no
   schema version, no shared type, and no compiler enforcement between the producer
   and consumer means a field rename silently breaks the consumer at runtime. Use
-  a shared contract crate with a typed envelope and a schema version.
+  a shared contract package (a crate in Rust) with a typed envelope and a schema
+  version.
 
-- **Inline fire-and-forget spawning inside the API binary** (`tokio::spawn` with
-  no handle, no queue, no broker). The task is lost on a crash or a restart. It
-  cannot be retried, observed, or distributed to another instance.
+- **Inline fire-and-forget spawning inside the API process** — `tokio::spawn` in
+  Rust, a bare `asyncio.create_task` or FastAPI `BackgroundTasks` in Python: no
+  handle, no queue, no broker. This is the most common way the three-process split
+  collapses back into one. The task is lost on a crash or a restart. It cannot be
+  retried, observed, or distributed to another instance.
 
 - **Non-idempotent task handlers.** AMQP is at-least-once. A handler that does
   not check whether its work is already done will duplicate side effects on every
@@ -546,10 +703,11 @@ runtime.run(shutdown).await?;
   a runtime change. The generic runtime stays concept-free; each handler holds
   its own concept port.
 
-- **Skipping the contract crate for "just one task type."** The constraint that
-  makes the contract crate necessary — the API and worker are separately deployed
-  containers that can version-skew — is present from the first task type. The
-  crate is cheap to create (see `rust-workspace-setup`) and expensive to retrofit.
+- **Skipping the contract package (a crate in Rust) for "just one task type."**
+  The constraint that makes it necessary — the API and worker are separately
+  deployed containers that can version-skew — is present from the first task type.
+  It is cheap to create (`rust-workspace-setup`, or the uv workspace member in
+  [Python conventions](../conventions/python.md)) and expensive to retrofit.
 
 ## Relationship to Other Patterns and Skills
 
@@ -576,6 +734,12 @@ runtime.run(shutdown).await?;
   `crates/` directory, declared as a path dependency by both the API and the
   worker `Cargo.toml` files. The workspace enforces a single version of every
   shared type across all workspace members.
+
+- **`python-ddd`, `python-import-linter-setup`, and [Python
+  conventions](../conventions/python.md)** — the Python delegates for the mapping
+  above: the worker's own layering, the forbidden-import contract that replaces
+  Rust's manifest dependency gate, and the uv workspace packaging that delivers the
+  shared contract package to both services.
 
 - **[worker fleet pattern](worker_fleet_pattern.md)** — once this pattern's
   API/worker/broker split exists, the fleet pattern fixes the next two day-1

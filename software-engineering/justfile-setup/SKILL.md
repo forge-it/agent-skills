@@ -4,7 +4,7 @@ description: Use when bootstrapping a new monorepo that mixes Rust, Python, and/
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.2"
+  version: "0.0.3"
 ---
 
 # Justfile Setup
@@ -18,6 +18,16 @@ A justfile is the right home for this because each recipe has **one
 responsibility**: either it delegates to a component's own toolchain (`cargo`,
 `uv`, `pnpm`) or it orchestrates the Docker Compose stack. When a recipe tries to
 do both, it breaks the first principle — split it.
+
+**One task runner, and only one.** A task runner is a *command surface*, and a
+project gets one. Two runners means two vocabularies for the same actions,
+contributors guessing which directory to stand in, and documentation that has to
+explain the split. `just` is language-agnostic, so it can own the whole surface
+for a repository that mixes stacks; a language-specific runner — `cargo-make`,
+`[tool.poe]`, `tox`/`nox` task aliases, root-level `npm` scripts, a `Makefile` —
+cannot. The per-language setup skills therefore configure tools and stop: they
+never define how those tools are invoked. Task-alias wrappers are the thing
+prohibited; a component's own application entry point is unrelated and fine.
 
 Run this skill once when a new monorepo is created. After the root `justfile`
 exists, extend it by adding new recipes; do not re-run the skill — with one
@@ -231,7 +241,7 @@ web-check:
 # [python] Run ruff + mypy + import-linter — run before every commit
 service-check:
   cd service && uv run ruff check .
-  cd service && uv run mypy .
+  cd service && uv run mypy
   cd service && uv run lint-imports
 
 # [rust] cargo clippy + fmt-check — run before every commit

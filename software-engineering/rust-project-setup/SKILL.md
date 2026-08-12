@@ -4,7 +4,7 @@ description: Guidelines for bootstrapping a Rust project with consistent toolcha
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.1.0"
+  version: "0.1.1"
 ---
 
 # Rust Project Setup
@@ -64,13 +64,13 @@ targets = ["wasm32-unknown-unknown"]
 > binary, anything a `cargo` task cannot drive — **the task runner is `just` at
 > the repository root** (`justfile-setup`), and this section does not apply.
 >
-> Why: a task runner is a *command surface*, and a project gets one. Two runners
-> means two vocabularies for the same actions, contributors learning which
-> directory to stand in, and documentation that has to explain the split. `just`
-> is language-agnostic, so it can own the whole surface; cargo-make is
-> Rust-centric and cannot. `just` also finds the root justfile from any
-> subdirectory, so the "I'm already inside the crate" ergonomics that favour
-> `cargo make` largely disappear.
+> Why a project gets exactly one task runner, and why `just` is the one that can
+> own a mixed-stack surface: see **"One task runner, and only one"** in
+> `justfile-setup`, which owns that concern. The cargo-make-specific half of the
+> argument: `just` is language-agnostic and cargo-make is Rust-centric, so only
+> one of the two can own a polyglot repository at all — and `just` finds the root
+> justfile from any subdirectory, so the "I'm already inside the crate"
+> ergonomics that favour `cargo make` largely disappear.
 >
 > What cargo-make genuinely does better, conceded: `install_crate` auto-installs
 > a missing tool (`cargo-llvm-cov`, `sqlx-cli`) before a task runs; its

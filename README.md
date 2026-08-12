@@ -26,8 +26,9 @@ Each skill includes:
 | [technical-design-discussions](software-engineering/technical-design-discussions/SKILL.md) | Design conversations: verify sources, weigh trade-offs, recommend, record ADRs |
 | [git-workflow](software-engineering/git-workflow/SKILL.md) | Git branch naming, commits, and version control |
 | [database-management](software-engineering/database-management/SKILL.md) | Database schema management and migration strategies |
-| [python-code-style](software-engineering/python-code-style/SKILL.md) | Python code style for clean, maintainable code |
-| [python-commands](software-engineering/python-commands/SKILL.md) | Python command-line interface best practices |
+| [python-code-style-v1](software-engineering/python-code-style-v1/SKILL.md) | Python code style for clean, maintainable code |
+| [python-commands](software-engineering/python-commands/SKILL.md) | Running Python through the project's package manager, inside the right virtualenv |
+| [python-project-setup](software-engineering/python-project-setup/SKILL.md) | Python interpreter pinning, `uv` + committed lockfile, and the commit-1 `pyproject.toml` |
 | [python-testing](software-engineering/python-testing/SKILL.md) | Python testing best practices using pytest |
 | [rust-code-style](software-engineering/rust-code-style/SKILL.md) | Rust code style with hexagonal architecture |
 | [rust-design-principles](software-engineering/rust-design-principles/SKILL.md) | SOLID, KISS, and design patterns for Rust |
@@ -56,7 +57,9 @@ It sequences these **one-shot setup skills** (each installs an invariant from co
 [`rust-workspace-setup`](software-engineering/rust-workspace-setup/SKILL.md) ·
 [`justfile-setup`](software-engineering/justfile-setup/SKILL.md) ·
 [`ci-setup`](software-engineering/ci-setup/SKILL.md) ·
-[`agent-hooks-setup`](software-engineering/agent-hooks-setup/SKILL.md)
+[`agent-hooks-setup`](software-engineering/agent-hooks-setup/SKILL.md) ·
+[`python-project-setup`](software-engineering/python-project-setup/SKILL.md) ·
+[`rust-conventions-crate-setup`](software-engineering/rust-conventions-crate-setup/SKILL.md)
 — alongside the existing `rust-architecture-test-setup`, `python-import-linter-setup`, `frontend-vue-eslint-setup`, and `rust-project-setup`.
 
 ## Patterns
@@ -71,6 +74,8 @@ Language-agnostic backend / full-stack architecture patterns — each a concrete
 | scalability | [worker_pattern](patterns/scalability/worker_pattern.md) | Broker-backed worker as its own hexagonal app (scalable from day 1) |
 | scalability | [worker_fleet_pattern](patterns/scalability/worker_fleet_pattern.md) | Homogeneous worker fleet: replica-count-only scaling + self-enrollment identity (ADRs) |
 | testing | [parallel_test_isolation_pattern](patterns/testing/parallel_test_isolation_pattern.md) | Parallel integration tests via per-test isolation |
+| conventions | [rust](patterns/conventions/rust.md) | ArchUnit-style convention enforcement: rules as a dev-only crate, zero-knob constructors, permission ledgers |
+| conventions | [python](patterns/conventions/python.md) | The same enforcement ladder in Python: `ast`-based rules as a dev-only uv workspace package |
 | decisions | [local_port_allocation_pattern](patterns/decisions/local_port_allocation_pattern.md) | Non-overlapping port ranges (ADR) for parallel envs/worktrees |
 | decisions | [frontend_api_type_mirroring_pattern](patterns/decisions/frontend_api_type_mirroring_pattern.md) | Keep frontend types in sync with the API contract (ADR) |
 | decisions | [observability_posture_pattern](patterns/decisions/observability_posture_pattern.md) | The app emits, the platform collects — staged observability (ADR) |
@@ -97,7 +102,7 @@ agent-skills/
     │   └── SKILL.md
     ├── database-management/
     │   └── SKILL.md
-    ├── python-code-style/
+    ├── python-code-style-v1/
     │   └── SKILL.md
     ├── python-commands/
     │   └── SKILL.md
