@@ -1,10 +1,10 @@
 ---
 name: python-project-setup
-description: Use when bootstrapping a NEW Python project or a new Python component in a monorepo from commit 1 — pinning the interpreter (`.python-version` plus `requires-python`), adopting `uv` with a committed `uv.lock`, laying out `src/` behind a real `[build-system]`, declaring dev tooling in a PEP 735 `[dependency-groups]` group, and configuring the linter and type checker to fail instead of advise. Triggers — a component directory has no `pyproject.toml` yet; `uv sync` is not yet the single command that produces a working environment; the interpreter version is whatever each developer happens to have; lint and type checks run but nothing ever fails. Not for the task runner (`justfile-setup`), layering (`python-ddd`), import contracts (`python-import-linter-setup`), or uv workspace mechanics (`patterns/conventions/python.md`).
+description: Use when bootstrapping a NEW Python project or a new Python component in a monorepo from commit 1 — pinning the interpreter to the mandatory greenfield floor of CPython 3.14 (`.python-version` plus `requires-python`), adopting `uv` with a committed `uv.lock`, laying out `src/` behind a real `[build-system]`, declaring dev tooling in a PEP 735 `[dependency-groups]` group, and configuring the linter and type checker to fail instead of advise. Triggers — a component directory has no `pyproject.toml` yet; `uv sync` is not yet the single command that produces a working environment; the interpreter version is whatever each developer happens to have; lint and type checks run but nothing ever fails. Not for the task runner (`justfile-setup`), layering (`python-ddd`), import contracts (`python-import-linter-setup`), or uv workspace mechanics (`patterns/conventions/python.md`).
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.1"
+  version: "0.0.2"
 ---
 
 # Python Project Setup
@@ -42,11 +42,13 @@ still being accepted as the legacy form.
 
 ## Interpreter Pinning (CRITICAL)
 
-Two declarations are required, and they are not redundant.
+**The greenfield floor is CPython 3.14.** A new project or a new component pins
+3.14 or newer — never `>=3.13` or lower, regardless of what the machine happens
+to have installed. Two declarations are required, and they are not redundant.
 
 ```
-service/.python-version          →  3.13
-service/pyproject.toml           →  [project] requires-python = ">=3.13"
+service/.python-version          →  3.14
+service/pyproject.toml           →  [project] requires-python = ">=3.14"
 ```
 
 **`.python-version` selects the interpreter.** uv resolves the Python request in
@@ -63,15 +65,16 @@ machine's uv state, not of the repository, and nothing reports which one you got
 selector. It bounds resolution — every locked version must support the whole
 declared range; is recorded in `uv.lock` as its own `requires-python` field, so
 changing the floor invalidates the lockfile; ships in the distribution metadata
-as `Requires-Python: >=3.13`; and supplies ruff's `target-version` when absent.
+as `Requires-Python: >=3.14`; and supplies ruff's `target-version` when absent.
 
 ### Keep the pin equal to the floor
 
-Pin the minor version the floor names — `.python-version` of `3.13` with
-`requires-python = ">=3.13"`. Two things break when they disagree.
+Pin the minor version the floor names — `.python-version` of `3.14` with
+`requires-python = ">=3.14"`. Two things break when they disagree.
 
 **A pin below the floor is a hard error**, exit code **2**, on every project
-command:
+command. (The capture below was taken against a `>=3.13` floor, before 3.14
+became the mandated baseline; the behaviour is the same at any floor.)
 
 ```
 $ uv sync
@@ -98,7 +101,7 @@ declare a range wider than the version it runs.
 ### Bootstrap command
 
 ```bash
-uv init --package --name backend-service --python 3.13 service
+uv init --package --name backend-service --python 3.14 service
 ```
 
 That writes both declarations consistently, plus `src/backend_service/`, a
@@ -160,7 +163,7 @@ sections refer back to it instead of repeating it.
 [project]
 name = "backend-service"
 version = "0.1.0"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 dependencies = []
 
 [dependency-groups]
@@ -424,6 +427,16 @@ pinned_version="$(cat .python-version)"
 running_version="$(uv run python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
 test "$running_version" = "$pinned_version" || fail "2: pinned $pinned_version, running $running_version"
 
+# 2b. The floor is at or above the mandated greenfield baseline. A ban that lives
+#     only in prose is not a ban; this is what makes it one.
+uv run python - <<'FLOOR' || fail "2b: requires-python floor is below 3.14"
+import pathlib, re, sys, tomllib
+
+requirement = tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["requires-python"]
+floor = re.search(r"(\d+)\.(\d+)", requirement)
+sys.exit(0 if floor and (int(floor.group(1)), int(floor.group(2))) >= (3, 14) else 1)
+FLOOR
+
 # 3. The project is really installed — src/ + [build-system] are wired. The
 #    import succeeding is the whole signal; do NOT print __file__ to "prove"
 #    installation, because under an editable install it is the source path
@@ -491,16 +504,21 @@ build.
    Below the floor it is a hard error; above it, mypy checks the interpreter it
    runs under while ruff targets the floor, so version-incompatible code passes
    every local gate.
-2. **The wrong `uv sync` flag in CI.** `--frozen` validates nothing, so the job
+2. **A greenfield floor below 3.14.** `>=3.13` or lower on new work is banned, no
+   matter what the developer's machine has installed. It silently forfeits stdlib
+   the patterns depend on — `uuid.uuid7()`, and with it the time-ordered resource
+   names the parallel-test-isolation orphan sweep uses — and it starts the project
+   already owing an upgrade.
+3. **The wrong `uv sync` flag in CI.** `--frozen` validates nothing, so the job
    passes with a lockfile that no longer matches the manifests; bare `uv sync`
    *rewrites* the lockfile, so the build installs a resolution no one reviewed.
    CI takes `--locked`, always. Equally: an uncommitted or gitignored `uv.lock`
    leaves no reproducibility contract to check.
-3. **`pip install` or a hand-made `venv`** inside a uv project — including
+4. **`pip install` or a hand-made `venv`** inside a uv project — including
    `pip install -e ".[dev]"` in a workflow. It writes into an environment the
    lockfile is supposed to describe, and the drift stays invisible until
    `uv sync` removes it.
-4. **Passing a path to the type checker** (`uv run mypy .`). The explicit path
+5. **Passing a path to the type checker** (`uv run mypy .`). The explicit path
    overrides `[tool.mypy] files`, so the invocation, not the manifest, decides
    the scope — and the two disagree the moment a directory is added.
 

@@ -14,7 +14,7 @@ description: >-
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.4"
+  version: "0.0.5"
 ---
 
 # Greenfield Project Setup (Orchestrator)
@@ -136,7 +136,7 @@ Which phases apply to which components (✓ = applies, — = skip):
 
 | Phase | Rust backend | Python backend | Vue frontend | Worker |
 |-------|:---:|:---:|:---:|:---:|
-| 1 workspace/toolchain | ✓ | ✓ (uv, pinned interpreter) | ✓ (node) | ✓ (same stack as its API) |
+| 1 workspace/toolchain | ✓ | ✓ (uv, pinned interpreter — **≥3.14**) | ✓ (node) | ✓ (same stack as its API) |
 | 2 skeleton | ✓ hexagonal | ✓ DDD | ✓ feature-arch | ✓ hexagonal |
 | 3 invariant gate | ✓ structure-test (+ conventions crate on a workspace) | ✓ import-linter (+ conventions package on a uv workspace) | ✓ eslint | ✓ own gate + the shared conventions crate/package |
 | 4 wiring/lifecycle | ✓ | ✓ | — | ✓ |
