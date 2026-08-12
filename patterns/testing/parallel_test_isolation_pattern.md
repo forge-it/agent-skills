@@ -12,7 +12,7 @@ description: >-
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.2"
+  version: "0.0.3"
 ---
 
 # Parallel Test Isolation Pattern
@@ -377,7 +377,7 @@ per test" must key on, what a shared fixture actually shares, and what survives 
 | Stack startup, once | `#[ctor::ctor] start_docker_services()` — once per test process | a session-scoped `autouse` fixture in `tests/conftest.py` — but **once per xdist worker**, not once per run (see *Fixture scope*); the cross-process once-per-run mechanism is a file lock |
 | Readiness gating | `wait_for_postgres_ready()` etc., blocking before the first test | the same wait loops inside that fixture, one function per service — tests never call `docker compose` themselves |
 | Per-test database | `TestDatabase::new()` / `.teardown()` | a **function-scoped `yield` fixture** in `tests/integration/conftest.py` that creates, migrates, yields, and drops |
-| Unique resource names | `uuid::Uuid::now_v7()` suffix | `uuid.uuid7()` — **stdlib only from Python 3.14**; on 3.13 and earlier use the `uuid-utils` package. `uuid.uuid4()` also satisfies uniqueness, but it is not time-ordered, so it forfeits the resource *age* the orphan sweep below relies on |
+| Unique resource names | `uuid::Uuid::now_v7()` suffix | `uuid.uuid7()` — stdlib from **Python 3.14**, which the greenfield baseline mandates, so new projects just call it. On an older codebase use the `uuid-utils` package; `uuid.uuid4()` satisfies uniqueness but is not time-ordered, so it forfeits the resource *age* the orphan sweep below relies on |
 | Semantic-label helper | `unique_email(prefix)` | the same helper, in `tests/utils/helpers.py` — never defined in a test module (see `python-testing`, *Test Modules Contain Only Tests*) |
 | Serialized singletons | `#[serial(...)]` from `serial_test` | `@pytest.mark.xdist_group(name="…")` run under `--dist loadgroup`, which places every member of a group on **one** worker — the group is ordered inside that worker only, so with `-n <N>` a *single* run already has `N` processes on the stack, and a true singleton needs one stack per run |
 | Ephemeral e2e port | `app.bind("0.0.0.0:0")` | bind a `socket` to port `0`, read `getsockname()[1]`, then hand **that same socket** to the server |

@@ -17,7 +17,7 @@ description: >-
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.3"
+  version: "0.0.4"
 ---
 
 # Python Convention Enforcement Pattern
@@ -62,10 +62,11 @@ serially thrashes the environment doing it.) In the flow people actually use,
 **a checker is the only thing standing between you and accidental cross-package
 imports.** In Python, the gate *is* the boundary.
 
-> **Greenfield baseline:** every new Python project requires **CPython 3.13 or
-> newer**. The implementation below deliberately uses the Python 3.13
-> `Path.rglob(..., recurse_symlinks=True)` API; do not copy it into an older
-> project without adapting the traversal.
+> **Greenfield baseline:** every new Python project requires **CPython 3.14 or
+> newer**. This is a floor, not a preference — no new work declares `>=3.13` or
+> lower. The implementation below uses `Path.rglob(..., recurse_symlinks=True)`
+> (available from 3.13); do not copy it into an older project without adapting
+> the traversal.
 
 ## The ArchUnit Pattern (general view)
 
@@ -194,7 +195,7 @@ ironbox-conventions = { workspace = true }
 [project]
 name = "api"
 version = "0.1.0"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 dependencies = ["ironbox-shared>=0.1", "fastapi[standard]"]   # standard; SHIPS in metadata
 
 [dependency-groups]
@@ -387,8 +388,8 @@ configuration, which is visible at neither.**
 ## Anatomy of a Rule (`ast`)
 
 > These modules run as written (executed on CPython 3.13–3.14 against both
-> compliant and violating fixture trees). They intentionally require the
-> greenfield Python ≥3.13 baseline for symlink-safe traversal and encode *this
+> compliant and violating fixture trees). They need ≥3.13 for symlink-safe
+> traversal, which the ≥3.14 greenfield baseline satisfies, and encode *this
 > repository's* test conventions — see `python-testing`. Re-read the constants
 > and the allowed-construct list against your own conventions before adopting.
 
@@ -845,8 +846,9 @@ These details generalise to every rule you add:
   (as `_is_module_marker` does) or use a dotted value pattern. This is exactly
   why every rule needs a fires-on-violation test, not only a
   stays-quiet-on-clean one.
-- **Follow symlinked test trees.** The greenfield baseline is Python ≥3.13, so
-  every traversal uses `Path.rglob(..., recurse_symlinks=True)`. Without it, a
+- **Follow symlinked test trees.** The greenfield baseline is Python ≥3.14 and
+  the API arrived in 3.13, so every traversal uses
+  `Path.rglob(..., recurse_symlinks=True)`. Without it, a
   symlinked test subtree is silently skipped — exactly the skipped-tree failure
   this gate exists to prevent.
 - **`ast` discards comments.** For a comment-aware rule (e.g. "`# type: ignore`
@@ -1060,7 +1062,7 @@ source; the root lockfile makes it reproducible.
 
 ```dockerfile
 # syntax=docker/dockerfile:1
-FROM python:3.13-slim AS builder
+FROM python:3.14-slim AS builder
 COPY --from=ghcr.io/astral-sh/uv:0.12.1 /uv /bin/uv     # pin a version you verified
 WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=0
@@ -1082,7 +1084,7 @@ COPY services/api            services/api
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev --no-editable --package api
 
-FROM python:3.13-slim
+FROM python:3.14-slim
 COPY --from=builder /app/.venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH"
 CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0"]
@@ -1106,7 +1108,7 @@ you pin, as they have moved before:
   copies all of them: omit one and you get either
   `references a workspace in tool.uv.sources … but is not a workspace member`
   or `The lockfile at 'uv.lock' needs to be updated, but --locked was provided`.
-- **Keep the builder and runtime bases identical** (both `python:3.13-slim`
+- **Keep the builder and runtime bases identical** (both `python:3.14-slim`
   here). A copied `.venv` records its interpreter path in `pyvenv.cfg`; mixing
   a uv-provided builder image with a different runtime base works only by
   coincidence of layout and breaks silently on musl or a relocated interpreter.
