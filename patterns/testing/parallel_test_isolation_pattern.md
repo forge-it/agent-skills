@@ -12,7 +12,7 @@ description: >-
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.3"
+  version: "0.0.4"
 ---
 
 # Parallel Test Isolation Pattern
@@ -370,11 +370,20 @@ Rust's harness runs tests as **threads in one process**, while `pytest` with
 `pytest-xdist` runs them in separate **worker processes**. That changes what "unique
 per test" must key on, what a shared fixture actually shares, and what survives a crash.
 
+**Stack lifetime this mapping assumes: one machine-wide stack, brought up once per
+*run* and left running.** That is a third lifetime, and the document uses all three —
+be explicit about which one is in force. Half 1's `ctor` model brings the stack up once
+per *process*, which is safe in Rust only because a `cargo test` run is exactly one
+process; under `-n <N>` "once per process" would mean `N` concurrent `docker compose up`
+calls against one stack, which is why Python needs the lock-and-marker fixture below and
+Rust does not. *Why This Matters* posits a stricter lifetime again — one stack per
+parallel agent — under which the stack lock becomes unnecessary but stays harmless.
+
 ### Structural mapping
 
 | Concern | Rust (ironbox) | Python |
 |---|---|---|
-| Stack startup, once | `#[ctor::ctor] start_docker_services()` — once per test process | a session-scoped `autouse` fixture in `tests/conftest.py` — but **once per xdist worker**, not once per run (see *Fixture scope*); the cross-process once-per-run mechanism is a file lock |
+| Stack startup, once | `#[ctor::ctor] start_docker_services()` — once per test process | a session-scoped `autouse` fixture in `tests/conftest.py` — but **once per xdist worker**, not once per run (see *Fixture scope*); the cross-process once-per-run mechanism is a file lock **plus a marker file** — a lock alone gives mutual exclusion, not once-only |
 | Readiness gating | `wait_for_postgres_ready()` etc., blocking before the first test | the same wait loops inside that fixture, one function per service — tests never call `docker compose` themselves |
 | Per-test database | `TestDatabase::new()` / `.teardown()` | a **function-scoped `yield` fixture** in `tests/integration/conftest.py` that creates, migrates, yields, and drops |
 | Unique resource names | `uuid::Uuid::now_v7()` suffix | `uuid.uuid7()` — stdlib from **Python 3.14**, which the greenfield baseline mandates, so new projects just call it. On an older codebase use the `uuid-utils` package; `uuid.uuid4()` satisfies uniqueness but is not time-ordered, so it forfeits the resource *age* the orphan sweep below relies on |
@@ -398,18 +407,21 @@ per test" must key on, what a shared fixture actually shares, and what survives 
 - **`testrun_uid`** is one value shared by every worker of a single run: the only
   identity token that means "this run" rather than "this worker".
 
-**Key every isolated resource on worker identity + test identity + a uniqueness
-suffix** — `<project>_test_<worker_id>_<uuid>`. Not on a process id: the OS reuses
-pids, and one worker process runs hundreds of tests, so a pid is neither unique per
-test nor a stable owner label. Not on a bare random value: unique but anonymous, so
-when a worker is killed nothing identifies which leftovers were its. Worker identity
-makes an orphan attributable; the suffix makes it collision-free.
+**Key every isolated resource on run identity + worker identity + a uniqueness suffix.**
+This document mandates exactly **one** name format, spelled out once under *Cleanup that
+survives failure* below — use it verbatim and never invent a second format. The argument
+for those three parts: not a process id, because the OS reuses pids and one worker process
+runs hundreds of tests, so a pid is neither unique per test nor a stable owner label; and
+not a bare random value, because that is unique but anonymous, so when a worker is killed
+nothing identifies which leftovers were its. Run identity lets a sweep tell a live run
+from an orphan, worker identity makes an orphan attributable, and the uniqueness suffix
+makes the name collision-free.
 
 ### Per-test database isolation — three options, one default
 
 | Option | Mechanism | Cannot isolate |
 |---|---|---|
-| **Fresh database per test** (the default) | `CREATE DATABASE <name> TEMPLATE <migrated_template>` on a connection with `isolation_level="AUTOCOMMIT"`; `DROP DATABASE … WITH (FORCE)` in teardown | nothing at the database level; costs the most (roughly an order of magnitude more per test than rollback on a local PostgreSQL 17) |
+| **Fresh database per test** (the default) | `CREATE DATABASE <name> TEMPLATE <migrated_template>` on a connection with `isolation_level="AUTOCOMMIT"`; `DROP DATABASE … WITH (FORCE)` in teardown | nothing at the database level; costs **two orders of magnitude** more per test than rollback — see *What the default costs* below |
 | Fresh schema per test | one connection, `CREATE SCHEMA <name>`, per-test `search_path`; `DROP SCHEMA … CASCADE` | anything cluster-wide (roles, extensions, database settings), and any code that hardcodes a schema-qualified name escapes the boundary silently |
 | Transaction rollback | outer `connection.begin()`, `Session(bind=connection)`, rollback in teardown | see the three hard limits below |
 
@@ -438,10 +450,48 @@ a `Session(bind=connection)` joins the outer transaction under
 issued by the code under test releases a savepoint and the outer rollback still undoes
 it. Do not cite that as the reason.
 
+#### What the default costs
+
+Measured on one machine — PostgreSQL 17.10 in Docker on a local NVMe SSD, median of 12
+runs per row. Treat the *shape* as transferable and the absolute numbers as not:
+
+| Template schema | Rollback per test | Fresh database per test | Ratio |
+|---|---|---|---|
+| 1 table, 0 rows | 0.97 ms | 85.8 ms | 88× |
+| 20 tables, 0 rows | 1.00 ms | 98.7 ms | 99× |
+| 100 tables, 0 rows | 1.06 ms | 130.4 ms | 123× |
+| 100 tables, 5 000 rows | 0.89 ms | 134.3 ms | 151× |
+
+Three consequences, and the recommendation depends on all three:
+
+- **It is two orders of magnitude, not one.** Budget **80–135 ms per test** for the
+  default, against roughly 1 ms for rollback.
+- **The dominant term is a fixed floor, not schema size.** An *empty* template — zero
+  tables — still measured 87 ms per test, because a PostgreSQL template is ~7.4 MiB of
+  catalog that `CREATE DATABASE` copies regardless. Schema size only adds on top, so a
+  small-schema project does not get a cheap version of this.
+- **`CREATE`/`DROP DATABASE` is a machine-wide serialization point,** so adding workers
+  does not buy proportional throughput: four concurrent workers roughly doubled
+  per-operation latency (74 ms → 144 ms) and returned only 2.5× the throughput of one
+  worker — about 25 databases per second machine-wide. It is nevertheless
+  concurrency-**safe**: zero failures at 1, 2, 4, and 8 workers. Safe, but flat.
+
+**This bounds the speed-up promised earlier.** *Why This Matters for Parallel Worktrees
+and Fast CI* says the suite duration drops to the duration of the single slowest test —
+that holds for the test *bodies*, not for this fixture. At ~25 databases per second
+machine-wide, 500 per-test databases is roughly **20 seconds** of floor that no number of
+workers removes. Read the earlier claim as "the slowest test **plus** the serialized cost
+of provisioning every test's database".
+
 **Default recommendation: a fresh database per test** — the direct port of this
-pattern's invariant, and the only option with no isolation hole. Adopt rollback
-isolation later, for one measured test category, as a documented exception; never as
-the project-wide default.
+pattern's invariant, and the only option with no isolation hole. But the numbers above
+mean most suites of any size will need the escape hatch, so plan for it rather than
+treating it as hypothetical: **adopt rollback isolation for read-only query tests** —
+tests that execute no DDL and where commit visibility across connections is not the
+behaviour under test. That is precisely the category where rollback's three limits above
+do not bite. Every other category keeps its own database. Record the exception per
+category, with the measurement that justified it; never switch rollback on project-wide
+as the default.
 
 ### Fixture scope is the correctness knob
 
@@ -452,10 +502,52 @@ shared state, which is the exact failure this pattern exists to prevent.
 **The trap: `session` scope means "once per worker", not "once per run."** Each xdist
 worker is its own process and builds its own copy — a session fixture ran twice under
 `-n 2`. That is correct for per-worker-owned things (an engine, a connection pool, a
-readiness wait). Anything that must truly happen **once per run** — `docker compose up`,
-creating the migrated template database — needs a cross-process mechanism: take a file
-lock in `tmp_path_factory.getbasetemp().parent`, the one directory every worker of a run
-shares (each worker's own basetemp is `popen-gw<N>` beneath it), keyed on `testrun_uid`.
+readiness wait). Anything that must truly happen **once per run** needs a cross-process
+mechanism — and **a file lock alone is not that mechanism.** A lock gives mutual
+exclusion, not once-only. Measured with four workers released simultaneously, a lock-only
+fixture ran the work **4 times**; lock-plus-marker ran it **once**. For the template
+database the lock-only form does not merely waste work, it fails: the three serialized
+workers each then hit `DuplicateDatabase: database "…" already exists`.
+
+**The mechanism is a lock plus a marker file.** The lock holder takes the lock, checks the
+marker, does the work, writes the marker; every other worker takes the lock, sees the
+marker, and skips. This is the standard `pytest-xdist` idiom and the only form that is
+once-per-run.
+
+**The two once-per-run cases need different keys — do not give them one key:**
+
+| Work | Key the lock and marker on | Why |
+|---|---|---|
+| Creating the migrated template database | `testrun_uid` | The template is a per-run artifact, so one per run is exactly right. |
+| `docker compose up` on a machine-wide stack | the **compose project name** (stack identity) | The stack is not a per-run artifact. Keying it on `testrun_uid` guarantees two concurrent runs never exclude each other — and concurrent worktrees are the case this pattern exists to serve. |
+
+Put the lock and the marker in `tmp_path_factory.getbasetemp().parent`. In a
+**distributed** run that is the one directory every worker of the run shares — verified:
+all four workers reported the same `/tmp/pytest-of-<user>/pytest-0`, each with its own
+`popen-gw<N>` beneath it. In a **non-distributed** run it escapes one level further to
+`/tmp/pytest-of-<user>`, which every run on the machine shares — which is what a
+stack-identity lock wants anyway, and harmless for a `testrun_uid`-keyed one because the
+key still differs per run.
+
+```python
+# tests/conftest.py — once per RUN, not once per worker.
+# FileLock comes from the `filelock` package, pinned in the PEP 735 `dev` group.
+@pytest.fixture(scope="session")
+def template_database_name(tmp_path_factory, testrun_uid):
+    # Sorts outside the ironbox_test_% sweep prefix; the operator sweep drops it.
+    template_name = f"ironbox_tmpl_{testrun_uid[:8]}"
+    shared_directory = tmp_path_factory.getbasetemp().parent
+    marker_path = shared_directory / f"{testrun_uid}.template-ready"
+    with FileLock(str(shared_directory / f"{testrun_uid}.template.lock")):
+        if not marker_path.exists():        # the lock ALONE is not once-per-run
+            create_and_migrate_template(template_name)
+            marker_path.write_text(template_name)
+    return template_name
+```
+
+`create_and_migrate_template` belongs in `tests/utils/helpers.py`: `CREATE DATABASE` on an
+autocommit connection, run the migrations, then **dispose** the engine — the template must
+have no other session connected before any worker creates a database from it.
 
 For async suites, `pytest-asyncio` runs in strict mode by default, so an async fixture
 must use `@pytest_asyncio.fixture` — a plain `@pytest.fixture` errors. A wider-scoped
@@ -499,15 +591,65 @@ runs the application in-process and no port is involved.
   reports `worker 'gw0' crashed while running <nodeid>` and the post-`yield` code never
   executes. No fixture — and no `pytest_sessionfinish` in that worker — closes this hole.
 - **The practical answer is a name prefix plus a sweep.** Name every isolated resource
-  `<project>_test_<testrun_uid>_<worker_id>_<uuid7>`: the prefix makes orphans findable
+  **`<project>_test_<testrun_uid[:8]>_<worker_id>_<uuid7().hex>`** — for example
+  `ironbox_test_fa03dd4e_gw0_019ff641d7e273a2aa86344998fb0771`, 58 characters. The prefix
+  makes orphans findable
   (`SELECT datname FROM pg_database WHERE datname LIKE '<project>_test_%'`), the run
-  segment tells a sweep which names belong to a *live* run, and a time-ordered UUIDv7
+  segment tells a sweep which names belong to a *live* run, and the time-ordered UUIDv7
   gives each name an age. Drop with `WITH (FORCE)` — a plain `DROP DATABASE` fails with
   `database … is being accessed by other users` whenever a leaked connection survives.
+- **The run segment is truncated to 8 characters because PostgreSQL identifiers are
+  limited to 63 bytes — and it truncates past that *silently*, with no error.** A full
+  32-hex `testrun_uid` plus a full 32-hex `uuid7` is 82 characters, and the 19 bytes
+  PostgreSQL discards are the entire random tail: two *distinct* names both store as
+  `…_gw0_019ff63b35a07` and the second `CREATE DATABASE` fails with `DuplicateDatabase`.
+  Check the arithmetic against your own project prefix — 63 bytes, minus the 48 fixed bytes
+  (`_test_` is 6, run segment 8, two separators 2, uuid7 hex 32), minus the worker segment,
+  leaves **9 characters for `<project>`** in the worst case, `worker_id` being `master` in
+  a non-distributed run and the longest value it takes.
+- **Never shorten the `uuid7` to buy room — shorten the project prefix instead.** A
+  UUIDv7's randomness lives entirely in its *tail*: within one millisecond CPython 3.14
+  holds the first 20 hex characters constant, so `uuid7().hex[:16]` yielded **1 distinct
+  value out of 361** generated in that millisecond. A prefix slice of a UUIDv7 is a
+  timestamp, not an identifier.
+- **The template database is dropped by the same operator sweep, never inside a session.**
+  No worker can drop it in session teardown while its siblings are still creating databases
+  from it, and a killed worker drops nothing — so every run leaks a ≥7.4 MiB template.
+  That is why the template name must sort *outside* the per-test prefix:
+  `<project>_tmpl_<testrun_uid[:8]>` does not match `<project>_test_%`, so the sweep can
+  reclaim stale per-test databases without ripping a live run's template out from under it,
+  and can reclaim stale templates as a separate, explicitly chosen step.
 - **Make the sweep an explicit operator command** (a `just` recipe), never an automatic
   start-of-session step: a prefix sweep cannot tell a leaked database from a concurrent
   run's live one, and at session start it would drop the other worktree's databases out
   from under it.
+
+The per-test fixture that puts all of the above together — function-scoped, so the database
+is created and dropped per test, and split in two so the test's own engine is disposed
+before the drop runs:
+
+```python
+# tests/integration/conftest.py — one database per test
+@pytest.fixture
+def test_database_url(worker_id, testrun_uid, template_database_name):
+    database_name = f"ironbox_test_{testrun_uid[:8]}_{worker_id}_{uuid.uuid7().hex}"
+    admin_engine = create_engine(ADMIN_DATABASE_URL, isolation_level="AUTOCOMMIT")
+    with admin_engine.connect() as connection:       # AUTOCOMMIT: CREATE DATABASE
+        connection.execute(text(                     # cannot run in a transaction
+            f'CREATE DATABASE "{database_name}" TEMPLATE "{template_database_name}"'
+        ))
+    yield f"{BASE_DATABASE_URL}/{database_name}"     # created last before yield
+    with admin_engine.connect() as connection:
+        connection.execute(text(f'DROP DATABASE IF EXISTS "{database_name}" WITH (FORCE)'))
+    admin_engine.dispose()
+
+
+@pytest.fixture
+def database_engine(test_database_url):
+    engine = create_engine(test_database_url)
+    yield engine
+    engine.dispose()        # release connections before the fixture above drops
+```
 
 ---
 
@@ -517,9 +659,11 @@ runs the application in-process and no port is involved.
   and release it at the end of every database test — `TestDatabase::new()` /
   `teardown()` in the Rust example, a function-scoped `yield` fixture in Python.
   Never reuse a database across tests.
-- **Every resource name includes a UUIDv7 suffix.** Database names, object
-  keys, entity names with unique constraints — all of them. Never use a
-  static, shared, mutable name.
+- **Every resource name ends in a complete, untruncated UUIDv7.** Database names,
+  object keys, entity names with unique constraints — all of them. Never use a
+  static, shared, mutable name, and never truncate the UUID to fit an identifier
+  limit (63 bytes for a PostgreSQL name) — shorten the other name segments
+  instead; see *Mapping to Python*.
 - **End-to-end test servers bind port `0`.** The OS assigns a free port;
   the test reads it back. No test hardcodes a host port.
 - **New fixtures use env-substitutable host ports.** The `${VAR:-default}`
@@ -584,8 +728,12 @@ runs the application in-process and no port is involved.
   `pytest`, `pytest-xdist`, and `pytest-asyncio` are pinned
   (`python-project-setup`), and the uv workspace layout that decides where a
   member's `tests/` tree and its `conftest.py` hierarchy sit (Python
-  conventions). The same isolation principles apply unchanged: per-test database,
-  unique resource names, teardown that survives failure.
+  conventions). **These two documents diverge on the isolation default, and the
+  divergence is real rather than a wording difference:** `python-testing`'s
+  `tests/integration/conftest.py` ships an `autouse=True` transaction-rollback
+  `db_session` fixture project-wide, whereas this pattern's default is a fresh database
+  per test. A project must choose one of the two deliberately instead of inheriting both;
+  the trade-off is the measured cost in *What the default costs* above.
 - **`ci-setup`** — CI runs the integration suite; this pattern is what makes
   the suite safe to run in a CI job without serializing every test. Apply
   `ci-setup` to wire the docker-stack startup into the CI job.
