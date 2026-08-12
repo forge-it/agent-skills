@@ -4,7 +4,7 @@ description: Use when bootstrapping CI for a new monorepo with Rust, Python, and
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.1"
+  version: "0.0.2"
 ---
 
 # CI Setup
@@ -191,15 +191,26 @@ jobs:
   # python-lint:
   #   name: python lint
   #   runs-on: ubuntu-latest
+  #   defaults:
+  #     run:
+  #       working-directory: service
   #   steps:
   #     - uses: actions/checkout@v4
-  #     - uses: actions/setup-python@v5
+  #     - uses: astral-sh/setup-uv@v8
   #       with:
-  #         python-version: "3.12"
-  #     - run: pip install -e ".[dev]"
-  #     - run: ruff check .
-  #     - run: mypy .
-  #     - run: lint-imports
+  #         working-directory: service
+  #         enable-cache: true
+  #       # No python-version input: the action reads the pin from
+  #       # service/.python-version, so the interpreter is a property of the
+  #       # repository rather than of this workflow file.
+  #     - run: uv sync --locked
+  #       # --locked fails the job if uv.lock no longer matches the manifests.
+  #       # Never `pip install -e ".[dev]"`: dev tooling is not an extra, and
+  #       # pip writes into an environment the lockfile is meant to describe.
+  #       # See python-project-setup.
+  #     - run: uv run ruff check .
+  #     - run: uv run mypy
+  #     - run: uv run lint-imports
   #       # lint-imports enforces the DDD layering contracts from
   #       # python-import-linter-setup. Exits non-zero on any breach.
 ```
@@ -331,7 +342,7 @@ Template for a new component job:
 | `rust-clippy` | push / PR | yes | `cargo clippy -- -D warnings` or `just clippy` |
 | `rust-structure` | push / PR | yes | `cargo test --test structure` or `just structure` |
 | `web-eslint` | push / PR | yes (error-level rules) | `npm run lint` or `just web-lint` |
-| `python-lint` | push / PR | yes | `ruff check . && mypy . && lint-imports` |
+| `python-lint` | push / PR | yes | `ruff check . && mypy && lint-imports` |
 | integration tests | tag push (release) | yes (gates image build) | `just test-integration` with Docker stack |
 
 ## Cross-references
