@@ -14,7 +14,7 @@ description: >-
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.5"
+  version: "0.0.6"
 ---
 
 # Greenfield Project Setup (Orchestrator)
@@ -77,7 +77,7 @@ name; *pattern* = read the doc), and the gate that proves it is live.
 | 5 | Task runner | SKILL `justfile-setup` | `just` recipes (dev / local-prod / prod / lint / test-all) run, **plus one recipe per gate family** — on a Rust workspace `cargo test --workspace --test structure`; on a Python repo `uv run lint-imports` plus a per-member `cd <member> && uv run pytest` (never `uv run --package X pytest` from the root — it aborts collection) |
 | 6 | Local infra + parallel test isolation | *local_port_allocation_pattern* + *parallel_test_isolation_pattern* | integration tests pass **in parallel**, no collisions |
 | 7 | Scalability (opt-in, default-on for SaaS) | *worker_pattern* + *worker_fleet_pattern* + the shared task-contracts package — rust: a workspace crate (`rust-workspace-setup`); python: a uv workspace member (see *worker_pattern*'s Python mapping) | worker boots and consumes a test task |
-| 8 | Day-1 cross-cutting decisions (ADRs) | *observability_posture_pattern*; *frontend_api_type_mirroring_pattern* (if vue+backend); *worker_fleet_pattern* topology + identity ADRs (if worker); port allocation (phase 6); the convention-enforcement policy and its permission protocol (phase 3); the task-runner growth mechanism (`import`, never `mod`) | each decision recorded as an ADR in `docs/decisions/` |
+| 8 | Day-1 cross-cutting decisions (ADRs) | *observability_posture_pattern*; *frontend_api_type_mirroring_pattern* (if vue+backend); *worker_fleet_pattern* topology + identity ADRs (if worker); port allocation (phase 6); the test-isolation strategy — and on Rust, whether repositories own a pool or take an executor, since that decides whether rollback isolation is ever available (phase 6); the convention-enforcement policy and its permission protocol (phase 3); the task-runner growth mechanism (`import`, never `mod`) | each decision recorded as an ADR in `docs/decisions/` |
 | 9 | Navigation + docs | *claude_md_pattern* + *docs_artifact_layout_pattern* + *repo_root_files_pattern* | root + per-component `CLAUDE.md` and `docs/` trees exist; root files present |
 | 10 | Automation gates | SKILL `agent-hooks-setup` + `ci-setup`; *dependency_audit_pattern* | hooks fire locally; CI is green on a trial PR **and invokes the task runner, never a hand-listed crate/member set**; audit command runs |
 | 11 | Continuous practices (wire in, not one-shot) | SKILL `rust-testing` / `python-testing` + `python-commands`, `*-code-style`, `rust-design-principles` / `rust-design-idioms`, `rest-api-design`, `reconcile-docs` | referenced by `CLAUDE.md`, enforced by phase-10 hooks + CI |
@@ -119,6 +119,31 @@ Note the phase boundary: phase 3 **installs** the gates; phases 5 and 10 are wha
 make them **reachable**. The task-runner recipe and the CI step belong there, not
 here.
 
+### Phase 6: the isolation strategy is a per-language decision, not one rule
+
+Both stacks give every test a private world; *how* differs, and the difference is
+a language fact rather than a preference.
+
+**Python** can afford transaction-rollback isolation as its default — roughly
+1 ms per test against 80–195 ms for a database — because a SQLAlchemy session
+bound to an external connection is already the shape the UoW uses. Reserve a
+real per-test database for the cases rollback cannot serve: DDL under test on
+MySQL/MariaDB, code that opens its own connection, and anything asserting
+cross-connection commit visibility.
+
+**Rust keeps the per-test database** and should *not* reach for rollback. Getting
+a test-controlled executor to the repositories means either an sqlx type in a
+domain port — which the phase-3 gate rejects, since it enforces a framework-free
+domain — or a unit-of-work holding a `Transaction` across await points, which
+fights the borrow checker. Instead make the database cheap: migrate and seed a
+template once per test binary and `CREATE DATABASE … TEMPLATE` per test.
+
+Decide the Rust repository seam here even if you keep pool-owning repositories,
+and record it in phase 8. Pool-owning is a fine choice — but it makes the per-test
+database your permanent isolation strategy, and retrofitting the seam later means
+touching every repository (in one real codebase, 61 files). That is exactly the
+kind of decision this skill exists to make deliberately rather than by drift.
+
 ### Why this order
 
 Toolchain/workspace (1) gives crates a home before you scaffold them (2). The
@@ -140,7 +165,7 @@ Which phases apply to which components (✓ = applies, — = skip):
 | 2 skeleton | ✓ hexagonal | ✓ DDD | ✓ feature-arch | ✓ hexagonal |
 | 3 invariant gate | ✓ structure-test (+ conventions crate on a workspace) | ✓ import-linter (+ conventions package on a uv workspace) | ✓ eslint | ✓ own gate + the shared conventions crate/package |
 | 4 wiring/lifecycle | ✓ | ✓ | — | ✓ |
-| 6 test isolation | ✓ | ✓ pytest fixtures + xdist worker identity | partial | ✓ |
+| 6 test isolation | ✓ per-test DB cloned from a template | ✓ pytest fixtures + xdist worker identity | partial | ✓ |
 | 7 worker | — | — | — | ✓ |
 | 8 day-1 ADRs | ✓ | ✓ | ✓ (type-mirroring consumer) | ✓ (fleet topology + identity) |
 | 9 docs + CLAUDE.md | ✓ | ✓ | ✓ | ✓ |

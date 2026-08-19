@@ -12,7 +12,7 @@ description: >-
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.5"
+  version: "0.0.6"
 ---
 
 # Parallel Test Isolation Pattern
@@ -224,13 +224,31 @@ migration set (median of 15):
 | `CREATE DATABASE … TEMPLATE <migrated template>` | **99 ms** |
 | `CREATE DATABASE` alone — the irreducible floor | **46 ms** |
 
-So build the migrated-and-seeded template **once per run**, then create each
-test database from it: ~194 ms cheaper per test, roughly 3×, with the isolation
-guarantee unchanged — each test still owns a private, uniquely-named database.
-The template must be built exactly once, which needs the lock-**and-marker**
-mechanism described under *Mapping to Python*; a plain lock serializes the work
-without preventing repeats, and the second worker through it fails on
-`DuplicateDatabase`.
+So build the migrated-and-seeded template **once per test binary**, then create
+each test database from it, with the isolation guarantee unchanged — each test
+still owns a private, uniquely-named database.
+
+**The size of the win is proportional to what your migrations do**, because both
+paths pay the same fixed cost (the connects plus `CREATE`/`DROP DATABASE`). Only
+the migrate-per-test path pays for the migration statements on top. Measured:
+~194 ms and ~3× against the 7-file, ~100 KB set above; only **24%** (95 ms → 72 ms)
+against a 2-file toy schema. Measure your own set before quoting a number.
+
+**Building it exactly once is language-specific.** In Rust a
+`tokio::sync::OnceCell` suffices — `cargo test` runs a binary's tests as threads
+in one process, so no lock and no marker file are needed (verified: 16
+concurrent `TestDatabase::new()` calls, initializer body ran once). But note that
+**every file directly under `tests/` compiles to its own binary**, each with its
+own statics, so a suite split across N integration-test files builds N templates
+— still far cheaper than per-test migration, but consolidate the
+database-backed tests into one target if you want literally one. In Python the
+equivalent needs the lock-**and-marker** mechanism described under *Mapping to
+Python*, because pytest-xdist workers are separate processes.
+
+**Close the template's connection pool before cloning from it.** PostgreSQL
+refuses to copy a template that any other session is connected to:
+`source database "…" is being accessed by other users`, SQLSTATE **55006**.
+Build the template, seed it, close the pool, *then* hand the name out.
 
 Two further properties of this cost, because they bound what parallelism can buy:
 
