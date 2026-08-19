@@ -4,7 +4,7 @@ description: Use when bootstrapping CI for a new monorepo with Rust, Python, and
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.5"
+  version: "0.0.6"
 ---
 
 # CI Setup
@@ -39,7 +39,7 @@ Run this once. After the workflow exists and passes, you do not re-run the skill
 
 | Component | Job | Gates enforced |
 |-----------|-----|----------------|
-| Rust | `rust-check` | `just core-check` → clippy `-D warnings`, `fmt --check`, and `cargo test --workspace --test structure` (hexagonal layering) |
+| Rust | `rust-check` | `just core-check` → `fmt --all --check`, then `clippy --all-targets --all-features -D warnings`, then `cargo test --workspace --test structure` (hexagonal layering). Cheapest-first, and workspace-wide so no crate is left unchecked |
 | Vue | `web-check` | `just web-check` → ESLint feature-architecture boundaries, format check, `vue-tsc` |
 | Python | `python-check` | `just service-check` → `ruff format --check`, `ruff check`, `mypy`, `lint-imports`, and `pytest src/tests/architecture` (conventions gate: gate coverage and the interpreter floor) |
 
@@ -60,9 +60,9 @@ These three skills install the local check; this skill makes it a build-breaker.
 ## Workflow template
 
 The template below is a reference for a Rust + Python + Vue monorepo. Adapt job
-names, package names (`-p <your-crate>`), and working-directory prefixes to match
-your project, and delete the jobs for components your repository does not have —
-that applies equally to all three stacks.
+names and the recipe names to match your project, and delete the jobs for
+components your repository does not have — that applies equally to all three
+stacks. Crate selection and directory handling live in the recipes, not here.
 
 ```yaml
 name: CI
@@ -199,9 +199,10 @@ target/
 `restore-keys` fallback (`${{ runner.os }}-<job>-`) reuses the previous cache
 on a miss rather than starting cold.
 
-Each cache key is scoped to the job that builds it (`clippy`, `structure`, and
-so on). This prevents a clippy build from polluting the structure gate's cache
-and vice versa — the jobs can run in parallel without racing over a shared key.
+There is one Rust job, so one cache key. That is a side benefit of the collapse:
+three separate Rust jobs each paid a cold compile on their own runner and needed
+per-job keys to avoid racing; one job compiles once and the structure gate reuses
+clippy's artifacts. If you do split the Rust job later, scope a key per job.
 
 Node caching is handled natively by `actions/setup-node@v4` via the `cache: npm`
 option and the `cache-dependency-path` pointing at `web/package-lock.json`.
@@ -219,6 +220,13 @@ separation of concerns applied to the pipeline:
   by running cheapest-first, so a formatting slip still reports before the compile.
 - Each job carries a single cache key, since there is now one Rust job rather than
   three racing to write the same key.
+- **The honest cost:** three parallel jobs reported all three Rust failures in one
+  run; one fail-fast recipe reports only the first, so a change with both a clippy
+  error and a layering violation needs two round-trips. Cheapest-first ordering
+  shortens time-to-first-failure but does not recover that. If it bites, make
+  `core-check` a shebang recipe that records each failure and exits non-zero at the
+  end — which restores all-failures-in-one-run without moving the gate list back
+  into this file.
 
 ## Integration tests and the local Docker stack
 
@@ -256,19 +264,18 @@ wiring CI; a workflow that re-spells the commands is a second source of truth an
 the two diverge silently.
 
 ```yaml
-- name: Run Clippy (deny warnings)
-  run: just clippy
-
-- name: Enforce hexagonal layering
-  run: just structure
-
-- name: Lint Vue
-  run: just web-lint
+- name: Quality gate
+  run: just core-check
 ```
 
-The `justfile` becomes the canonical definition of what each check does; the
-workflow just invokes it. When the check changes (a new flag, a new package), the
-change lives in one place.
+Use the recipe names `justfile-setup` actually defines — `core-check`,
+`web-check`, `service-check`, and `test-all`. A workflow step naming a recipe that
+does not exist fails at the first run, which is the cheap failure; the expensive
+one is a step that *works* while duplicating a command the recipe also has.
+
+The `justfile` is the canonical definition of what each check does; the workflow
+invokes it. When a check changes — a new flag, a new package, an added gate — the
+change lives in one place and the developer running it locally sees it.
 
 ## Adding new component types
 
@@ -280,23 +287,30 @@ linting failure should not cancel a Rust structure check that would have passed.
 Template for a new component job:
 
 ```yaml
-<component-name>-<check-name>:
-  name: <human-readable name>
+<component>-check:
+  name: <component> check
   runs-on: ubuntu-latest
-  defaults:
-    run:
-      working-directory: <component-directory>
   steps:
     - name: Checkout code
       uses: actions/checkout@v4
-    # ... toolchain setup, cache, then the single check command
+    # ... toolchain setup and cache for that component
+    - name: Install just
+      uses: taiki-e/install-action@v2
+      with:
+        tool: just
+    - name: Quality gate
+      run: just <component>-check
 ```
+
+One job per component, named for the component — not per gate. The job never
+spells out the checks; it invokes the component's `<component>-check` recipe, which
+you add in `justfile-setup` first.
 
 ## Common mistakes and anti-patterns
 
 | Mistake | Why it is a problem | Fix |
 |---------|---------------------|-----|
-| One monolithic `test` job for all components | A single Vue lint failure cancels all Rust jobs; reviewers cannot tell which component broke | One job per component per concern |
+| One monolithic `test` job for all components | A single Vue lint failure cancels all Rust jobs; reviewers cannot tell which component broke | One job per component, invoking that component's check recipe |
 | Sharing one cargo cache key across several Rust jobs | Parallel jobs race to write the same key; one job's cached artifacts corrupt another's | One Rust job, one key — or scope the key per job if you do split |
 | Running integration tests in the same job as static analysis | Static-analysis jobs must not require external services; they become flaky when the Docker stack is slow | Separate jobs; gate integration tests behind a feature flag |
 | Treating lint warnings as non-blocking | Warnings accumulate; once there are hundreds, no one fixes them | Set `lint` rules to `error` at the ESLint level and `-D warnings` in Clippy |
@@ -312,7 +326,7 @@ Template for a new component job:
 | `rust-check` | push / PR | yes | `just core-check` |
 | `web-check` | push / PR | yes (error-level rules) | `just web-check` |
 | `python-check` | push / PR | yes | `just service-check` |
-| integration tests | tag push (release) | yes (gates image build) | `just test-integration` with Docker stack |
+| integration tests | tag push (release) | yes (gates image build) | `just test-all` with the Docker stack up |
 
 ## Cross-references
 

@@ -17,7 +17,7 @@ description: >-
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.7"
+  version: "0.0.8"
 ---
 
 # Python Convention Enforcement Pattern
@@ -185,7 +185,7 @@ services/
 members = ["packages/*", "services/*"]
 
 [dependency-groups]                  # PEP 735 — dev-only, never shipped
-dev = ["pytest==9.1.1", "ruff==0.16.2", "import-linter==2.3", "ironbox-conventions"]
+dev = ["pytest==9.1.1", "ruff==0.16.2", "import-linter==2.13", "ironbox-conventions"]
 
 [tool.uv.sources]                    # inherited by every member
 ironbox-conventions = { workspace = true }

@@ -4,7 +4,7 @@ description: Use when bootstrapping a new monorepo that mixes Rust, Python, and/
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.4"
+  version: "0.0.5"
 ---
 
 # Justfile Setup
@@ -72,7 +72,7 @@ spans two categories, break it into two recipes and have the outer one call both
 | **Format** | Apply auto-formatting | `fmt`, `fmt-rust`, `fmt-web`, `fmt-python` |
 | **Local-prod deploy** | Build + run via Docker Compose with a prod-like config | `local-deploy-up`, `local-deploy-down`, `local-<component>-deploy-up/down` |
 | **Production build** | Build the final Docker image for shipping | `prod-<component>-build` |
-| **Test-resource reclaim** | Drop leaked per-test databases and templates, on demand | `db-sweep` |
+| **Test-resource reclaim** | Drop leaked per-test databases; templates separately, on demand | `db-sweep`, `db-sweep-templates` |
 | **Utilities** | One-off helpers (key generation, client installs, etc.) | freeform names |
 
 ### Naming rules
@@ -251,8 +251,8 @@ service-check:
 # Ordered cheapest-first: a formatting slip reports in seconds instead of after a
 # full compile. CI invokes this recipe as-is, so the ordering benefits both.
 core-check:
-  cargo fmt -p <core-crate-name> -- --check
-  cargo clippy -p <core-crate-name> -- -D warnings
+  cargo fmt --all -- --check
+  cargo clippy --all-targets --all-features -- -D warnings
   cargo test --workspace --test structure
 
 # ── Tests ────────────────────────────────────────────────────────────────────
@@ -300,26 +300,50 @@ fmt-web:
   npm --prefix web run format
 
 # [python] ruff format
-# Reclaim leaked test databases and templates. Deliberately an explicit operator
-# command, never an automatic start-of-session step: a prefix sweep cannot tell a
-# leaked database from a concurrent run's live one, so running it automatically
-# would drop another worktree's databases mid-run. Per-test clones and templates
-# are separate steps so a live run's template is not taken out from under it.
-db-sweep:
-  #!/usr/bin/env bash
-  set -euo pipefail
-  : "${DATABASE_ADMIN_URL:?set DATABASE_ADMIN_URL (see service/.env)}"
-  for prefix in '<project>_test_%' '<project>_tmpl_%'; do
-    psql "$DATABASE_ADMIN_URL" -At \
-      -c "SELECT datname FROM pg_database WHERE datname LIKE '$prefix'" \
-    | while read -r leaked; do
-        echo "dropping $leaked"
-        psql "$DATABASE_ADMIN_URL" -c "DROP DATABASE \"$leaked\" WITH (FORCE)"
-      done
-  done
-
 fmt-python:
   cd service && uv run ruff format .
+
+# ── Test-resource reclaim ────────────────────────────────────────────────────
+
+# Drop leaked per-test databases. Always an explicit operator command, never an
+# automatic start-of-session step: a prefix sweep CANNOT distinguish a leak from a
+# concurrent run's live resource, so running it automatically would drop another
+# worktree's databases mid-run. `_` is a LIKE wildcard, so both prefixes escape it
+# — unescaped, `<project>_test_%` also matches `<project>Xtest…` and would drop
+# unrelated databases.
+db-sweep:
+  @just _db-drop-matching '<project>\_test\_%'
+
+# Templates are a SEPARATE, deliberately chosen step, because this is the dangerous
+# half: a live run's template matches the prefix too, and dropping it WITH (FORCE)
+# kills that run. Ordering does not help — once `CREATE DATABASE … TEMPLATE t`
+# returns the clone no longer depends on `t`, so sweeping clones first protects
+# nothing. Run this only when no suite is running anywhere against this server.
+db-sweep-templates:
+  @just _db-drop-matching '<project>\_tmpl\_%'
+
+[private]
+_db-drop-matching pattern:
+  #!/usr/bin/env bash
+  # `set shell` at the top of this file does NOT apply to a shebang recipe, so
+  # these flags are required rather than redundant.
+  set -euo pipefail
+  : "${TEST_DATABASE_ADMIN_URL:?set TEST_DATABASE_ADMIN_URL (see the component .env)}"
+  failed=$(mktemp)
+  trap 'rm -f "$failed"' EXIT
+  psql "$TEST_DATABASE_ADMIN_URL" -At \
+    -c "SELECT datname FROM pg_database WHERE datname LIKE '{{ pattern }}'" \
+  | while read -r leaked; do
+      echo "dropping $leaked"
+      # Keep going: one undroppable database (datistemplate=true, say) must not
+      # abandon the rest of the leak. The loop body is a subshell, so the failure
+      # is recorded in a file rather than a variable.
+      psql "$TEST_DATABASE_ADMIN_URL" -c "DROP DATABASE \"$leaked\" WITH (FORCE)" \
+        || echo "$leaked" >> "$failed"
+    done
+  if [ -s "$failed" ]; then
+    echo "could not drop:" >&2 && cat "$failed" >&2 && exit 1
+  fi
 
 # ── Local-prod deploy (Docker Compose, prod-like config) ─────────────────────
 
@@ -571,8 +595,9 @@ CI calls exactly two recipes from this justfile:
 
 The architecture gate skills install what these recipes run:
 
-- `rust-architecture-test-setup` adds `cargo test --test structure` which is
-  called by `dev-core-test` (via `cargo test -p <crate>`).
+- `rust-architecture-test-setup` adds `cargo test --test structure`, which
+  `core-check` runs — it is a quality gate, not a test-suite run, so it does not
+  belong in `dev-core-test`.
 - `python-import-linter-setup` adds `lint-imports` which is called by
   `service-check`.
 - `frontend-vue-eslint-setup` wires the ESLint architecture rules which are
@@ -673,4 +698,6 @@ justfile handles orchestration.
 | `just local-deploy-down` | Stop the local-prod stack |
 | `just prod-<component>-build` | Build the production Docker image for one component |
 | `just <component>-env` | Create `<component>/.env` from template if missing |
+| `just db-sweep` | Drop leaked per-test databases (manual; see the section) |
+| `just db-sweep-templates` | Drop leaked templates — kills any live run, so run it alone |
 | `just web-install` | Install `web/node_modules` |

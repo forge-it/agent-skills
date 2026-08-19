@@ -5,7 +5,7 @@ vibe: Turns the architecture doc into a build that fails when someone crosses a 
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.2.0"
+  version: "0.2.1"
 ---
 
 # Rust Architecture Test Setup
@@ -553,17 +553,19 @@ mod manifest_dependency_boundary {
 
 ## Step 3 — Wire the gate
 
-Add `cargo test --test structure` to CI (see `ci-setup`). Give the project's
-task runner a recipe so it runs with the rest of the suite — with `just` (see
-`justfile-setup`):
+Add the gate to the component's quality-gate recipe — `justfile-setup` names it
+`<component>-check` — and do **not** give it a recipe of its own:
 
 ```just
-# justfile
-structure:
-    cargo test --test structure
-
-check: format clippy structure test
+core-check:
+    cargo fmt --all -- --check
+    cargo clippy --all-targets --all-features -- -D warnings
+    cargo test --test structure      # --workspace on a multi-crate workspace
 ```
+
+CI needs no separate wiring: `ci-setup`'s Rust job runs `just core-check`, so a
+gate added to the recipe is in CI by construction. Never add the raw command to
+the workflow as well — that is two places to change and one to forget.
 
 On a single-crate, Rust-only project that runs cargo-make instead (see the scope
 gate in `rust-project-setup`), the equivalent is a `[tasks.structure]` entry with
