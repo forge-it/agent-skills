@@ -12,7 +12,7 @@ description: >-
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.4"
+  version: "0.0.5"
 ---
 
 # Parallel Test Isolation Pattern
@@ -210,6 +210,45 @@ async fn should_return_created_user() {
 
 Because every test database has a unique name, hundreds of tests can run
 concurrently against the same PostgreSQL instance with no interference.
+
+#### Create from a per-run template, not by migrating per test
+
+The example above migrates and seeds **every** test database. That is the
+expensive way to honour the invariant, and the cost is worth knowing before you
+copy it. Measured against a stock PostgreSQL 17.10 with a real 7-file, ~100 KB
+migration set (median of 15):
+
+| Path | median |
+|---|---|
+| `CREATE DATABASE` + apply all migrations (the example above) | **292 ms** |
+| `CREATE DATABASE … TEMPLATE <migrated template>` | **99 ms** |
+| `CREATE DATABASE` alone — the irreducible floor | **46 ms** |
+
+So build the migrated-and-seeded template **once per run**, then create each
+test database from it: ~194 ms cheaper per test, roughly 3×, with the isolation
+guarantee unchanged — each test still owns a private, uniquely-named database.
+The template must be built exactly once, which needs the lock-**and-marker**
+mechanism described under *Mapping to Python*; a plain lock serializes the work
+without preventing repeats, and the second worker through it fails on
+`DuplicateDatabase`.
+
+Two further properties of this cost, because they bound what parallelism can buy:
+
+- **The floor is fixed, not schema-driven.** An empty template still costs tens
+  of milliseconds, because a PostgreSQL template is megabytes of catalog to
+  copy. A smaller schema does not make it cheap.
+- **`CREATE`/`DROP DATABASE` contends inside one server.** Four concurrent
+  workers yielded ~2.5× throughput with per-operation latency roughly doubling —
+  safe, but sublinear. Threads in one test process all share one PostgreSQL, so
+  adding threads does not reduce the per-test floor. Giving each *process* its
+  own stack does parallelize it, at the cost of one database server per stack.
+
+**One teardown hazard.** `DROP DATABASE … WITH (FORCE)` forces an immediate
+checkpoint. In a burst of creates with no intervening checkpoint, the first drop
+pays to flush everything: one measured run took **26 seconds**, having fsynced
+22,514 files. After an explicit `CHECKPOINT` the same drop took 21–36 ms. If
+teardown ever appears to hang, this is the first thing to check; the fixture
+server's `checkpoint_timeout` and `max_wal_size` are the knobs.
 
 #### Unique names for everything else
 
