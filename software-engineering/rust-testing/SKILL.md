@@ -4,7 +4,7 @@ description: Guidelines for writing effective Rust tests. Use when writing or mo
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.1.1"
+  version: "0.1.2"
 ---
 
 # Rust Testing Skill
@@ -666,7 +666,7 @@ pub mod constants;
 - **Close the template's pool before cloning from it.** PostgreSQL refuses to copy a template another session is connected to: `source database "…" is being accessed by other users`, SQLSTATE **55006**.
 - **Every file directly under `tests/` is its own binary** with its own statics, so a suite split across several integration-test files builds one template per file. Consolidate the database-backed tests into one target if you want literally one.
 
-The saving is proportional to what your migrations do, since both paths pay the same connect plus `CREATE`/`DROP` cost: measured ~3× (292 ms → 99 ms) against a 7-file, ~100 KB migration set, but only ~24% against a 2-file toy schema. Name the template per run (`<project>_tmpl_<uuidv7>`) so an operator sweep can distinguish it from the `<project>_test_%` clones, and drop it there rather than inside a test.
+The saving is proportional to what your migrations do, since both paths pay the same connect plus `CREATE`/`DROP` cost: measured ~3× (292 ms → 99 ms) against a 7-file, ~100 KB migration set, but only ~24% against a 2-file toy schema. Name the template per run (`<project>_tmpl_<uuidv7>`) so an operator sweep can distinguish it from the `<project>_test_%` clones, and drop it there — `justfile-setup`'s `db-sweep` recipe — rather than inside a test. Nothing in the test binary can drop it: sibling tests may still be cloning from it, and a `SIGKILL`ed run drops nothing at all.
 
 For simple sqlx projects, `#[sqlx::test]` provides managed per-test databases out of the box; the `TestDatabase` pattern is preferred because it also controls naming, seeding, templating, and teardown.
 

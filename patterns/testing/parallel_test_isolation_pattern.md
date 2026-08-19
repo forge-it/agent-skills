@@ -12,7 +12,7 @@ description: >-
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.7"
+  version: "0.0.8"
 ---
 
 # Parallel Test Isolation Pattern
@@ -626,13 +626,30 @@ def template_database_name(tmp_path_factory, testrun_uid):
 autocommit connection, run the migrations, then **dispose** the engine — the template must
 have no other session connected before any worker creates a database from it.
 
-For async suites, `pytest-asyncio` runs in strict mode by default, so an async fixture
-must use `@pytest_asyncio.fixture` — a plain `@pytest.fixture` errors. A wider-scoped
-async fixture must also declare a matching **loop** scope
-(`@pytest_asyncio.fixture(scope="session", loop_scope="session")` consumed by tests
-marked `@pytest.mark.asyncio(loop_scope="session")`): with the default function loop
-scope the fixture's loop is not the test's loop, so a connection opened there is bound
-to a loop that is no longer running.
+For async suites, **configure auto mode and the loop scopes in `pyproject.toml`** —
+per-test markers are what `python-testing` forbids, and configuration is what makes the
+setting uniform instead of remembered:
+
+```toml
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+```
+
+All three keys are real options in pytest-asyncio 1.4.0 (`pytest --help`, *asyncio*
+section). Under auto mode a plain `@pytest.fixture` on an async fixture works, and no
+`@pytest.mark.asyncio` is needed anywhere.
+
+**What the loop-scope keys buy you** is the thing that bites otherwise: a fixture and
+the test consuming it must run on the *same* event loop, and with the default
+function-scoped loop a session-scoped async fixture's loop is not the test's loop — a
+connection opened there is bound to a loop that is no longer running. Setting both
+defaults to the same scope removes the mismatch for every fixture at once.
+
+(Left at pytest-asyncio's own defaults, the plugin is in **strict** mode, where an
+async fixture must use `@pytest_asyncio.fixture` and each scope must be declared per
+decorator. That is the form to recognise in an existing suite, not the one to write.)
 
 ### Where ports come from
 
@@ -696,7 +713,7 @@ runs the application in-process and no port is involved.
   `<project>_tmpl_<testrun_uid[:8]>` does not match `<project>_test_%`, so the sweep can
   reclaim stale per-test databases without ripping a live run's template out from under it,
   and can reclaim stale templates as a separate, explicitly chosen step.
-- **Make the sweep an explicit operator command** (a `just` recipe), never an automatic
+- **Make the sweep an explicit operator command** — the `db-sweep` recipe in `justfile-setup` — never an automatic
   start-of-session step: a prefix sweep cannot tell a leaked database from a concurrent
   run's live one, and at session start it would drop the other worktree's databases out
   from under it.

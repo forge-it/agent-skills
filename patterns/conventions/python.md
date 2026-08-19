@@ -17,7 +17,7 @@ description: >-
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.6"
+  version: "0.0.7"
 ---
 
 # Python Convention Enforcement Pattern
@@ -185,7 +185,7 @@ services/
 members = ["packages/*", "services/*"]
 
 [dependency-groups]                  # PEP 735 — dev-only, never shipped
-dev = ["pytest>=8", "ruff", "import-linter", "ironbox-conventions"]
+dev = ["pytest==9.1.1", "ruff==0.16.2", "import-linter==2.3", "ironbox-conventions"]
 
 [tool.uv.sources]                    # inherited by every member
 ironbox-conventions = { workspace = true }
@@ -200,7 +200,7 @@ requires-python = ">=3.14"
 dependencies = ["ironbox-shared>=0.1", "fastapi[standard]"]   # standard; SHIPS in metadata
 
 [dependency-groups]
-dev = ["pytest>=8", "ironbox-conventions"]
+dev = ["pytest==9.1.1", "ironbox-conventions"]
 
 [tool.uv.sources]                                              # uv-only; not in built metadata
 ironbox-shared      = { workspace = true }
