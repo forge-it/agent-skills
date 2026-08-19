@@ -12,7 +12,7 @@ description: >-
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.6"
+  version: "0.0.7"
 ---
 
 # Parallel Test Isolation Pattern
@@ -409,7 +409,9 @@ mod find_by_id {
 
 What this demonstrates:
 - `TestDatabase::new()` creates a fresh database named
-  `ironbox_test_<uuidv7>`, fully migrated and seeded.
+  `ironbox_test_<uuidv7>`, fully migrated and seeded. This is the **expensive
+  form** — migrating per test rather than cloning a per-run template; see
+  *Create from a per-run template* below before copying it.
 - `unique_email("user-find")` produces a name that will never collide with
   any other test running at the same time.
 - `test_database.teardown()` drops the database with `WITH (FORCE)` so
@@ -442,7 +444,7 @@ parallel agent — under which the stack lock becomes unnecessary but stays harm
 |---|---|---|
 | Stack startup, once | `#[ctor::ctor] start_docker_services()` — once per test process | a session-scoped `autouse` fixture in `tests/conftest.py` — but **once per xdist worker**, not once per run (see *Fixture scope*); the cross-process once-per-run mechanism is a file lock **plus a marker file** — a lock alone gives mutual exclusion, not once-only |
 | Readiness gating | `wait_for_postgres_ready()` etc., blocking before the first test | the same wait loops inside that fixture, one function per service — tests never call `docker compose` themselves |
-| Per-test database | `TestDatabase::new()` / `.teardown()` | a **function-scoped `yield` fixture** in `tests/integration/conftest.py` that creates, migrates, yields, and drops |
+| Per-test database | `TestDatabase::new()` / `.teardown()` | a **function-scoped `yield` fixture** in `tests/integration/conftest.py` that creates *from the template*, yields, and drops — never migrating per test |
 | Unique resource names | `uuid::Uuid::now_v7()` suffix | `uuid.uuid7()` — stdlib from **Python 3.14**, which the greenfield baseline mandates, so new projects just call it. On an older codebase use the `uuid-utils` package; `uuid.uuid4()` satisfies uniqueness but is not time-ordered, so it forfeits the resource *age* the orphan sweep below relies on |
 | Semantic-label helper | `unique_email(prefix)` | the same helper, in `tests/utils/helpers.py` — never defined in a test module (see `python-testing`, *Test Modules Contain Only Tests*) |
 | Serialized singletons | `#[serial(...)]` from `serial_test` | `@pytest.mark.xdist_group(name="…")` run under `--dist loadgroup`, which places every member of a group on **one** worker — the group is ordered inside that worker only, so with `-n <N>` a *single* run already has `N` processes on the stack, and a true singleton needs one stack per run |
@@ -540,15 +542,33 @@ machine-wide, 500 per-test databases is roughly **20 seconds** of floor that no 
 workers removes. Read the earlier claim as "the slowest test **plus** the serialized cost
 of provisioning every test's database".
 
-**Default recommendation: a fresh database per test** — the direct port of this
-pattern's invariant, and the only option with no isolation hole. But the numbers above
-mean most suites of any size will need the escape hatch, so plan for it rather than
-treating it as hypothetical: **adopt rollback isolation for read-only query tests** —
-tests that execute no DDL and where commit visibility across connections is not the
-behaviour under test. That is precisely the category where rollback's three limits above
-do not bite. Every other category keeps its own database. Record the exception per
-category, with the measurement that justified it; never switch rollback on project-wide
-as the default.
+**The choice is not per language — it is per persistence design.** Rollback
+isolation is available exactly when the caller can supply the connection that the
+repositories and the unit of work use. Python usually can, because a unit of work
+that takes a `session_factory` already exposes that seam; a Rust adapter that
+connects its own pool from a URL does not, and one that takes an executor does.
+Nothing about either language decides it. If your layer has no such seam, a
+per-test database is your only option until you add one — and adding it later
+means touching every adapter, which is why the seam is a day-1 decision.
+
+**Where the seam exists, default to rollback for the integration tier** —
+repository, mapper, and unit-of-work tests. Not because it is merely cheaper, but
+because 88–151× on a floor no parallelism removes means a suite of any size would
+otherwise have to escape the default immediately, and a default most projects must
+escape is a warning wearing the wrong label.
+
+**Use a real per-test database for the three categories rollback cannot serve**,
+and note the criterion is *not* "read-only": a test that writes through the
+repository and reads it back is safe, because a `commit()` under test is undone
+too. The disqualifying properties are the ones above — DDL under test on an engine
+that implicitly commits it, any access that does not go through the fixture's
+connection (a second engine, a subprocess, an out-of-process server), and
+cross-connection commit visibility as the behaviour under test. In practice that
+is the e2e tier and MySQL/MariaDB DDL tests.
+
+Record the choice per tier with the measurement that justified it. The two
+mechanisms are **additive**: the categories above need a real database forever, so
+the per-test-database machinery below stays regardless.
 
 ### Fixture scope is the correctness knob
 

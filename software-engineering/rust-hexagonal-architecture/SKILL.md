@@ -4,7 +4,7 @@ description: Guidelines for structuring Rust business applications around a cent
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.4"
+  version: "0.0.5"
 ---
 
 # Hexagonal Architecture Skill
@@ -123,9 +123,13 @@ pub struct SqliteAuthorRepository {
 }
 
 impl SqliteAuthorRepository {
-    pub async fn new(database_url: &str) -> Result<Self, sqlx::Error> {
-        let pool = sqlx::SqlitePool::connect(database_url).await?;
-        Ok(Self { pool })
+    /// Takes the pool; it does not connect one. Resolving a URL into a pool is
+    /// the composition root's job (see `composition_pattern`), and injecting the
+    /// handle is also what lets a test supply a connection it controls — the seam
+    /// transaction-rollback test isolation needs. An adapter that connects
+    /// internally closes that door for the whole project.
+    pub const fn new(pool: sqlx::SqlitePool) -> Self {
+        Self { pool }
     }
 }
 

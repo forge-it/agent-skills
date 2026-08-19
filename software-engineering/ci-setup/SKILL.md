@@ -4,7 +4,7 @@ description: Use when bootstrapping CI for a new monorepo with Rust, Python, and
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.3"
+  version: "0.0.4"
 ---
 
 # CI Setup
@@ -43,7 +43,7 @@ Run this once. After the workflow exists and passes, you do not re-run the skill
 | Rust | `rust-clippy` | `cargo clippy --all-targets -- -D warnings` |
 | Rust | `rust-structure` | `cargo test --test structure` (hexagonal layering) |
 | Vue | `web-eslint` | `npm run lint` (feature-architecture boundary rules) |
-| Python | `python-lint` | `ruff format --check` + `ruff check` + `mypy` + `lint-imports` + `pytest tests/architecture` (conventions gate: gate coverage and the interpreter floor) |
+| Python | `python-lint` | `ruff format --check` + `ruff check` + `mypy` + `lint-imports` + `pytest src/tests/architecture` (conventions gate: gate coverage and the interpreter floor) |
 
 The structure gate (`rust-structure`) is documented in `rust-architecture-test-setup`.
 The ESLint boundary rules are documented in `frontend-vue-eslint-setup`.
@@ -233,7 +233,7 @@ jobs:
         # that every workspace member carries this gate, and that every member
         # declares requires-python at or above the greenfield floor — so the
         # floor is one constant in that library, never a version literal here.
-        run: uv run pytest tests/architecture
+        run: uv run pytest src/tests/architecture
 ```
 
 ## Dependency caching
@@ -363,7 +363,7 @@ Template for a new component job:
 | `rust-clippy` | push / PR | yes | `cargo clippy -- -D warnings` or `just clippy` |
 | `rust-structure` | push / PR | yes | `cargo test --test structure` or `just structure` |
 | `web-eslint` | push / PR | yes (error-level rules) | `npm run lint` or `just web-lint` |
-| `python-lint` | push / PR | yes | `ruff format --check . && ruff check . && mypy && lint-imports && pytest tests/architecture` |
+| `python-lint` | push / PR | yes | `ruff format --check . && ruff check . && mypy && lint-imports && pytest src/tests/architecture` |
 | integration tests | tag push (release) | yes (gates image build) | `just test-integration` with Docker stack |
 
 ## Cross-references
