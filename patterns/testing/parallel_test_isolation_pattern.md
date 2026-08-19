@@ -12,7 +12,7 @@ description: >-
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.8"
+  version: "0.0.9"
 ---
 
 # Parallel Test Isolation Pattern
@@ -647,6 +647,16 @@ function-scoped loop a session-scoped async fixture's loop is not the test's loo
 connection opened there is bound to a loop that is no longer running. Setting both
 defaults to the same scope removes the mismatch for every fixture at once.
 
+**And it is deliberate shared state — the one exception this pattern makes.** A
+session test loop is one loop for every test in the worker, with no per-test loop
+teardown to cancel what a test left behind. So it comes with two obligations: every
+test must leave no pending tasks (await or cancel what it starts, close what it
+opens), and no module-level object may cache the loop or a loop-bound handle. The
+alternative is worse — leaving the test loop function-scoped while a fixture is
+session-scoped re-creates the mismatch above for every async fixture. If your suite
+has no session-scoped *async* fixture, keep both at `function` and skip this
+entirely; the template-name fixture below is a plain `def` and needs no loop at all.
+
 (Left at pytest-asyncio's own defaults, the plugin is in **strict** mode, where an
 async fixture must use `@pytest_asyncio.fixture` and each scope must be declared per
 decorator. That is the form to recognise in an existing suite, not the one to write.)
@@ -688,7 +698,7 @@ runs the application in-process and no port is involved.
   **`<project>_test_<testrun_uid[:8]>_<worker_id>_<uuid7().hex>`** — for example
   `ironbox_test_fa03dd4e_gw0_019ff641d7e273a2aa86344998fb0771`, 58 characters. The prefix
   makes orphans findable
-  (`SELECT datname FROM pg_database WHERE datname LIKE '<project>_test_%'`), the run
+  (`SELECT datname FROM pg_database WHERE datname LIKE '<project>\_test\_%'` — `_` is a `LIKE` wildcard, so escape it or the pattern also matches `<project>Xtest…`), the run
   segment tells a sweep which names belong to a *live* run, and the time-ordered UUIDv7
   gives each name an age. Drop with `WITH (FORCE)` — a plain `DROP DATABASE` fails with
   `database … is being accessed by other users` whenever a leaked connection survives.

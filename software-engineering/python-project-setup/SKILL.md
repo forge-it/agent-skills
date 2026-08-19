@@ -4,7 +4,7 @@ description: Use when bootstrapping a NEW Python project or a new Python compone
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.4"
+  version: "0.0.5"
 ---
 
 # Python Project Setup
@@ -26,7 +26,9 @@ Everything else — command invocation, layering, which lint rules apply, what t
 tests look like — belongs to a skill listed at the bottom.
 
 Every behavioral claim below was reproduced against **uv 0.7.20, ruff 0.16.2,
-mypy 1.18.2**. Three are tool-version-bound and are the ones to re-check on an
+mypy 1.18.2**, and the two mypy claims re-verified on **mypy 2.3.1**, which is what
+this skill pins — a greenfield project has no reason to start a major version
+behind. Three claims are tool-version-bound and are the ones to re-check on an
 upgrade: ruff's `target-version` inference from `requires-python`, hatchling's
 wheel-inference failure on a name mismatch, and `[tool.uv] dev-dependencies`
 still being accepted as the legacy form.
@@ -169,13 +171,17 @@ dependencies = []
 [dependency-groups]
 dev = [
     "ruff==0.16.2",
-    "mypy==1.18.2",
+    "mypy==2.3.1",
     # Test tier. WHICH tools a project needs is `python-testing`'s call (and
     # `parallel_test_isolation_pattern`'s, for xdist and filelock); pinning them
     # here is this skill's, because this is the group and the `==` rule lives here.
     "pytest==9.1.1",
     "pytest-xdist==3.8.0",
     "pytest-asyncio==1.4.0",
+    # Needed by the once-per-run lock in parallel_test_isolation_pattern. NOT a
+    # transitive dependency of pytest-xdist (it ships only in xdist's `testing`
+    # extra), so without this line the documented FileLock import fails.
+    "filelock==3.20.0",
 ]
 
 [build-system]
@@ -204,7 +210,7 @@ and run `uv lock` to record the narrowed specifier:
 ```bash
 uv add --dev ruff mypy             # resolves them and records them in uv.lock
 grep -A1 '^name = "ruff"' uv.lock  # → version = "0.16.2"
-grep -A1 '^name = "mypy"' uv.lock  # → version = "1.18.2"
+grep -A1 '^name = "mypy"' uv.lock  # → version = "2.3.1"
 ```
 
 **Layout.** `pyproject.toml`, `.python-version`, the committed `uv.lock`, and

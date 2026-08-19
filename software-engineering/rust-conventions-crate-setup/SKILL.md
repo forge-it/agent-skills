@@ -5,7 +5,7 @@ vibe: Turns house conventions into a library the build runs, one gate per crate.
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.1"
+  version: "0.0.2"
 ---
 
 # Rust Conventions Crate Setup
@@ -396,17 +396,20 @@ Give the task runner one recipe (see `justfile-setup`) and have **CI call the
 recipe** rather than re-listing crates, so the local command and the gating
 command cannot diverge.
 
-If `rust-architecture-test-setup` already installed a single-crate `structure`
-recipe, **replace** it — `just` hard-errors on a redefined recipe name:
+The gate belongs in the component's existing `core-check` recipe, not a recipe of
+its own — `justfile-setup` owns the `<component>-check` naming, and a separate
+`structure` recipe would be a second place the command lives:
 
 ```just
-# justfile
-structure:
-    cargo test --workspace --test structure
+core-check:
+    cargo fmt --all -- --check
+    cargo clippy --all-targets --all-features -- -D warnings
+    cargo test --workspace --test structure   # <- workspace-wide, not one crate
 ```
 
-`ci-setup`'s Rust job runs `cargo test --test structure` for one crate; change
-that step to invoke the recipe, or the gate covers only the crate it names.
+If `rust-architecture-test-setup` already added a single-crate invocation, widen it
+to `--workspace` in place. `ci-setup`'s Rust job invokes `just core-check`, so no CI
+edit is needed — that is the point of routing CI through the runner.
 
 Never hand-enumerate crates in CI (`cargo test -p a --test structure`,
 `cargo test -p b --test structure`, …). Every member added later is then
