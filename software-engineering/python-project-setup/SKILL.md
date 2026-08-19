@@ -4,7 +4,7 @@ description: Use when bootstrapping a NEW Python project or a new Python compone
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.2"
+  version: "0.0.3"
 ---
 
 # Python Project Setup
@@ -146,11 +146,11 @@ Picking the wrong one turns a reproducibility check into a no-op.
 **CI must run `uv sync --locked`**, so a developer who edits
 `[project.dependencies]` without running `uv lock` gets a failing build instead
 of a job that quietly re-resolves and installs something no one reviewed.
-`ci-setup`'s Python job is a commented-out template: when you enable it, install
-with `uv sync --locked` and take the interpreter from `.python-version` — never
-`pip install -e ".[dev]"` (dev tooling is not an extra, and `pip` does not belong
-in a uv project), and never a hardcoded `python-version:`, which makes the
-interpreter a property of the workflow file and defeats the pin.
+`ci-setup`'s Python job installs with `uv sync --locked` and takes the
+interpreter from `.python-version` — never `pip install -e ".[dev]"`, since dev
+tooling is not an extra and pip writes into an environment the lockfile is meant
+to describe, and never a hardcoded `python-version:`, which makes the interpreter
+a property of the workflow instead of the repository.
 
 ---
 

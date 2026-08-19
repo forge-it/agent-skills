@@ -17,7 +17,7 @@ description: >-
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.5"
+  version: "0.0.6"
 ---
 
 # Python Convention Enforcement Pattern
@@ -282,19 +282,14 @@ gates. Two layers, and the split is the whole design: `_machinery.py` holds
 The per-package gate is a one-liner, identical in every member:
 
 ```python
-# services/api/tests/architecture/test_conventions.py
+# services/api/src/tests/architecture/test_conventions.py
 from ironbox_conventions import (
-    members_carry_convention_gates,
     module_filenames_follow_canonical_pattern,
     modules_contain_only_tests,
     package_root,
     pytest_references_use_canonical_names,
     requires_python_meets_baseline,
 )
-
-
-def test_members_carry_convention_gates():
-    members_carry_convention_gates().enforce(package_root(__file__))
 
 
 def test_requires_python_meets_baseline():
@@ -313,10 +308,23 @@ def test_pytest_references_use_canonical_names():
     pytest_references_use_canonical_names().enforce(package_root(__file__))
 ```
 
+The conventions package's **own** gate is that same file plus one line — it is
+where the workspace-scoped coverage rule lives, and it dogfoods every other rule
+against itself:
+
+```python
+# packages/ironbox-conventions/src/tests/architecture/test_conventions.py
+# ... the same four tests as above, plus:
+
+
+def test_members_carry_convention_gates():
+    members_carry_convention_gates().enforce(package_root(__file__))
+```
+
 Four properties of this shape are load-bearing:
 
 - **No separate test target.** Plain `pytest` in that package collects
-  `tests/architecture/` automatically, so the gate rides along on every local
+  `src/tests/architecture/` automatically, so the gate rides along on every local
   run — the fastest possible feedback for zero configuration. (It is also why
   the runner must `cd` into the member; see the `--package` trap.)
 - **No public name in the conventions package may begin with `test`.** pytest's
@@ -915,7 +923,9 @@ from ._machinery import (
     locked_member_directories,
 )
 
-CONVENTION_GATE_RELATIVE_PATH = Path("tests") / "architecture" / "test_conventions.py"
+CONVENTION_GATE_RELATIVE_PATH = (
+    Path("src") / "tests" / "architecture" / "test_conventions.py"
+)
 MINIMUM_PYTHON_VERSION = (3, 14)
 
 
@@ -1011,20 +1021,24 @@ read the manifest — so glob expansion would also be correct here today. The
 lockfile wins only because asking a tool for its own answer survives that tool
 changing its rules.
 
-**Every gate calls it with `package_root(__file__)`**, like every other rule; the
-rule walks up to `uv.lock` itself. Do not expose a workspace-root helper for it:
-two identically-shaped `*_root(__file__)` calls in one gate file are one
-copy-paste from handing a *per-package* rule the workspace root, where it scans
-`<workspace>/tests/**`, never sees the member's violating file, and passes
-vacuously — and this rule's own remediation creates `<workspace>/tests/` in the
-`editable = "."` topology. Deriving the root internally costs report precision:
-the violation's path is the *reporting* member's gate, so an editor jump lands on
-that file rather than the missing one, and the message names the absent sibling
-instead. Every member reports the same finding, so each already owns "the
-workspace is incomplete"; the standing cost is a TOML parse per member and one
-failure reported N times. Its limit: it asserts the gate *file* exists, not that
-the file calls every rule — a residue that stays a visible diff, and the reason
-staged adoption below is legal.
+**Host this one rule in the conventions package's own gate, not in every
+member's.** Its subject is the workspace, not a package tree, so calling it from
+every member reports one finding N times and — worse — makes a *member's* suite
+fail for a sibling's omission, which is the cross-member attribution the
+central-scanner anti-pattern below exists to forbid. The conventions package
+exists exactly once and every member already depends on it, so hosting it there
+costs no locality and creates no load-bearing member. This matches the Rust
+sibling, which hosts its coverage rule once for the same reason.
+
+It still takes `package_root(__file__)` like every other rule and walks up to
+`uv.lock` itself. Do not expose a workspace-root helper for it: two
+identically-shaped `*_root(__file__)` calls in one gate file are one copy-paste
+from handing a *per-package* rule the workspace root, where it scans the wrong
+tree, never sees the member's violating file, and passes vacuously.
+
+Its limit: it asserts the gate *file* exists, not that the file calls every rule
+— a residue that stays a visible diff, and the reason staged adoption below is
+legal.
 
 **The rule needs the whole workspace tree on disk in every member's run.** A
 narrowed per-member CI checkout or Docker context reports a correct lockfile as
@@ -1097,7 +1111,9 @@ def test_flags_member_without_gate(tmp_path: Path) -> None:
     ):
         (tmp_path / member_relative_path).mkdir(parents=True)
     for gated_relative_path in (".", "packages/alpha"):
-        gate_directory = tmp_path / gated_relative_path / "tests" / "architecture"
+        gate_directory = (
+            tmp_path / gated_relative_path / "src" / "tests" / "architecture"
+        )
         gate_directory.mkdir(parents=True)
         (gate_directory / "test_conventions.py").write_text("")
     with pytest.raises(AssertionError, match="packages/gamma"):
@@ -1253,11 +1269,12 @@ Pin it at `0.1.0`, never touch it, and let the lockfile be the contract.
    `[dependency-groups] dev = [..., "<project>-conventions"]` plus
    `[tool.uv.sources] <project>-conventions = { workspace = true }`.
 6. **Add the identical gate file** to every member under
-   `tests/architecture/test_conventions.py` — including the conventions package
-   itself, so it dogfoods — and have every one of them call the step-3 coverage
-   rule, so the instruction is enforced rather than remembered. A member added a
-   year later with no gate then fails every existing member's suite instead of
-   passing unnoticed.
+   `src/tests/architecture/test_conventions.py` — including the conventions
+   package itself, so it dogfoods. The conventions package's copy gets one extra
+   test calling the step-3 **coverage rule**, which is where that rule lives: a
+   member added a year later with no gate then fails the conventions package's
+   suite instead of passing unnoticed, and no member's suite fails for a
+   sibling's omission.
 7. **Wire the runner and CI per member**: `cd <member> && uv run pytest`, one
    recipe and one CI job each, so a violation fails that member's own run.
    Never a single job that scans everything, and never `uv run --package X
@@ -1296,9 +1313,10 @@ the gap it closes.
    meaning "clean".
 5. **A package that cannot be cleaned this cycle keeps its gate file and visibly
    omits the offending rule's call**, with a tracking note. The file is not
-   optional — `members_carry_convention_gates()` requires it, and it calls that
-   rule from day one — so adoption is staged one *call* at a time inside a gate
-   that already exists. Never a silent exemption, never a deleted gate file.
+   optional — `members_carry_convention_gates()`, hosted in the conventions
+   package's own gate, requires every member to have one — so adoption is staged
+   one *call* at a time inside a gate that already exists. Never a silent
+   exemption, never a deleted gate file.
 6. **Expect the rule to find more than you predicted.** That number *is* the
    argument for mechanising it.
 

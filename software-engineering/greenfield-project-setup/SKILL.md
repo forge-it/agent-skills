@@ -14,7 +14,7 @@ description: >-
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.6"
+  version: "0.0.7"
 ---
 
 # Greenfield Project Setup (Orchestrator)
@@ -72,9 +72,9 @@ name; *pattern* = read the doc), and the gate that proves it is live.
 | 0 | Stack + repo init | — | monorepo dirs (`core/` rust, `web/` vue, `worker/`, `crates/`, or a python package / uv workspace root) + `git` initialized |
 | 1 | Workspace + toolchain | rust: SKILL `rust-workspace-setup` + `rust-project-setup`; python: SKILL `python-project-setup` (a multi-package repo also *reads* conventions/`python` — its greenfield recipe, not this skill, owns creating the uv workspace root) | `cargo build` succeeds / `uv sync` succeeds **and the package actually imports** — `uv sync` exits 0 on a `src/` layout with no `[build-system]`, so it alone proves nothing |
 | 2 | Component skeletons | SKILL `rust-hexagonal-architecture` + `rust-project-structure` / `python-ddd` / `frontend-vue-development` | each component compiles |
-| 3 | Architecture invariant gates | rust workspace: *read* `rust-architecture-test-setup` (catalogue only) → SKILL `rust-conventions-crate-setup`; rust single crate: SKILL `rust-architecture-test-setup`; python: SKILL `python-import-linter-setup` + *read* conventions/`python` for the conventions package; vue: SKILL `frontend-vue-eslint-setup` | the gate **passes clean AND fails on a planted violation** — the member-local gate fails in the owning component and no other; every member has a gate. Python's `lint-imports` half is one root-level contract set, so its findings are *not* member-local |
+| 3 | Architecture invariant gates | rust workspace: *read* `rust-architecture-test-setup` (catalogue only) → SKILL `rust-conventions-crate-setup`; rust single crate: SKILL `rust-architecture-test-setup`; python: SKILL `python-import-linter-setup` + *read* conventions/`python` for the conventions package; vue: SKILL `frontend-vue-eslint-setup` | the gate **passes clean AND fails on a planted violation** — the member-local gate fails in the owning component and no other; every member has a gate, proven by the workspace-scoped coverage rule |
 | 4 | Backend wiring + lifecycle | *composition_pattern* → *bootstrap_pattern* → *runtime_pattern* | app boots; workers drain on SIGTERM |
-| 5 | Task runner | SKILL `justfile-setup` | `just` recipes (dev / local-prod / prod / lint / test-all) run, **plus one recipe per gate family** — on a Rust workspace `cargo test --workspace --test structure`; on a Python repo `uv run lint-imports` plus a per-member `cd <member> && uv run pytest` (never `uv run --package X pytest` from the root — it aborts collection) |
+| 5 | Task runner | SKILL `justfile-setup` | `just` recipes (dev / local-prod / prod / lint / test-all) run, **plus one recipe per gate family** — on a Rust workspace `cargo test --workspace --test structure`; on a Python repo a per-member `cd <member> && uv run lint-imports` plus `cd <member> && uv run pytest` (never `uv run --package X pytest` from the root — it aborts collection) |
 | 6 | Local infra + parallel test isolation | *local_port_allocation_pattern* + *parallel_test_isolation_pattern* | integration tests pass **in parallel**, no collisions |
 | 7 | Scalability (opt-in, default-on for SaaS) | *worker_pattern* + *worker_fleet_pattern* + the shared task-contracts package — rust: a workspace crate (`rust-workspace-setup`); python: a uv workspace member (see *worker_pattern*'s Python mapping) | worker boots and consumes a test task |
 | 8 | Day-1 cross-cutting decisions (ADRs) | *observability_posture_pattern*; *frontend_api_type_mirroring_pattern* (if vue+backend); *worker_fleet_pattern* topology + identity ADRs (if worker); port allocation (phase 6); the test-isolation strategy — and on Rust, whether repositories own a pool or take an executor, since that decides whether rollback isolation is ever available (phase 6); the convention-enforcement policy and its permission protocol (phase 3); the task-runner growth mechanism (`import`, never `mod`) | each decision recorded as an ADR in `docs/decisions/` |
@@ -101,48 +101,27 @@ its siblings, or the scanner copied per crate — both refactors later.
 
 ### Phase 3 on a Python monorepo has the same two sub-steps
 
-**Invoke** `python-import-linter-setup` for the layer and boundary contracts —
-what Python cannot enforce by construction. Then **read** conventions/`python` and
-install the conventions package it specifies. Same ordering as Rust, different
-mechanics.
-
-One asymmetry to know going in: `lint-imports` runs one root-level contract set,
-so unlike the conventions gate its findings are not member-local — do not expect
-the "fails in the owning component and no other" half of the phase gate from it.
-Gate *coverage*, by contrast, is mechanized on both stacks: each conventions
-library carries a **coverage rule** that fails when a member owns no gate. The
-Python one reads `[manifest] members` from `uv.lock` — uv's own list, never
-inferred from source kinds, since an out-of-glob path dependency with
-`[tool.uv] package = false` also locks as `virtual`.
+Same ordering as Rust: invoke the gate skill, then install the conventions
+package the pattern specifies. One carve-out for the phase gate — each conventions
+library's **coverage rule** is workspace-scoped and hosted once, so a missing
+member gate fails the conventions library's own suite rather than the offending
+member's.
 
 Note the phase boundary: phase 3 **installs** the gates; phases 5 and 10 are what
 make them **reachable**. The task-runner recipe and the CI step belong there, not
 here.
 
-### Phase 6: the isolation strategy is a per-language decision, not one rule
+### Phase 6: choose the isolation strategy, and record it
 
-Both stacks give every test a private world; *how* differs, and the difference is
-a language fact rather than a preference.
+Every test owns a private world either way; *which mechanism is available* depends
+on whether your persistence layer lets the caller supply the connection its
+repositories and unit of work use. That is a property of the design, not of the
+language. **`parallel_test_isolation_pattern` owns the decision rule, the
+categories that need a real per-test database, and the measurements** — do not
+re-derive any of them here.
 
-**Python** can afford transaction-rollback isolation as its default — roughly
-1 ms per test against 80–195 ms for a database — because a SQLAlchemy session
-bound to an external connection is already the shape the UoW uses. Reserve a
-real per-test database for the cases rollback cannot serve: DDL under test on
-MySQL/MariaDB, code that opens its own connection, and anything asserting
-cross-connection commit visibility.
-
-**Rust keeps the per-test database** and should *not* reach for rollback. Getting
-a test-controlled executor to the repositories means either an sqlx type in a
-domain port — which the phase-3 gate rejects, since it enforces a framework-free
-domain — or a unit-of-work holding a `Transaction` across await points, which
-fights the borrow checker. Instead make the database cheap: migrate and seed a
-template once per test binary and `CREATE DATABASE … TEMPLATE` per test.
-
-Decide the Rust repository seam here even if you keep pool-owning repositories,
-and record it in phase 8. Pool-owning is a fine choice — but it makes the per-test
-database your permanent isolation strategy, and retrofitting the seam later means
-touching every repository (in one real codebase, 61 files). That is exactly the
-kind of decision this skill exists to make deliberately rather than by drift.
+Make the seam decision before the second adapter exists, since retrofitting it
+means touching every repository, and record it as a phase-8 ADR.
 
 ### Why this order
 
@@ -184,7 +163,7 @@ The foundation is live only when **all** of these pass together:
 - [ ] every workspace member owns a gate, proven by the conventions library's coverage rule on both stacks — note `cargo test --workspace --test structure` passes when a gate is missing, so it proves nothing here, and both rules assert the gate *file* exists, not that it calls every rule
 - [ ] every gate is reachable from the task runner, and CI invokes the runner instead of a hand-listed crate/member set
 - [ ] every convention rule has a `should_flag`/`should_pass` fixture pair, and they actually run
-- [ ] no gate test is disabled or landed red — `grep -rn '#\[ignore' --include='*.rs' .` returns nothing, and `grep -rn '\(@pytest\.mark\|pytestmark = pytest\.mark\)\.\(skip\|xfail\)' --include='*.py' */tests/architecture` returns nothing (scoped to gate directories: a `skipif` in an ordinary suite is legitimate, so a repo-wide grep here only teaches you to wave the check through)
+- [ ] no gate test is disabled or landed red — `grep -rn '#\[ignore' --include='*.rs' .` returns nothing, and `grep -rn '\(@pytest\.mark\|pytestmark = pytest\.mark\)\.\(skip\|xfail\)' --include='*.py' $(git ls-files '*src/tests/architecture/*.py')` returns nothing (scoped to gate directories: a `skipif` in an ordinary suite is legitimate, so a repo-wide grep here only teaches you to wave the check through)
 - [ ] every `GRANTED_*` permission ledger is still empty — `grep -rn 'GRANTED_' --include='*.rs' .` shows only empty collections
 - [ ] `rustfmt --check`, `clippy -D warnings`, `ruff check`, `ruff format --check`, type checks clean
 - [ ] unit + integration tests pass **in parallel** (isolation works)
