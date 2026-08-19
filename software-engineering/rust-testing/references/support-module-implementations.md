@@ -11,6 +11,50 @@ This file contains the complete reference implementations for `tests/common/` an
 use ctor::ctor;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
+use tokio::sync::OnceCell;
+
+/// The migrated, seeded template every test database is cloned from.
+///
+/// Built once per **test binary**, which is what `cargo test` gives us: a
+/// binary's tests are threads in one process, so a `OnceCell` needs no file
+/// lock. Note every file directly under `tests/` is its own binary with its own
+/// statics, so a suite split across several integration-test files builds one
+/// template per file.
+static TEMPLATE_DATABASE: OnceCell<String> = OnceCell::const_new();
+
+async fn template_database_name() -> &'static str {
+    TEMPLATE_DATABASE
+        .get_or_init(|| async {
+            let template_name = format!("myproject_tmpl_{}", uuid::Uuid::now_v7().simple());
+            let admin_pool = PgPoolOptions::new()
+                .connect(&admin_database_url())
+                .await
+                .unwrap();
+            sqlx::query(&format!(r#"CREATE DATABASE "{template_name}""#))
+                .execute(&admin_pool)
+                .await
+                .unwrap();
+            admin_pool.close().await;
+
+            let template_pool = PgPoolOptions::new()
+                .max_connections(1)
+                .connect(&test_database_url(&template_name))
+                .await
+                .unwrap();
+            sqlx::migrate!().run(&template_pool).await.unwrap();
+            // Seed static reference data HERE, once — not in every test.
+            // ReferenceDataSeeder::new(template_pool.clone()).seed().await.unwrap();
+
+            // Load-bearing: PostgreSQL refuses to copy a template that another
+            // session is connected to — `source database "..." is being accessed
+            // by other users`, SQLSTATE 55006.
+            template_pool.close().await;
+
+            template_name
+        })
+        .await
+        .as_str()
+}
 
 #[ctor]
 fn start_docker_stack() {
@@ -33,16 +77,19 @@ impl TestDatabase {
             .connect(&admin_database_url())
             .await
             .unwrap();
-        sqlx::query(&format!(r#"CREATE DATABASE "{name}""#))
-            .execute(&admin_pool)
-            .await
-            .unwrap();
+        // Clone the template: no migrations, no seeding, per test.
+        let template_name = template_database_name().await;
+        sqlx::query(&format!(
+            r#"CREATE DATABASE "{name}" TEMPLATE "{template_name}""#
+        ))
+        .execute(&admin_pool)
+        .await
+        .unwrap();
 
         let pool = PgPoolOptions::new()
             .connect(&test_database_url(&name))
             .await
             .unwrap();
-        sqlx::migrate!().run(&pool).await.unwrap();
 
         Self { pool, name }
     }

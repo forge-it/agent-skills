@@ -4,7 +4,7 @@ description: Guidelines for writing effective Rust tests. Use when writing or mo
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.1.0"
+  version: "0.1.1"
 ---
 
 # Rust Testing Skill
@@ -661,7 +661,14 @@ pub mod constants;
 
 **infra.rs — shared stack + per-test database.** The Docker stack (compose file with env-substitutable host ports) starts once per test binary via `#[ctor]`; each test then creates its own uniquely named database (Section 17).
 
-If the project has static reference data, seed it in `TestDatabase::new()` right after the migrations run. For simple sqlx projects, `#[sqlx::test]` provides managed per-test databases out of the box; the `TestDatabase` pattern is preferred because it also controls naming, seeding, and teardown.
+**Migrate and seed a template once, then clone it per test — never migrate per test.** `TestDatabase::new()` should do exactly one thing: `CREATE DATABASE "<unique>" TEMPLATE "<template>"`. Build the migrated-and-seeded template behind a `tokio::sync::OnceCell`, which is sufficient because `cargo test` runs a binary's tests as threads in one process — no file lock needed. Two details that bite:
+
+- **Close the template's pool before cloning from it.** PostgreSQL refuses to copy a template another session is connected to: `source database "…" is being accessed by other users`, SQLSTATE **55006**.
+- **Every file directly under `tests/` is its own binary** with its own statics, so a suite split across several integration-test files builds one template per file. Consolidate the database-backed tests into one target if you want literally one.
+
+The saving is proportional to what your migrations do, since both paths pay the same connect plus `CREATE`/`DROP` cost: measured ~3× (292 ms → 99 ms) against a 7-file, ~100 KB migration set, but only ~24% against a 2-file toy schema. Name the template per run (`<project>_tmpl_<uuidv7>`) so an operator sweep can distinguish it from the `<project>_test_%` clones, and drop it there rather than inside a test.
+
+For simple sqlx projects, `#[sqlx::test]` provides managed per-test databases out of the box; the `TestDatabase` pattern is preferred because it also controls naming, seeding, templating, and teardown.
 
 **Usage in tests** — one `super` per directory level between the test file and the category root; cross-category helpers come from `crate::common`.
 
