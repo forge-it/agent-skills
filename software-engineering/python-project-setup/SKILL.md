@@ -4,7 +4,7 @@ description: Use when bootstrapping a NEW Python project or a new Python compone
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.3"
+  version: "0.0.4"
 ---
 
 # Python Project Setup
@@ -170,6 +170,12 @@ dependencies = []
 dev = [
     "ruff==0.16.2",
     "mypy==1.18.2",
+    # Test tier. WHICH tools a project needs is `python-testing`'s call (and
+    # `parallel_test_isolation_pattern`'s, for xdist and filelock); pinning them
+    # here is this skill's, because this is the group and the `==` rule lives here.
+    "pytest==9.1.1",
+    "pytest-xdist==3.8.0",
+    "pytest-asyncio==1.4.0",
 ]
 
 [build-system]

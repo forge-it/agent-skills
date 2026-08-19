@@ -4,7 +4,7 @@ description: Use when bootstrapping a new monorepo that mixes Rust, Python, and/
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.3"
+  version: "0.0.4"
 ---
 
 # Justfile Setup
@@ -72,6 +72,7 @@ spans two categories, break it into two recipes and have the outer one call both
 | **Format** | Apply auto-formatting | `fmt`, `fmt-rust`, `fmt-web`, `fmt-python` |
 | **Local-prod deploy** | Build + run via Docker Compose with a prod-like config | `local-deploy-up`, `local-deploy-down`, `local-<component>-deploy-up/down` |
 | **Production build** | Build the final Docker image for shipping | `prod-<component>-build` |
+| **Test-resource reclaim** | Drop leaked per-test databases and templates, on demand | `db-sweep` |
 | **Utilities** | One-off helpers (key generation, client installs, etc.) | freeform names |
 
 ### Naming rules
@@ -240,14 +241,19 @@ web-check:
 
 # [python] Run ruff + mypy + import-linter — run before every commit
 service-check:
+  cd service && uv run ruff format --check .
   cd service && uv run ruff check .
   cd service && uv run mypy
   cd service && uv run lint-imports
+  cd service && uv run pytest src/tests/architecture
 
 # [rust] cargo clippy + fmt-check — run before every commit
+# Ordered cheapest-first: a formatting slip reports in seconds instead of after a
+# full compile. CI invokes this recipe as-is, so the ordering benefits both.
 core-check:
-  cargo clippy -p <core-crate-name> -- -D warnings
   cargo fmt -p <core-crate-name> -- --check
+  cargo clippy -p <core-crate-name> -- -D warnings
+  cargo test --workspace --test structure
 
 # ── Tests ────────────────────────────────────────────────────────────────────
 
@@ -294,6 +300,24 @@ fmt-web:
   npm --prefix web run format
 
 # [python] ruff format
+# Reclaim leaked test databases and templates. Deliberately an explicit operator
+# command, never an automatic start-of-session step: a prefix sweep cannot tell a
+# leaked database from a concurrent run's live one, so running it automatically
+# would drop another worktree's databases mid-run. Per-test clones and templates
+# are separate steps so a live run's template is not taken out from under it.
+db-sweep:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  : "${DATABASE_ADMIN_URL:?set DATABASE_ADMIN_URL (see service/.env)}"
+  for prefix in '<project>_test_%' '<project>_tmpl_%'; do
+    psql "$DATABASE_ADMIN_URL" -At \
+      -c "SELECT datname FROM pg_database WHERE datname LIKE '$prefix'" \
+    | while read -r leaked; do
+        echo "dropping $leaked"
+        psql "$DATABASE_ADMIN_URL" -c "DROP DATABASE \"$leaked\" WITH (FORCE)"
+      done
+  done
+
 fmt-python:
   cd service && uv run ruff format .
 

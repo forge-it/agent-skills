@@ -4,7 +4,7 @@ description: Use when bootstrapping CI for a new monorepo with Rust, Python, and
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.4"
+  version: "0.0.5"
 ---
 
 # CI Setup
@@ -39,13 +39,19 @@ Run this once. After the workflow exists and passes, you do not re-run the skill
 
 | Component | Job | Gates enforced |
 |-----------|-----|----------------|
-| Rust | `rust-fmt` | `cargo fmt --all -- --check` |
-| Rust | `rust-clippy` | `cargo clippy --all-targets -- -D warnings` |
-| Rust | `rust-structure` | `cargo test --test structure` (hexagonal layering) |
-| Vue | `web-eslint` | `npm run lint` (feature-architecture boundary rules) |
-| Python | `python-lint` | `ruff format --check` + `ruff check` + `mypy` + `lint-imports` + `pytest src/tests/architecture` (conventions gate: gate coverage and the interpreter floor) |
+| Rust | `rust-check` | `just core-check` → clippy `-D warnings`, `fmt --check`, and `cargo test --workspace --test structure` (hexagonal layering) |
+| Vue | `web-check` | `just web-check` → ESLint feature-architecture boundaries, format check, `vue-tsc` |
+| Python | `python-check` | `just service-check` → `ruff format --check`, `ruff check`, `mypy`, `lint-imports`, and `pytest src/tests/architecture` (conventions gate: gate coverage and the interpreter floor) |
 
-The structure gate (`rust-structure`) is documented in `rust-architecture-test-setup`.
+**Every job invokes a `just` recipe, never a raw command.** That is the whole
+anti-drift mechanism: a gate can only be added, changed, or weakened in the
+recipe, where the developer running it locally sees the same change. A CI file
+that re-spells the commands is a second source of truth, and the two diverge
+silently — which is the failure this skill exists to prevent. One job per
+*component*, not per gate: a Rust formatting failure still cannot cancel the Vue
+job, while a finer per-gate split would put the gate list back in this file.
+
+The structure gate is documented in `rust-architecture-test-setup`.
 The ESLint boundary rules are documented in `frontend-vue-eslint-setup`.
 The import-linter contracts are documented in `python-import-linter-setup`.
 
@@ -73,8 +79,8 @@ jobs:
 
   # ── Rust ──────────────────────────────────────────────────────────────────
 
-  rust-fmt:
-    name: rustfmt
+  rust-check:
+    name: rust check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -88,27 +94,7 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ steps.rust-toolchain.outputs.channel }}
-          components: rustfmt
-
-      - name: Check workspace formatting
-        run: cargo fmt --all -- --check
-
-  rust-clippy:
-    name: clippy
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Extract Rust toolchain version
-        id: rust-toolchain
-        run: echo "channel=$(grep 'channel' rust-toolchain.toml | sed 's/.*\"\(.*\)\".*/\1/')" >> "$GITHUB_OUTPUT"
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ steps.rust-toolchain.outputs.channel }}
-          components: clippy
+          components: rustfmt, clippy
 
       - name: Cache Rust artifacts
         uses: actions/cache@v4
@@ -118,55 +104,26 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             target/
-          key: ${{ runner.os }}-clippy-${{ hashFiles('Cargo.lock') }}
+          key: ${{ runner.os }}-check-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-clippy-
+            ${{ runner.os }}-check-
 
-      - name: Run Clippy (deny warnings)
-        run: cargo clippy --all-targets --all-features -- -D warnings
-
-  rust-structure:
-    name: architecture (structure gate)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Extract Rust toolchain version
-        id: rust-toolchain
-        run: echo "channel=$(grep 'channel' rust-toolchain.toml | sed 's/.*\"\(.*\)\".*/\1/')" >> "$GITHUB_OUTPUT"
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@master
+      - name: Install just
+        uses: taiki-e/install-action@v2
         with:
-          toolchain: ${{ steps.rust-toolchain.outputs.channel }}
+          tool: just
 
-      - name: Cache Rust artifacts
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-structure-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-structure-
-
-      - name: Enforce hexagonal layering (tests/structure gate)
-        # Hermetic: scans the source tree only — no database, no network.
-        # Asserts inward-only layer dependencies, framework-free domain, and
-        # file-naming conventions. Installed by rust-architecture-test-setup.
-        run: cargo test --test structure
+      - name: Quality gate
+        # Exactly what a developer runs locally. clippy -D warnings, fmt --check,
+        # and the hexagonal structure gate all live in the recipe, so CI cannot
+        # drift from the local command by editing this file.
+        run: just core-check
 
   # ── Vue ───────────────────────────────────────────────────────────────────
 
-  web-eslint:
-    name: web eslint
+  web-check:
+    name: web check
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: web
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -179,22 +136,22 @@ jobs:
           cache-dependency-path: web/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --prefix web
 
-      - name: Lint (ESLint feature-architecture boundaries)
-        # Enforces the feature-architecture boundary rules installed by
-        # frontend-vue-eslint-setup. Rules at "error" level block the build;
-        # rules at "warn" are advisory until flipped to "error" after cleanup.
-        run: npm run lint
+      - name: Install just
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
+
+      - name: Quality gate
+        # ESLint feature-architecture boundaries, prettier check, vue-tsc.
+        run: just web-check
 
   # ── Python ────────────────────────────────────────────────────────────────
 
-  python-lint:
-    name: python lint
+  python-check:
+    name: python check
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: service
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -213,27 +170,17 @@ jobs:
         # Never `pip install -e ".[dev]"`: dev tooling is not an extra, and pip
         # writes into an environment the lockfile is meant to describe.
         # See python-project-setup.
-        run: uv sync --locked
+        run: cd service && uv sync --locked
 
-      - name: Format and lint (ruff)
-        run: uv run ruff format --check . && uv run ruff check .
+      - name: Install just
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
 
-      - name: Type check (mypy)
-        # No path argument: `[tool.mypy] files` in pyproject.toml owns the scope,
-        # and an explicit path silently overrides it. See python-project-setup.
-        run: uv run mypy
-
-      - name: Enforce DDD layering (import-linter contracts)
-        # Installed by python-import-linter-setup. Exits non-zero on any breach,
-        # including transitive ones a per-file scan cannot see.
-        run: uv run lint-imports
-
-      - name: Enforce conventions (architecture gate)
-        # The conventions package from patterns/conventions/python.md. Asserts
-        # that every workspace member carries this gate, and that every member
-        # declares requires-python at or above the greenfield floor — so the
-        # floor is one constant in that library, never a version literal here.
-        run: uv run pytest src/tests/architecture
+      - name: Quality gate
+        # ruff format --check, ruff check, mypy (no path — the manifest owns the
+        # scope), lint-imports, and the conventions gate.
+        run: just service-check
 ```
 
 ## Dependency caching
@@ -264,15 +211,14 @@ option and the `cache-dependency-path` pointing at `web/package-lock.json`.
 Each component type owns exactly the jobs it needs and no others. This is
 separation of concerns applied to the pipeline:
 
-- `rust-fmt` runs in seconds with no compilation — it does not need the cargo
-  cache. Splitting it from `rust-clippy` means a trivial formatting failure
-  reports immediately without waiting for a full compile.
-- `rust-clippy` and `rust-structure` each carry their own cache key so they can
-  run in parallel without key collision. The structure gate is hermetic (source
-  scan only, no external services) and therefore fast enough to always run on
-  every push.
-- `web-eslint` is completely independent of Rust. A Vue boundary violation does
-  not interfere with Rust job status — reviewers see the exact failure domain.
+- One job per **component**, so a Rust failure never cancels the Vue job and
+  reviewers see the exact failure domain.
+- Not one job per **gate**. A finer split would have to name each gate here, which
+  is precisely the second source of truth this skill exists to remove. The cost of
+  collapsing is coarser attribution *within* a component; the recipe mitigates it
+  by running cheapest-first, so a formatting slip still reports before the compile.
+- Each job carries a single cache key, since there is now one Rust job rather than
+  three racing to write the same key.
 
 ## Integration tests and the local Docker stack
 
@@ -300,11 +246,14 @@ The release pipeline (triggered on `v*` tag pushes) builds and pushes Docker
 images to a registry after the tests pass. That is a separate workflow file with
 its own concerns — CI and release have no shared jobs.
 
-## Pairing with just recipes
+## Invoking just recipes (the anti-drift mechanism)
 
-If the project uses `just` (see `justfile-setup`), the CI jobs should invoke the
-same recipes that developers run locally. This keeps the local and CI experiences
-identical:
+CI invokes `just` recipes, not raw commands — this is not an optional pairing but
+the reason the workflow can be trusted. A gate can then only be added, changed, or
+weakened in the recipe, where the developer running it locally sees the same
+change. If a project has no task runner, install one (`justfile-setup`) before
+wiring CI; a workflow that re-spells the commands is a second source of truth and
+the two diverge silently.
 
 ```yaml
 - name: Run Clippy (deny warnings)
@@ -348,33 +297,32 @@ Template for a new component job:
 | Mistake | Why it is a problem | Fix |
 |---------|---------------------|-----|
 | One monolithic `test` job for all components | A single Vue lint failure cancels all Rust jobs; reviewers cannot tell which component broke | One job per component per concern |
-| Sharing a single cargo cache key across jobs | Parallel jobs race to write the same key; one job's cached artifacts corrupt another's | Scope each key to the job (`-clippy-`, `-structure-`) |
+| Sharing one cargo cache key across several Rust jobs | Parallel jobs race to write the same key; one job's cached artifacts corrupt another's | One Rust job, one key — or scope the key per job if you do split |
 | Running integration tests in the same job as static analysis | Static-analysis jobs must not require external services; they become flaky when the Docker stack is slow | Separate jobs; gate integration tests behind a feature flag |
 | Treating lint warnings as non-blocking | Warnings accumulate; once there are hundreds, no one fixes them | Set `lint` rules to `error` at the ESLint level and `-D warnings` in Clippy |
 | Hardcoding the Rust toolchain version | The CI toolchain diverges from `rust-toolchain.toml`; different results locally vs. CI | Read the channel from `rust-toolchain.toml` at runtime (see template) |
 | Installing architecture gates locally but not in CI | The gates are advisory — developers learn to ignore them | Every gate that runs locally must also run in CI with a non-zero exit on failure |
-| Putting `cargo fmt --check` inside the clippy job | Formatting failures are instantaneous; combining them delays the fast feedback | Separate `rust-fmt` and `rust-clippy` jobs |
+| Re-spelling gate commands in the workflow instead of invoking a recipe | The workflow becomes a second source of truth; a gate added locally is silently absent in CI, or weakened in CI without touching the recipe | Every job runs `just <component>-check`; the gate list lives in the recipe |
+| Ordering a component's gates slowest-first | A formatting slip waits behind a full compile before reporting | Order the recipe cheapest-first (`fmt --check`, then clippy, then the structure gate) |
 
 ## Quick reference — CI jobs
 
 | Job | Trigger | Blocking | Local equivalent |
 |-----|---------|----------|-----------------|
-| `rust-fmt` | push / PR | yes | `cargo fmt --all -- --check` or `just fmt-check` |
-| `rust-clippy` | push / PR | yes | `cargo clippy -- -D warnings` or `just clippy` |
-| `rust-structure` | push / PR | yes | `cargo test --test structure` or `just structure` |
-| `web-eslint` | push / PR | yes (error-level rules) | `npm run lint` or `just web-lint` |
-| `python-lint` | push / PR | yes | `ruff format --check . && ruff check . && mypy && lint-imports && pytest src/tests/architecture` |
+| `rust-check` | push / PR | yes | `just core-check` |
+| `web-check` | push / PR | yes (error-level rules) | `just web-check` |
+| `python-check` | push / PR | yes | `just service-check` |
 | integration tests | tag push (release) | yes (gates image build) | `just test-integration` with Docker stack |
 
 ## Cross-references
 
 - `rust-architecture-test-setup` — installs the `tests/structure/` gate that
-  `rust-structure` runs.
+  `core-check` runs.
 - `python-import-linter-setup` — installs the `lint-imports` contracts that
-  `python-lint` runs.
+  `service-check` runs.
 - `frontend-vue-eslint-setup` — installs the ESLint boundary rules that
-  `web-eslint` runs.
-- `justfile-setup` — the CI workflow can invoke `just` recipes so local and CI
-  commands stay identical.
+  `web-check` runs.
+- `justfile-setup` — owns every recipe these jobs invoke. A gate is only reachable
+  from CI once it is in a recipe.
 - `rust-testing` and `python-testing` — cover how to structure tests so the
   feature-flag split between unit and integration tests works correctly.
