@@ -35,9 +35,13 @@ fetch_concurrency=12
 # train. Excluded from discovery and REPORTED — never silently dropped, because
 # a wrongly-excluded repository is invisible in the finished release notes.
 #
-# Kept in sync BY HAND with the identical list in
-# ../syneto-release-promote/promote.sh. The two skills must agree on what is out
-# of the release; if you change one, change the other in the same commit.
+# Kept in sync BY HAND with the identical lists in
+# ../syneto-release-promote/promote.sh and
+# ../syneto-release-notes-scoped/acquire.sh. The three skills must agree on
+# what is out of the release; if you change one, change the others in the same
+# commit. The scoped copy asserts at startup that its constants match this
+# file's and refuses to run on drift, so an unsynced edit here fails loudly
+# there.
 retired_repositories=("central-vat-searcher")
 
 is_retired() {

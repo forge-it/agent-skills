@@ -1,10 +1,10 @@
 ---
 name: syneto-release-notes
-description: Use when producing or publishing a Syneto Central release notes entry — a production hotfix or a major production release — including asks phrased as "release notes", "hotfix notes", "what is shipping", or when a central-2.x dev branch is about to be merged into the prod branch. Syneto-specific: assumes the Central repository family under /home/cristi/Projects and the CEN Confluence space.
+description: Use when producing or publishing a Syneto Central release notes entry covering every contributing repository in the fleet — a production hotfix or a major production release — including asks phrased as "release notes", "hotfix notes", "what is shipping", or when a central-2.x dev branch is about to be merged into the prod branch. When the operator names specific repositories, or asks for one repository's hotfix notes, use syneto-release-notes-scoped instead. Syneto-specific: assumes the Central repository family under /home/cristi/Projects and the CEN Confluence space.
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.3"
+  version: "0.0.4"
 ---
 
 # Syneto Release Notes Skill
@@ -43,6 +43,8 @@ Do **not** apply for:
 - Release notes for any project outside the Syneto Central family
 - SynetoOS appliance release notes (a different artifact entirely)
 - Summarising a single branch or pull request
+- An entry restricted to repositories the operator names — that is
+  `syneto-release-notes-scoped`. This skill always describes the whole fleet.
 
 ## Invocation Contract
 
@@ -57,6 +59,11 @@ The skill takes **no required arguments**. Everything resolves:
 | Repositories | Discovered (see R3). |
 
 Both titles already exist in the page history. Do not invent a new one.
+
+**Scope check before running anything:** this contract is zero-argument because
+the scope is always the whole fleet. If the ask names specific repositories,
+stop — that is `syneto-release-notes-scoped`, which requires the list this
+skill must never take.
 
 ## Stage Shape
 
@@ -272,6 +279,14 @@ A ticket already published in an earlier entry is **excluded** from the new entr
 and listed in the provenance report. Include it only when this release adds
 materially new user-visible behaviour — and then say so explicitly in the entry
 text.
+
+**Partial-scope predecessors are not "already published".** A ticket whose
+published bracket covers only a strict subset of the repositories now carrying
+it in commit subjects shipped partially — the usual source is a scoped hotfix
+entry from `syneto-release-notes-scoped`. Re-describe it, naming the surface
+that ships now; excluding it would leave the user-visible half of the change
+undescribed forever. The brackets are readable from the page HTML already
+fetched in Stage 3, so this is a mechanical check, not a judgement call.
 
 The check covers this page. The pre-2026 archive page is deliberately not scanned.
 

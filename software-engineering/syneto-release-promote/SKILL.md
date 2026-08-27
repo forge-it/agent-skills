@@ -4,7 +4,7 @@ description: Use when shipping a Syneto Central release after its release notes 
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.3"
+  version: "0.0.4"
 ---
 
 # Syneto Release Promote Skill
@@ -154,6 +154,14 @@ the IaaC repository runs on its own cadence.
 Show the plan and let the operator strike repositories off it. Whatever is promoted
 should match what the accepted notes describe; if it does not, say so.
 
+**A scoped notes entry demands a scoped promotion.** When the accepted entry was
+produced by `syneto-release-notes-scoped` — its brackets cover only a subset of
+the repositories with non-empty ranges — name exactly the bracketed repositories
+as positional arguments. A `--check` plan listing repositories absent from the
+entry's brackets is a **stop condition**, not a detail: those repositories' work
+was never described, reviewed, or accepted, and promoting the fleet against a
+scoped entry ships it anyway.
+
 ### 7. Report No-Ops as No-Ops (HIGH)
 
 Merging an already-promoted repository succeeds trivially and moves nothing. The
@@ -234,6 +242,7 @@ auditable merge commit and `git revert -m 1 <merge>` works. Revert as a new comm
 | Mistake | Consequence |
 |---|---|
 | Promoting before the notes are accepted | Range is destroyed; the release cannot be described |
+| Promoting the whole fleet after a scoped notes entry | Ships repositories the accepted notes never described |
 | Chaining `--check` into `--push` in one turn | Production push with no operator consent |
 | Setting `SYNETO_SKIP_FETCH` to make a write mode run | Promotes a tree nobody reviewed — the script refuses for this reason |
 | Merging the local dev branch | Promotes a staler tree than was reviewed |

@@ -39,9 +39,11 @@ projects_root="${SYNETO_PROJECTS_ROOT:-/home/cristi/Projects}"
 infrastructure_repository="central"
 infrastructure_prod_ref="production-on-prem"
 infrastructure_dev_ref="dev-on-prem"
-# Kept in sync BY HAND with the identical list in
-# ../syneto-release-notes/acquire.sh. The two skills must agree on what is out
-# of the release; if you change one, change the other in the same commit.
+# Kept in sync BY HAND with the identical lists in
+# ../syneto-release-notes/acquire.sh and
+# ../syneto-release-notes-scoped/acquire.sh. The three skills must agree on
+# what is out of the release; if you change one, change the others in the same
+# commit.
 retired_repositories=("central-vat-searcher")
 mode=""
 release_pattern='^central-[0-9]+\.[0-9]+$'
