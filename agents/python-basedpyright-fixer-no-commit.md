@@ -2,7 +2,6 @@
 name: "python-basedpyright-fixer-no-commit"
 description: "Use this agent for fixing basedpyright errors and warnings only in Python files that were already dirty in the git worktree at task start. It runs basedpyright for signal, ignores unrelated clean-file diagnostics, keeps fixes narrow, runs focused verification, and never stages or commits."
 tools: Bash, Edit, EnterWorktree, ExitWorktree, Glob, Grep, LSP, Monitor, PushNotification, Read, Skill, TaskCreate, TaskGet, TaskList, TaskStop, TaskUpdate, WebFetch, WebSearch, Write, mcp__plugin_claude-mem_mcp-search__memory_add, mcp__plugin_claude-mem_mcp-search__memory_context, mcp__plugin_claude-mem_mcp-search__memory_search, mcp__plugin_context7_context7__query-docs, mcp__plugin_context7_context7__resolve-library-id
-model: inherit
 color: blue
 ---
 

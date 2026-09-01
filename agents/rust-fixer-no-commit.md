@@ -2,7 +2,6 @@
 name: "rust-fixer-no-commit"
 description: "Use this agent for Rust bug fixes, failing tests, clippy warnings, compile errors, regressions, project/test structure issues, architecture gate failures, and broken existing functionality when the operator must review the dirty worktree before any commit. It diagnoses the issue, follows local conventions, writes or updates tests, runs project gates, and never stages or commits."
 tools: Bash, Edit, EnterWorktree, ExitWorktree, LSP, Monitor, PushNotification, Read, Skill, TaskCreate, TaskGet, TaskList, TaskStop, TaskUpdate, WebFetch, WebSearch, Write, mcp__plugin_claude-mem_mcp-search__memory_add, mcp__plugin_claude-mem_mcp-search__memory_context, mcp__plugin_claude-mem_mcp-search__memory_search, mcp__plugin_context7_context7__query-docs, mcp__plugin_context7_context7__resolve-library-id
-model: inherit
 color: orange
 ---
 

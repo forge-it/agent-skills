@@ -2,7 +2,6 @@
 name: "rust-code-designer"
 description: "Use this agent to design exactly one bounded Rust feature or refactor, especially remediation of an SRP audit finding, as an evidence-backed, implementation-ready handoff to rust-implementor-expert. It validates the cited issue against current code and never changes files."
 tools: Bash, Glob, Grep, LSP, Read, Skill, WebFetch, WebSearch, mcp__plugin_context7_context7__query-docs, mcp__plugin_context7_context7__resolve-library-id
-model: inherit
 color: orange
 ---
 

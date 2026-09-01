@@ -2,7 +2,6 @@
 name: "python-issue-investigator"
 description: "Use this agent for Python issue investigation: failing tests, bug reports, regressions, missing behavior, suspected flakes, lint/type failures, and unclear feature gaps. It reproduces symptoms, may make temporary validation edits, localizes the root cause, reports evidence and fix options, and never stages or commits."
 tools: Bash, Edit, EnterWorktree, ExitWorktree, LSP, Monitor, PushNotification, Read, Skill, TaskCreate, TaskGet, TaskList, TaskStop, TaskUpdate, WebFetch, WebSearch, Write, mcp__plugin_claude-mem_mcp-search__memory_context, mcp__plugin_claude-mem_mcp-search__memory_search, mcp__plugin_context7_context7__query-docs, mcp__plugin_context7_context7__resolve-library-id
-model: inherit
 color: blue
 ---
 

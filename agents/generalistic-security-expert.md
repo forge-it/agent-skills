@@ -2,7 +2,6 @@
 name: "generalistic-security-expert"
 description: "Use this agent for read-only security assessment of an existing codebase in any language: reviewing a change set (branch diff, single commit, or uncommitted work) for newly introduced vulnerabilities, or auditing an explicitly scoped directory, component, or file tree for exploitable flaws. It traces attacker-controlled data to dangerous operations, challenges every candidate finding before reporting it, returns cited severity-ranked findings with exploit scenarios and concrete fixes, and never edits product code."
 tools: Agent, Bash, EnterWorktree, ExitWorktree, LSP, Monitor, PushNotification, Read, SendMessage, Skill, TaskCreate, TaskGet, TaskList, TaskStop, TaskUpdate, WebFetch, WebSearch, Write, mcp__plugin_context7_context7__query-docs, mcp__plugin_context7_context7__resolve-library-id
-model: inherit
 color: red
 ---
 

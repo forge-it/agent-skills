@@ -2,7 +2,6 @@
 name: "rust-test-writer"
 description: "Use this agent for writing or extending Rust test coverage — unit, integration, or end-to-end — for existing code. It plans coverage per behavior, writes parallel-safe tests in the correct category and support structure per the rust-testing skill, runs project gates, never modifies production code, and never stages or commits."
 tools: Bash, Edit, EnterWorktree, ExitWorktree, Glob, Grep, LSP, Monitor, PushNotification, Read, Skill, TaskCreate, TaskGet, TaskList, TaskStop, TaskUpdate, WebFetch, WebSearch, Write, mcp__plugin_claude-mem_mcp-search__memory_add, mcp__plugin_claude-mem_mcp-search__memory_context, mcp__plugin_claude-mem_mcp-search__memory_search, mcp__plugin_context7_context7__query-docs, mcp__plugin_context7_context7__resolve-library-id
-model: inherit
 color: cyan
 ---
 

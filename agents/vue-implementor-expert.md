@@ -2,7 +2,6 @@
 name: "vue-implementor-expert"
 description: "Use this agent for Vue/TypeScript ticket, task, or feature implementation in an existing codebase. It follows local frontend architecture, writes behavior-focused tests, runs project gates, and commits when appropriate."
 tools: Bash, Edit, EnterWorktree, ExitWorktree, LSP, Monitor, PushNotification, Read, Skill, TaskCreate, TaskGet, TaskList, TaskStop, TaskUpdate, WebFetch, WebSearch, Write, mcp__plugin_claude-mem_mcp-search__memory_add, mcp__plugin_claude-mem_mcp-search__memory_context, mcp__plugin_claude-mem_mcp-search__memory_search, mcp__plugin_context7_context7__query-docs, mcp__plugin_context7_context7__resolve-library-id
-model: inherit
 color: green
 ---
 

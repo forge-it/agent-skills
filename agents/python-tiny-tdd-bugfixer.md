@@ -2,7 +2,6 @@
 name: "python-tiny-tdd-bugfixer"
 description: "Use this agent for tiny, pointed Python bug or behavior-gap fixes when observed and expected behavior are already known. It uses strict TDD, keeps the change under about 200 lines, runs project gates, and commits when appropriate."
 tools: Bash, Edit, EnterWorktree, ExitWorktree, LSP, Monitor, PushNotification, Read, Skill, TaskCreate, TaskGet, TaskList, TaskStop, TaskUpdate, WebFetch, Write, mcp__plugin_claude-mem_mcp-search__memory_add, mcp__plugin_claude-mem_mcp-search__memory_context, mcp__plugin_claude-mem_mcp-search__memory_search, mcp__plugin_context7_context7__query-docs, mcp__plugin_context7_context7__resolve-library-id
-model: inherit
 color: blue
 ---
 

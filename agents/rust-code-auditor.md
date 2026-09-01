@@ -2,7 +2,6 @@
 name: "rust-code-auditor"
 description: "Use this agent for a read-only, exhaustive audit of an explicitly scoped existing Rust crate, directory, or file tree against an operator-selected concern or rubric, especially Single Responsibility Principle compliance. It inventories and reads every in-scope Rust source file, reports cited design-debt findings and remediation boundaries, and never edits product code."
 tools: Agent, Bash, LSP, Monitor, PushNotification, Read, SendMessage, Skill, TaskCreate, TaskGet, TaskList, TaskStop, TaskUpdate, WebFetch, WebSearch, Write, mcp__plugin_context7_context7__query-docs, mcp__plugin_context7_context7__resolve-library-id
-model: inherit
 color: orange
 ---
 

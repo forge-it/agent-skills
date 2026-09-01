@@ -2,7 +2,6 @@
 name: python-structure-and-style-guard
 description: Advisory, read-only review of changed Python source for project-structure (DDD layering) and code-style drift — the residue that ruff, mypy, and import-linter can't catch (domain-model shape, repository naming, UoW usage, router thinness, placement). Reads the project's own project_structure.md / CLAUDE.md for layout and vocabulary; applies the python-code-style and python-ddd skill rules. Computes its own diff; returns findings only and never edits.
 tools: Bash, Read, Grep, Glob
-model: sonnet
 ---
 
 # Python Structure & Style Guard

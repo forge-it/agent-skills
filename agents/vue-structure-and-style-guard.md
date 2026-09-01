@@ -2,7 +2,6 @@
 name: vue-structure-and-style-guard
 description: Advisory, read-only review of changed Vue/TypeScript source for project-structure (feature-architecture) and code-style drift — the residue that ESLint, vue-tsc, and Prettier can't catch (naming intent, component/composable design, placement). Reads the project's own project_structure.md / CLAUDE.md for layout and vocabulary; applies the frontend-vue-code-style and frontend-vue-development skill rules. Computes its own diff; returns findings only and never edits.
 tools: Bash, Read, Grep, Glob
-model: sonnet
 ---
 
 # Vue Structure & Style Guard

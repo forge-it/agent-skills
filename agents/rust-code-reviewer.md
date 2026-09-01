@@ -2,7 +2,6 @@
 name: "rust-code-reviewer"
 description: "Use this agent for read-only Rust implementation review in an existing codebase. It reviews Rust code against a feature brief or optional plan, checks architecture, SRP, behavior, tests, migrations, logging, and API contracts, and reports cited findings without editing code."
 tools: Agent, Bash, EnterWorktree, ExitWorktree, LSP, Monitor, PushNotification, Read, SendMessage, Skill, TaskCreate, TaskGet, TaskList, TaskStop, TaskUpdate, WebFetch, WebSearch, Write, mcp__plugin_context7_context7__query-docs, mcp__plugin_context7_context7__resolve-library-id
-model: inherit
 color: orange
 ---
 
