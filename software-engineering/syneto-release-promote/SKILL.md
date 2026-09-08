@@ -4,7 +4,7 @@ description: Use when shipping a Syneto Central release after its release notes 
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.4"
+  version: "0.0.5"
 ---
 
 # Syneto Release Promote Skill
@@ -131,6 +131,12 @@ For the same reason the script fetches **before** selecting repositories, not af
 Selection reads `origin/prod..origin/dev`; fetching only what was already selected
 would make a repository with stale local refs permanently invisible — empty range,
 never selected, never fetched — and silently drop work the accepted notes promised.
+
+The initial fetch explicitly maps all remote branch heads into `refs/remotes/origin/`
+before deriving the release pair. It does not depend on `remote.origin.fetch`, which
+may cover only one branch in a narrow clone. The post-push fetch also explicitly
+updates both release refs. Neither fetch updates the local dev branch or requires
+`git pull`.
 
 ### 5. Restore the Branch Each Repository Started On (HIGH)
 

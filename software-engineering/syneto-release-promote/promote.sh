@@ -135,7 +135,10 @@ if [ "${SYNETO_SKIP_FETCH:-0}" != "1" ]; then
     running=0
     for repository in "${fetch_targets[@]}"; do
         {
-            fetch_error=$(git -C "$repository" fetch --quiet --prune origin 2>&1) \
+            # Explicit destinations bypass narrow/single-branch clone settings.
+            # Fetch all branch heads because the release pair is derived below.
+            fetch_error=$(git -C "$repository" fetch --quiet --prune --refmap= origin \
+                '+refs/heads/*:refs/remotes/origin/*' 2>&1) \
                 || printf '%s\t%s\n' "$repository" "${fetch_error//[$'\n\t']/ }" >>"$fetch_failure_log"
         } &
         running=$((running + 1))
@@ -538,7 +541,9 @@ for repository in "${resolved_repositories[@]}"; do
         # ref, which would otherwise make the range arithmetically 0 always and
         # hide work a teammate landed on dev mid-run. A failed fetch must not
         # masquerade as a clean result — that is the same false all-clear.
-        if git -C "$repository" fetch --quiet origin "$local_prod" "${dev_ref#origin/}" 2>/dev/null; then
+        if git -C "$repository" fetch --quiet --refmap= origin \
+            "+refs/heads/$local_prod:refs/remotes/$prod_ref" \
+            "+refs/heads/${dev_ref#origin/}:refs/remotes/$dev_ref" 2>/dev/null; then
             remaining=$(git -C "$repository" rev-list --count "$prod_ref..$dev_ref" 2>/dev/null)
             if [ "${remaining:-0}" -gt 0 ]; then
                 printf 'DONE*   %-24s %s -> %s, but %s NEW commit(s) landed on %s mid-run\n' \
