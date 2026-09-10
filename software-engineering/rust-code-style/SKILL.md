@@ -4,7 +4,7 @@ description: Coding conventions and style rules for Rust. Apply when writing or 
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.11"
+  version: "0.0.12"
 ---
 
 # Rust Code Style Skill
@@ -519,6 +519,8 @@ impl BackupStatus {
 - An external contract whose values the code neither branches on nor owns, and passes straight through unchanged.
 
 Rule 10 covers this shape in return position (name the outcomes of a function); this rule covers it everywhere else — parameters, struct fields, and stored state.
+
+Several `bool`/`Option` fields whose combinations encode a state (`running`, `failed`, `completed`) are not a string set but the same disease: collapse them into one enum with per-variant data (rust-design-idioms Idiom 18).
 
 **Rationale:** A stringly-typed set pushes validation to runtime and spreads it across every call site, where it is applied inconsistently or forgotten. The enum moves that check to the type — and each added variant surfaces as a list of compiler errors naming exactly the code that must change, instead of a grep for a literal.
 

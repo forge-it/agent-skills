@@ -1,10 +1,10 @@
 ---
 name: rust-design-idioms
-description: Rust-specific design idioms for encoding invariants in the type system and structuring errors. Use when modeling domain types or designing error handling in Rust code.
+description: Rust-specific design idioms for encoding invariants in the type system and structuring errors. Use when modeling domain types, state machines and ordered workflows, resource acquisition and release, operations gated on a permission check, exclusive resources shared by async tasks, public trait surfaces, parsers over large inputs, or error handling in Rust code.
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.4"
+  version: "0.0.5"
 ---
 
 # Design Idioms Skill
@@ -12,6 +12,8 @@ metadata:
 ## Purpose
 
 This skill provides guidelines for applying Rust-specific design idioms. It focuses on patterns that leverage Rust's type system to create safer, more expressive code. These idioms help eliminate runtime errors by encoding invariants in the type system.
+
+The rule behind every idiom here: **do not write code that checks whether the program is in a valid state when the types can make the invalid state impossible to construct.** Each idiom is still subject to the KISS test in rust-design-principles: reach for it when the bug it prevents is real in this codebase, not because the mechanism is available.
 
 ## When to Apply
 
@@ -22,6 +24,13 @@ Apply these guidelines when:
 - Designing APIs that are hard to misuse
 - Defining error types for functions and libraries
 - Composing errors from multiple sources
+- Enforcing an ordered workflow (initialize, then resolve, then run) at compile time
+- Modeling mutually exclusive states that carry different data
+- Acquiring something that must be released: locks, transactions, temporary files, reservations
+- Gating an operation on proof that a permission or safety check passed
+- Exposing a trait others may call but must not implement, or adding methods to a type from another crate
+- Sharing one exclusive resource between several async tasks
+- Parsing large inputs without allocating
 
 ## Core Idioms
 
@@ -48,6 +57,26 @@ fn create_user(email: EmailAddress, password: Password) -> User {
 
 // This won't compile - types don't match
 create_user(password, email); // Compile error!
+```
+
+The same protection applies when two values share an underlying type but mean different things. `u64` cannot tell bytes from milliseconds; `Uuid` cannot tell a user from an order.
+
+```rust
+// Bad - every id is a Uuid, so any id fits any parameter
+fn load_user(id: Uuid) -> Result<User, LoadError> { /* ... */ }
+let order_id: Uuid = order.id();
+load_user(order_id); // Compiles. Loads nothing, or the wrong thing.
+
+// Good - one newtype per meaning
+struct UserId(Uuid);
+struct OrderId(Uuid);
+struct TenantId(Uuid);
+struct Bytes(u64);
+struct Milliseconds(u64);
+struct Port(u16);
+
+fn load_user(id: UserId) -> Result<User, LoadError> { /* ... */ }
+load_user(order_id); // Compile error: expected UserId, found OrderId
 ```
 
 ### 2. Parse, Don't Validate (CRITICAL)
@@ -207,6 +236,8 @@ impl std::fmt::Display for EmailAddress {
 - `PartialEq, Eq` - For equality comparisons
 - `PartialOrd, Ord` - If ordering makes sense
 - `Hash` - If used as HashMap/HashSet key
+
+Capability tokens (Idiom 20) are the exception: never derive `Clone` or `Default` on one, since each is a way to obtain a token without the check.
 
 ### 6. Conversion Traits (HIGH)
 
@@ -375,17 +406,15 @@ let schedule = Schedule::new(ScheduleConfig {
     name: ScheduleName::new("daily-postgres-backup")?,
     cron: CronExpression::new("0 0 2 * * *")?,
     backup_strategy: BackupStrategy::Dump,
-    source: SourceConfig {
-        source_type: SourceType::PostgreSql,
-        host: Some(Host::new("db-host")?),
-        database: Some(DatabaseName::new("production")?),
-        secret: Some(SecretName::new("postgres-credentials")?),
+    source: SourceConfig::PostgreSql {
+        host: Host::new("db-host")?,
+        database: DatabaseName::new("production")?,
+        secret: SecretName::new("postgres-credentials")?,
     },
-    destination: DestinationConfig {
-        gateway_type: DestinationGatewayType::S3,
-        bucket: Some(BucketName::new("my-backups")?),
-        directory: Some(Directory::new("/postgres/daily")?),
-        secret: Some(SecretName::new("aws-credentials")?),
+    destination: DestinationConfig::S3 {
+        bucket: BucketName::new("my-backups")?,
+        directory: Directory::new("/postgres/daily")?,
+        secret: SecretName::new("aws-credentials")?,
     },
     retention: RetentionConfig {
         daily: Some(RetentionCount::new(24)?),
@@ -399,13 +428,15 @@ let schedule = Schedule::new(ScheduleConfig {
 });
 // Every field is labeled. Related fields are grouped.
 // Impossible to silently swap arguments.
+// A kind plus the Options that depend on it (source_type + host/database/secret)
+// is one enum with per-variant data, not a struct of Options (Idiom 18).
 ```
 
 **Why this matters:**
 - Named fields are self-documenting — no need to count parameter positions
 - Related fields can be grouped into sub-structs for clarity
 - Adding or removing fields is a compiler-guided refactor, not a silent bug
-- `None, None, Some(...), None` sequences become meaningful: `host: None, database: None, secret: Some(...)`
+- `None, None, Some(...), None` sequences become meaningful: `weekly: None, monthly: Some(...)`
 - Code review becomes possible — reviewers can actually verify correctness
 
 **When positional arguments are fine:**
@@ -664,6 +695,434 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+### 17. Typestate: Encode Workflow Position in the Type (CRITICAL)
+
+When an object must pass through an ordered sequence of steps, and calling a step out of order is a programming error, make the current step part of the object's type. Each transition consumes `self` and returns the next step's type, so the compiler rejects out-of-order calls and rejects reuse of a stale step.
+
+```rust
+// Bad - runtime flags; every method re-checks the sequence, every caller must remember it
+struct PackageTransaction {
+    handle: TransactionHandle,
+    repositories_loaded: bool,
+    resolved: bool,
+}
+
+impl PackageTransaction {
+    fn run(&mut self) -> Result<TransactionReport, RunError> {
+        if !self.repositories_loaded {
+            return Err(RunError::RepositoriesNotLoaded);
+        }
+        if !self.resolved {
+            return Err(RunError::NotResolved);
+        }
+        // ...
+    }
+}
+
+// Good - the step is the type; an out-of-order call is a missing method
+use std::marker::PhantomData;
+
+struct Created;
+struct RepositoriesLoaded;
+struct Resolved;
+
+struct PackageTransaction<Step> {
+    handle: TransactionHandle,
+    _step: PhantomData<Step>,
+}
+
+impl PackageTransaction<Created> {
+    fn new(handle: TransactionHandle) -> Self {
+        Self { handle, _step: PhantomData }
+    }
+
+    fn load_repositories(self) -> Result<PackageTransaction<RepositoriesLoaded>, LoadError> {
+        self.handle.load_repositories()?;
+        Ok(PackageTransaction { handle: self.handle, _step: PhantomData })
+    }
+}
+
+impl PackageTransaction<RepositoriesLoaded> {
+    fn resolve(self) -> Result<PackageTransaction<Resolved>, ResolveError> {
+        self.handle.resolve()?;
+        Ok(PackageTransaction { handle: self.handle, _step: PhantomData })
+    }
+}
+
+impl PackageTransaction<Resolved> {
+    fn run(self) -> Result<TransactionReport, RunError> {
+        // `self` is consumed: the same transaction cannot run twice
+        self.handle.run()
+    }
+}
+
+// Compiles - the only order that exists
+let report = PackageTransaction::new(handle)
+    .load_repositories()?
+    .resolve()?
+    .run()?;
+
+// Does not compile - PackageTransaction<Created> has no run()
+PackageTransaction::new(handle).run();
+```
+
+Shape rules:
+- Marker types are empty structs (`struct Resolved;`). Keep them private unless callers must name the state in their own signatures.
+- `PhantomData<Step>` records the marker without storing a value. It occupies zero bytes; the state exists only at compile time.
+- Transitions take `self` by value, never `&mut self`. With `&mut self` the old type stays alive after the call and the compiler can no longer prevent reuse.
+- When a step carries data the earlier steps do not have (a resolved plan), give the marker type a field (`struct Resolved { plan: TransactionPlan }`) and store the marker as a real field, `step: Step`, in place of `_step: PhantomData<Step>`. The earlier markers stay empty. The walkthrough shows this shape.
+
+**Builders with required fields** are typestate applied to construction: `RequestBuilder<MissingUrl>` becomes `RequestBuilder<HasUrl>` after `.url(...)`, and only `RequestBuilder<HasUrl>` has `build()`. Use this only when construction has ordered or mandatory steps that a plain struct cannot express. When the fields are independent and all known up front, Idiom 10 (config struct) is the answer: a struct literal already makes every required field mandatory, without a generic parameter per field.
+
+**When NOT to apply:**
+- The sequence has one step, or the steps may legally run in any order. A plain method set is enough.
+- The state changes at runtime on information the compiler cannot see (a job that becomes `Running`, then `Failed` or `Completed` depending on what happened). That is a runtime state machine: one enum (Idiom 18), not typestate.
+- Objects in different steps must live in one collection or behind one `dyn` trait. The type would have to be erased, which removes the guarantee.
+
+The full walkthrough (why a generic parameter carries the state, what `PhantomData` does, why `self` and not `&mut self`, how to map a real workflow) is in `references/typestate-walkthrough.md`.
+
+**Rationale:** A boolean flag records a fact the compiler cannot read, so every method re-checks it and every caller must remember the order. Typestate turns "was this called too early?" into a missing method at compile time, and consuming `self` turns "was this called twice?" into a use-after-move error.
+
+### 18. Mutually Exclusive States Are One Enum (CRITICAL)
+
+When several `bool` or `Option` fields together describe which state something is in, and only some combinations are meaningful, replace them with one enum whose variants carry only the data valid in that state.
+
+```rust
+// Bad - three flags give eight combinations; three are meaningful
+struct Job {
+    id: JobId,
+    running: bool,
+    failed: bool,
+    completed: bool,
+    started_at: Option<Instant>,
+    error: Option<JobError>,
+    output: Option<JobOutput>,
+}
+// running && failed && completed compiles. What does it mean?
+// completed == true with output == None compiles too, and someone will unwrap() it.
+
+// Good - one value is one valid state; each state owns exactly its own data
+enum JobState {
+    Pending,
+    Running { started_at: Instant },
+    Failed { error: JobError },
+    Completed { output: JobOutput },
+}
+
+struct Job {
+    id: JobId,
+    state: JobState,
+}
+
+impl Job {
+    fn output(&self) -> Option<&JobOutput> {
+        match &self.state {
+            JobState::Completed { output } => Some(output),
+            JobState::Pending | JobState::Running { .. } | JobState::Failed { .. } => None,
+        }
+    }
+}
+```
+
+Signs that flags should become an enum:
+- Two or more `bool` fields where setting one implies clearing another.
+- An `Option` field that is `Some` only while some `bool` is `true`.
+- A comment, assertion, or validation function documenting which combinations are allowed.
+
+**Construction-time config is not exempt.** A config struct (Idiom 10) holding a kind field plus `Option`s that are `Some` only for some kinds has the same disease. The kind becomes an enum and the dependent fields move onto its variants: `SourceConfig::PostgreSql { host, database, secret }`, not `source_type` beside three `Option`s.
+
+**Boundary with rust-code-style Rule 13.** Rule 13 turns a closed set of *string names* into an enum. This idiom turns a set of *flag and optional fields* into an enum and moves each state's data onto its variant. The smell for Rule 13 is `status == "failed"`; the smell for this idiom is `if job.failed && !job.completed`.
+
+**Boundary with Idiom 17.** `JobState` changes at runtime on information the compiler does not have, so the enum is the right tool. Typestate is for sequences fixed at compile time (load, then resolve, then run) where a wrong order is a programming error, not a runtime outcome.
+
+**Rationale:** Independent flags let the representable states grow as two to the power of the flag count while the meaningful states stay few. The gap is where bugs live: code that must handle, or silently ignores, combinations that should never exist. The enum makes the representable set equal to the meaningful set, and each variant's payload proves the data is present without an `unwrap()`.
+
+### 19. RAII Guards: Release in Drop (HIGH)
+
+When acquiring something that must be released (a lock, a transaction, a temporary file, a reservation, a mount, a metrics timer), return a guard value whose `Drop` performs the release. Release then happens on every exit path, including `?` early returns and panics, without the caller remembering it.
+
+```rust
+// Bad - release is the caller's job; the early return leaks the lock
+fn apply_upgrade(lock: &RepositoryLock) -> Result<(), UpgradeError> {
+    lock.acquire()?;
+    let plan = build_plan()?;      // Err here: the lock is never released
+    execute(plan)?;
+    lock.release();
+    Ok(())
+}
+
+// Good - the guard releases when it goes out of scope, on every path
+struct RepositoryLockGuard<'lock> {
+    lock: &'lock RepositoryLock,
+}
+
+impl Drop for RepositoryLockGuard<'_> {
+    fn drop(&mut self) {
+        self.lock.release();
+    }
+}
+
+impl RepositoryLock {
+    fn acquire(&self) -> Result<RepositoryLockGuard<'_>, LockError> {
+        self.try_lock()?;
+        Ok(RepositoryLockGuard { lock: self })
+    }
+}
+
+fn apply_upgrade(lock: &RepositoryLock) -> Result<(), UpgradeError> {
+    let _guard = lock.acquire()?;
+    let plan = build_plan()?;      // Err here: _guard drops, the lock is released
+    execute(plan)?;
+    Ok(())
+}                                  // success: _guard drops here
+```
+
+**Commit-or-rollback guards.** A transaction guard rolls back in `Drop` unless `commit(self)` ran. `commit` consumes the guard, so nothing can touch the transaction after it.
+
+```rust
+struct Transaction<'connection> {
+    connection: &'connection Connection,
+    committed: bool,
+}
+
+impl Transaction<'_> {
+    fn commit(mut self) -> Result<(), CommitError> {
+        self.connection.execute("COMMIT")?;
+        self.committed = true;
+        Ok(())
+    }
+}
+
+impl Drop for Transaction<'_> {
+    fn drop(&mut self) {
+        if !self.committed {
+            // Drop cannot return an error; a failed rollback can only be reported
+            if let Err(rollback_error) = self.connection.execute("ROLLBACK") {
+                tracing::error!("transaction rollback failed: {rollback_error}");
+            }
+        }
+    }
+}
+```
+
+Shape rules:
+- Bind the guard to a named variable: `let _guard = lock.acquire()?;`. Writing `let _ = lock.acquire()?;` drops the guard on that same line and releases immediately.
+- `Drop` cannot return an error and cannot `.await`. When release can fail in a way the caller must handle, or must await, provide an explicit `release(self) -> Result<(), ReleaseError>` (or `async fn release(self)`) and keep `Drop` as the best-effort fallback that reports.
+- A guard never outlives what it guards: borrow the resource (`&'lock RepositoryLock`) or hold an `Arc` to it.
+
+**When NOT to apply:** the resource already has a guard from the standard library or the runtime (`File`, `TcpStream`, `MutexGuard`, `RwLockReadGuard`). Do not wrap what is already released on drop.
+
+**Rationale:** Cleanup written as a trailing statement runs only on the path the author was thinking about. Cleanup in `Drop` runs on the paths nobody was thinking about.
+
+### 20. Capability Tokens: Require Proof, Not a Check (HIGH)
+
+When an operation is allowed only after some check passed (an authorization decision, maintenance mode, an exclusive lock, a reboot approval), make the check return a token type that only it can construct, and make the operation take the token as a parameter. Code that did not run the check has no token and cannot call the operation.
+
+```rust
+// Bad - the operation trusts every caller to have checked
+fn delete_package(user: &User, package: &Package) -> Result<(), DeleteError> {
+    // Did the handler call user.can_write()? Every reviewer must verify every call site.
+}
+
+// Good - the operation demands proof; the proof can only come from the check
+pub struct WritePermission {
+    _private: (),   // no public constructor: only this module can create one
+}
+
+pub fn authorize_write(user: &User, policy: &Policy) -> Result<WritePermission, Forbidden> {
+    if policy.allows_write(user) {
+        Ok(WritePermission { _private: () })
+    } else {
+        Err(Forbidden::WriteDenied { user: user.id() })
+    }
+}
+
+fn delete_package(_permission: &WritePermission, package: &Package) -> Result<(), DeleteError> {
+    // No check here. Holding a WritePermission is the check.
+}
+```
+
+Shape rules:
+- The token has a private field and no public constructor other than the check. `pub struct Token;` with no fields can be built by anyone as `Token`; the `_private: ()` field closes that door.
+- One-shot operations take the token by value (`permit: RebootPermit`) so it is consumed and cannot be reused. Repeatable operations borrow it.
+- Never derive `Clone`, `Default`, or `Deserialize` on a token. Each is a way to obtain one without the check.
+- Name the token after what it proves. A right that is borrowed for repeated use ends in `Permission` (`WritePermission`, `AdminPermission`); a one-shot approval consumed by the operation ends in `Permit` (`RebootPermit`, `TransactionPermit`); a token that proves a state uses the state's noun (`AuthenticatedUser`, `ExclusiveLock`, `MaintenanceMode`).
+
+**When NOT to apply:** the check and the gated operation sit in the same function with a single call site. The token then names a guarantee the code already has by construction. Introduce it when a second call site appears.
+
+**Rationale:** "Did we remember to check?" is a question asked at every call site during every review. "Where did this token come from?" has exactly one answer, and the compiler checks it.
+
+### 21. Sealed Traits: Public to Call, Private to Implement (MEDIUM)
+
+When a public trait has invariants the crate controls, or describes a fixed set of the crate's own types, stop downstream crates from implementing it by giving it a private supertrait. Callers can still use the trait; only the owning crate can add implementations, so adding a method is not a breaking change.
+
+```rust
+// Bad - any crate can implement PackageBackend, so adding a method breaks them all,
+// and every method must defend against implementations that break the contract
+pub trait PackageBackend {
+    fn install(&self, package: &PackageName) -> Result<(), InstallError>;
+}
+
+// Good - callable everywhere, implementable only here
+mod private {
+    pub trait Sealed {}
+}
+
+pub trait PackageBackend: private::Sealed {
+    fn install(&self, package: &PackageName) -> Result<(), InstallError>;
+}
+
+pub struct DnfBackend;
+
+impl private::Sealed for DnfBackend {}
+
+impl PackageBackend for DnfBackend {
+    fn install(&self, package: &PackageName) -> Result<(), InstallError> { /* ... */ }
+}
+// Downstream: `impl PackageBackend for MyBackend` fails - `private::Sealed` is not nameable there.
+```
+
+**When NOT to apply:** the trait is a port that adapters in other crates, or mocks in `tests/`, are expected to implement (rust-hexagonal-architecture ports). Sealing a port defeats its purpose. Seal traits over a closed set of the crate's own types, never extension points.
+
+**Rationale:** An open trait is a contract with every crate that ever implements it. A sealed trait is a contract only with the crate that owns it, so it can grow without a major version.
+
+### 22. Extension Traits: Add Methods to Types You Do Not Own (MEDIUM)
+
+When domain behavior belongs conceptually on a type from another crate, define a trait holding that behavior and implement it for the foreign type. Callers get method syntax wherever the trait is imported; the foreign type stays untouched.
+
+```rust
+// Bad - free functions scattered beside their call sites
+fn is_security_update(package: &libdnf5::Package) -> bool { /* ... */ }
+fn upgrade_target(package: &libdnf5::Package) -> Option<PackageVersion> { /* ... */ }
+
+// Good - one extension trait, one concern, method syntax
+pub trait PackageExt {
+    fn is_security_update(&self) -> bool;
+    fn upgrade_target(&self) -> Option<PackageVersion>;
+}
+
+impl PackageExt for libdnf5::Package {
+    fn is_security_update(&self) -> bool {
+        self.advisories().any(|advisory| advisory.kind() == AdvisoryKind::Security)
+    }
+
+    fn upgrade_target(&self) -> Option<PackageVersion> { /* ... */ }
+}
+
+// Call site
+use crate::package::PackageExt;
+
+if package.is_security_update() { /* ... */ }
+```
+
+Shape rules:
+- Name the trait `<Type>Ext` and place it in the module that owns the domain concern, not beside the foreign type's import.
+- One extension trait per concern. Single responsibility applies to traits: do not let one `Ext` trait accumulate unrelated methods.
+- When the foreign type needs an invariant enforced, not just methods added, wrap it in a newtype (Idiom 1) instead. An extension trait cannot restrict construction.
+
+**Rationale:** The orphan rule forbids inherent `impl` blocks on foreign types. An extension trait is the sanctioned way to give a foreign type domain vocabulary without wrapping every value.
+
+### 23. Give an Exclusive Resource to One Task (HIGH)
+
+In async code, when several tasks use one resource whose operations must not interleave (a package manager that must never run two transactions at once, a serial device, a write-ahead log), give the resource to exactly one task and send it commands over a channel. Do not share it as `Arc<Mutex<Resource>>` across every caller.
+
+```rust
+// Bad - every caller locks; "one transaction at a time" holds only if every caller
+// keeps the guard across every .await, and nothing enforces that
+let manager = Arc::new(Mutex::new(PackageManager::new()));
+// handler:   manager.lock().await.install(&package).await;
+// worker:    manager.lock().await.upgrade().await;
+// scheduler: manager.lock().await.refresh_metadata().await;
+
+// Good - one owner, one queue, commands as data
+const PACKAGE_COMMAND_QUEUE_DEPTH: usize = 32;
+
+enum PackageCommand {
+    Install { package: PackageName, reply: oneshot::Sender<Result<(), InstallError>> },
+    Upgrade { reply: oneshot::Sender<Result<UpgradeReport, UpgradeError>> },
+}
+
+fn spawn_package_manager(mut manager: PackageManager) -> mpsc::Sender<PackageCommand> {
+    let (command_sender, mut command_receiver) = mpsc::channel(PACKAGE_COMMAND_QUEUE_DEPTH);
+
+    tokio::spawn(async move {
+        while let Some(command) = command_receiver.recv().await {
+            match command {
+                PackageCommand::Install { package, reply } => {
+                    let outcome = manager.install(&package).await;
+                    // the requester may have stopped waiting; there is nowhere else to report
+                    let _ = reply.send(outcome);
+                }
+                PackageCommand::Upgrade { reply } => {
+                    let outcome = manager.upgrade().await;
+                    let _ = reply.send(outcome);
+                }
+            }
+        }
+    });
+
+    command_sender
+}
+```
+
+```text
+HTTP handler ──┐
+worker ────────┼── mpsc channel ──> package-manager task (sole owner, one command at a time)
+scheduler ─────┘
+```
+
+Shape rules:
+- The command enum is the resource's public API. The `PackageManager` value never leaves the task.
+- Each command carries a `oneshot::Sender` for its reply. The caller awaits the reply, so ordering and back-pressure come from the channel, not from a lock.
+- Use a bounded channel; the bound is the queue-depth policy and is a named constant (rust-code-style Rule 5).
+- Serialization is the point. Never spawn several owner tasks for the same resource.
+- When the resource's operations form a typestate sequence (Idiom 17), the task owns whatever creates the first state (the library handle or a factory) and runs the whole sequence to completion inside one command. Typestate values never cross the channel.
+
+**When NOT to apply:**
+- The shared state is read-mostly, or its critical sections are synchronous and never hold across `.await`. `Arc<RwLock<_>>` or `Arc<Mutex<_>>` is simpler and correct there.
+- There is a single caller. No sharing problem exists.
+
+**Rationale:** A mutex guards memory, not a protocol. "Never two transactions concurrently" is a protocol invariant, and one owning task enforces it structurally: there is exactly one place operations can run, and it runs them one at a time.
+
+### 24. Borrow From the Input in Parsers (MEDIUM)
+
+When a function parses or slices a large input and the result is used only while the input is alive, let the output type borrow from the input instead of allocating owned copies.
+
+```rust
+// Bad - two String allocations per line of a multi-megabyte metadata file
+struct ParsedPackage {
+    name: String,
+    version: String,
+}
+
+// Good - views into the buffer already in memory; no allocation
+struct ParsedPackage<'input> {
+    name: &'input str,
+    version: &'input str,
+}
+
+fn parse_line(line: &str) -> Result<ParsedPackage<'_>, ParseError> {
+    let (name, rest) = line.split_once(' ').ok_or(ParseError::MissingVersion)?;
+    let (version, _architecture) = rest.split_once(' ').ok_or(ParseError::MissingArchitecture)?;
+    Ok(ParsedPackage { name, version })
+}
+```
+
+```text
+"nginx 1.28.0 x86_64"     one buffer
+ ^^^^^ ^^^^^^
+ name  version            two &str into it, zero copies
+```
+
+Scope: parsers and boundary code only (repository metadata, protocol frames, log lines, serialization). Domain models stay owned (`String`, `Vec<T>`). A domain type with a lifetime parameter infects every struct, port trait, and async task that holds it. Parse borrowed at the boundary, then build the owned domain value once the data is known valid (Idiom 2).
+
+**When NOT to apply:**
+- The parsed value outlives the input: stored in a repository, sent to another task, returned through a port.
+- The input is small or parsed once. The allocation is not worth a lifetime parameter.
+- The type must be `'static`: spawned into a Tokio task, or stored in a `Box<dyn Trait>` without a lifetime.
+
+**Rationale:** Copying out of a buffer you already hold is pure overhead on hot parsing paths. Everywhere else owned data is simpler, and the lifetime parameter costs more in API complexity than the allocation it saves.
+
 ## Anti-Patterns to Avoid
 
 1. **Primitive obsession**: Using raw String, i32, etc. for domain concepts instead of newtypes
@@ -679,6 +1138,16 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 11. **String-based errors**: Using `String` or `&str` as error types instead of structured enums
 12. **Downcasting errors**: Relying on `downcast_ref` to handle errors programmatically
 13. **Positional argument soup**: Constructors or functions with more than 3-4 positional parameters instead of config structs
+14. **Boolean sequencing flags**: `initialized: bool` / `resolved: bool` fields re-checked in every method instead of typestate (Idiom 17)
+15. **Flag soup**: several `bool`/`Option` fields whose combinations are mostly meaningless instead of one enum with per-variant data (Idiom 18)
+16. **Trailing cleanup**: `release()` / `unlock()` / `rollback()` as the last statement of a function instead of in `Drop` (Idiom 19)
+17. **Discarded guard**: `let _ = lock.acquire()?;`, which drops the guard on the same line and releases immediately
+18. **Check-and-hope**: `if user.can_write()` at some call sites instead of a token the operation requires (Idiom 20)
+19. **Forgeable token**: a capability type with a public constructor, or deriving `Clone`, `Default`, or `Deserialize`
+20. **Sealed port**: sealing a trait that adapters or test mocks must implement (Idiom 21)
+21. **Kitchen-sink extension trait**: one `Ext` trait accumulating unrelated methods on a foreign type (Idiom 22)
+22. **Mutex as protocol**: `Arc<Mutex<Resource>>` shared across tasks to enforce "one operation at a time" instead of a single owning task (Idiom 23)
+23. **Lifetimes in domain models**: borrowed `&'a str` fields in types that cross ports, tasks, or storage (Idiom 24)
 
 ## Guidelines
 
@@ -711,3 +1180,20 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 - Include relevant context (paths, IDs, values) in error variants
 - Implement `source()` to preserve error chains
 - Libraries must return structured errors; applications can use `Box<dyn Error>` internally
+
+### Type-Level State
+- Ordered steps fixed at compile time: typestate with consuming transitions (Idiom 17)
+- Mutually exclusive runtime states: one enum, data on the variant (Idiom 18)
+- Independent fields all known up front: config struct (Idiom 10), not a typestate builder
+
+### Resources and Ownership
+- Anything acquired is released in `Drop`; bind guards to a named variable, never `let _`
+- A check that gates an operation returns a private-constructor token the operation requires
+- One exclusive resource with many async callers: one owning task and a command channel
+
+### Trait Surface
+- Seal traits over the crate's own closed set of types; never seal ports
+- Extend foreign types with one `<Type>Ext` trait per concern; wrap in a newtype when an invariant is needed
+
+### Borrowing
+- Borrow from the input in parsers and boundary code; domain models own their data

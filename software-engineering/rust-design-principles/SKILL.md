@@ -4,7 +4,7 @@ description: Guidelines for applying software design principles. Use when design
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.2"
+  version: "0.0.3"
 ---
 
 # Design Principles Skill
@@ -254,6 +254,56 @@ fn create_sender(channel: NotificationChannel) -> Box<dyn NotificationSender> {
 }
 ```
 
+### 4. Choose Dispatch Deliberately (HIGH)
+
+Strategy through traits is the Rust form of Open/Closed and Dependency Inversion above: one trait names the behavior, each implementation is a separate type, and the caller depends on the trait. Rust offers two ways to select the implementation. Choose on purpose, not by habit.
+
+```rust
+trait RestoreStrategy {
+    fn restore(&self, job: &RestoreJob) -> Result<(), RestoreError>;
+}
+
+struct StagedRestore;
+struct DirectRestore;
+
+impl RestoreStrategy for StagedRestore { /* ... */ }
+impl RestoreStrategy for DirectRestore { /* ... */ }
+
+// Static dispatch - the strategy is a type parameter fixed at compile time.
+// Monomorphized into restore::<StagedRestore> and restore::<DirectRestore>; no vtable.
+fn restore<Strategy: RestoreStrategy>(
+    strategy: &Strategy,
+    job: &RestoreJob,
+) -> Result<(), RestoreError> {
+    strategy.restore(job)
+}
+
+// Dynamic dispatch - the strategy is a value chosen at runtime.
+// One compiled function; a vtable call per invocation.
+fn restore(strategy: &dyn RestoreStrategy, job: &RestoreJob) -> Result<(), RestoreError> {
+    strategy.restore(job)
+}
+
+fn select_strategy(mode: RestoreMode) -> Box<dyn RestoreStrategy> {
+    match mode {
+        RestoreMode::Staged => Box::new(StagedRestore),
+        RestoreMode::Direct => Box::new(DirectRestore),
+    }
+}
+```
+
+| Choose | When |
+|---|---|
+| Generic parameter (`Strategy: RestoreStrategy`) | The implementation is fixed at the call site or wired once at startup (a service generic over its repository port); the path is hot; the implementation set is small |
+| `Box<dyn RestoreStrategy>` or `&dyn RestoreStrategy` | The implementation is picked at runtime from data (configuration, a request field); several implementations live in one collection; the trait is a plugin point |
+
+Decision rules:
+- Default to generics for ports wired once in the composition root. Switch to `dyn` when the type parameters spread through every signature, usually past two or three, because the cost has become readability rather than performance.
+- `dyn` requires object safety: no generic methods and no `Self`-returning methods without `where Self: Sized`. When runtime selection is the requirement, design the trait for `dyn` from the start.
+- Do not choose `dyn` to avoid writing a type parameter, and do not choose generics for "zero cost" on a path that runs a handful of times per second. Neither cost is real in those cases; pick the simpler signature.
+
+Rust-specific compile-time patterns (typestate, capability tokens, RAII guards, sealed traits) live in rust-design-idioms. They are patterns too, and the same judgement applies: each must earn its place by a bug it prevents in this codebase.
+
 ## Anti-Patterns to Avoid
 
 1. **God classes**: Classes/Structs that do too many things (violates SRP)
@@ -262,6 +312,8 @@ fn create_sender(channel: NotificationChannel) -> Box<dyn NotificationSender> {
 4. **Deep inheritance**: Preferring inheritance over composition
 5. **Leaky abstractions**: Exposing implementation details through interfaces
 6. **Speculative generality**: Building for hypothetical future requirements
+7. **Reflexive `Box<dyn>`**: Dynamic dispatch chosen to avoid writing a type parameter when the implementation is fixed at startup
+8. **Generic sprawl**: Type parameters threaded through every signature to keep static dispatch on a cold path
 
 ## Guidelines
 
@@ -283,6 +335,11 @@ fn create_sender(channel: NotificationChannel) -> Box<dyn NotificationSender> {
 - Never introduce patterns preemptively
 - Understand the problem before choosing a pattern
 - Simple code is better than pattern-heavy code
+
+### Dispatch
+- Generics when the implementation is chosen at compile time or wired once at startup
+- `dyn` when the implementation is chosen at runtime or many live in one collection
+- Move from generics to `dyn` once type parameters spread past two or three signatures
 
 ### Decision Making
 - Ask "Do I need this complexity now?"
