@@ -407,8 +407,17 @@ Use this structure:
   and intentional report-file write if applicable>
 
 ## Verdict
-<ship as-is | ship after Blocking fixed | fix Blocking and Important before merge | rework before merge>
+<ship as-is | fix Important before merge | fix Blocking before merge | fix Blocking and Important before merge | rework before merge>
 ```
+
+Pick the verdict from the findings:
+
+- Blocking and Important present: fix Blocking and Important before merge.
+- Blocking only: fix Blocking before merge.
+- Important only: fix Important before merge.
+- Nits or no findings: ship as-is.
+- Rework before merge only when a Blocking finding needs re-architecture
+  rather than a local fix.
 
 Omit empty severity sections, the Scope Coverage section when the plan or
 brief enumerates no requirements, and the Pre-existing (context) section when
