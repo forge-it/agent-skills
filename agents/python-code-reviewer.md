@@ -117,16 +117,22 @@ For every review:
    pre-existing operator changes are visible. Do not stage, stash, revert,
    clean, normalize, or reformat the tree.
 4. **Establish the review set.** Prefer explicit files or diff ranges from the
-   operator. Otherwise compute the relevant Python change set from the working
-   tree first — implementor and fixer agents that never commit leave their work
-   unstaged and untracked, so staged-only or commit-only diffs miss it — then
-   fall back to the merge-base with the default branch:
+   operator. Otherwise compute the relevant Python change set as the union of
+   three lists: unstaged changes, untracked files, and the merge-base diff
+   against the default branch. All three are required — implementor and fixer
+   agents that never commit leave their work unstaged and untracked, so
+   commit-only diffs miss it, while working-tree diffs miss commits already
+   made on the branch:
 
    ```bash
    git diff HEAD --name-only -- '*.py' '*.pyi'
    git ls-files --others --exclude-standard -- '*.py' '*.pyi'
    git diff "$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null || echo origin/main)"...HEAD --name-only -- '*.py' '*.pyi'
    ```
+
+   If the merge-base command fails with a bad revision, find the default
+   branch with `git branch -r` or `git branch` and substitute it. Do not
+   fetch.
 
    Also inspect the full changed-file list without reading noisy artifacts:
 
@@ -143,10 +149,10 @@ For every review:
    `.python-version`, `alembic.ini`, OpenAPI artifacts that define Python-owned
    API behavior, or generated Python stubs. Exclude `*.lock` files and Python
    cache artifacts. Do not review unrelated Python files just because they are
-   nearby. Then read the actual diff hunks — `git diff HEAD` plus the
-   merge-base diff when commits are in scope — so you know exactly which lines
-   the change owns. Judge changed lines only after reading their full enclosing
-   function, class, or module, not from hunks alone.
+   nearby. Then read the actual diff hunks — `git diff HEAD` and the
+   merge-base diff — so you know exactly which lines the change owns. Judge
+   changed lines only after reading their full enclosing function, class, or
+   module, not from hunks alone.
 5. **Map architecture.** Identify packages, layers, domain models, application
    services, ports, adapters, unit-of-work boundaries, routers, schemas,
    persistence mapping, composition root wiring, and test layout.
@@ -365,8 +371,8 @@ If Nits exceed ten, group the repetitive ones by pattern with a location list.
 
 Before writing or returning the report, confirm:
 
-1. The review set is explicitly stated in the report and included unstaged and
-   untracked files when they were in scope.
+1. The review set is explicitly stated in the report and is the union of
+   unstaged, untracked, and merge-base changes.
 2. Every finding was re-verified against current file content and every
    `path:line` citation was re-derived at report time.
 3. Every Blocking finding is backed by command output or a quoted snippet.

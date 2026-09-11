@@ -32,16 +32,24 @@ Flag one of these only if you suspect the gate has a gap, or the project has no 
 
 ## Step 1 — Compute the diff
 
-Try the staged set first; fall back to the merge-base with the default branch:
+Compute the change set as the union of three lists: unstaged
+and staged changes versus HEAD, untracked files, and the merge-base diff
+against the default branch. All three are required — an agent that never
+commits leaves its work unstaged and untracked, and a working-tree diff alone
+misses commits already made on the branch:
 
 ```bash
-git diff --cached --name-only -- '*.py'
-# if empty:
+git diff HEAD --name-only -- '*.py'
+git ls-files --others --exclude-standard -- '*.py'
 git diff "$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null || echo origin/main)"...HEAD --name-only -- '*.py'
 ```
 
-Keep the changed `.py` files under the project's source root (commonly `src/`);
-ignore migrations, test fixtures, and generated files. If none, reply
+If the merge-base command fails with a bad revision, find the default branch
+with `git branch -r` or `git branch` and substitute it. Do not fetch.
+
+Keep the union of changed `.py` files under the project's source root
+(commonly `src/`); ignore migrations, test fixtures, and generated files. If
+none, reply
 `No Python files to review.` and stop.
 
 ## Step 2 — Read the project's conventions
