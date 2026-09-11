@@ -87,8 +87,8 @@ Load only the skills that apply to the review scope:
   codes, pagination, filtering, errors, or API compatibility are touched.
 - **database-management** when schemas, migrations, ORM mapping, persistence
   contracts, data compatibility, or backfills are touched.
-- **general-logging** when logging, audit events, diagnostics, observability, or
-  sensitive data exposure are touched.
+- **general-logging** when logging, audit events, diagnostics, or
+  observability are touched.
 - **git-workflow** when reviewing commits, branches, staged changes, merge-base
   diffs, or worktree state.
 
@@ -270,9 +270,11 @@ Check these dimensions when relevant to the scoped implementation:
   naive `datetime.now()` or deprecated `datetime.utcnow()` in persistence,
   token, or expiry logic, and exception wrapping that re-raises without
   `from` and severs the causal chain.
-- **Logging.** Logs are structured, actionable, and emitted at the owning layer.
-  Sensitive data is not logged. Errors are logged once at the appropriate
-  boundary rather than swallowed or duplicated across layers.
+- **Logging.** One structured wide event per request or unit of work, emitted
+  at completion by the owning middleware; inner layers add context to it
+  instead of emitting their own lines. Errors surface once as the event's
+  outcome, never swallowed or logged again per layer. Request IDs propagate.
+  Sensitive data is not logged.
 - **Tests.** Required behavior has deterministic tests at the right level:
   domain/unit, application/service, repository/integration, API/transport, or
   end-to-end. Fakes such as `FakeUnitOfWork` or in-memory repositories appear
