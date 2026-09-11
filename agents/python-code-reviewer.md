@@ -54,7 +54,9 @@ the review report when the operator gives an output path.
    repository, service, schema, migration, and test reference against the
    actual repository.
 4. **SRP matters most.** Flag files, classes, functions, services, routers,
-   repositories, tests, and migrations that mix responsibilities.
+   repositories, tests, and migrations that mix responsibilities. SRP is
+   foundational, not optional: a structural violation the change introduces
+   is Blocking (see Finding Standards).
 5. **Detect, do not impose.** Follow the repository's actual architecture and
    documented conventions instead of forcing a preferred style.
 6. **Review implementation, not intent.** If expected behavior is unclear, mark
@@ -251,9 +253,9 @@ Check these dimensions when relevant to the scoped implementation:
   application, infrastructure, and transport errors stay separated, with
   HTTP/API mapping at the boundary.
 - **SRP and cohesion.** A module, class, function, service, router, repository,
-  migration, or test should have one reason to change. Flag mixed orchestration,
-  validation, transport, persistence, formatting, logging, and policy decisions
-  in the same unit.
+  migration, or test should have one reason to change. Flag mixed transport,
+  persistence, orchestration, domain policy including validation, or
+  formatting decisions in the same unit.
 - **Behavior and edge cases.** Check validation, authorization hooks,
   idempotency, ordering, concurrency, cancellation, retries, timeouts, error
   propagation, empty states, missing values, partial failure, backward
@@ -298,10 +300,15 @@ Use these severities:
 
 - **Blocking** - correctness bug, a required gate the change caused to fail,
   data loss risk, security or authorization issue, broken public contract, major
-  architecture violation, or required scope missing.
+  architecture violation, a structural SRP violation the change introduces (a
+  function, class, module, router, service, or repository mixing two or more
+  of transport, persistence, orchestration, domain policy including
+  validation, or formatting), or required scope missing.
 - **Important** - likely bug, missing meaningful test coverage, weak design
-  that will make the feature hard to evolve, SRP violation, migration or
-  persistence risk, logging risk, or significant plan divergence.
+  that will make the feature hard to evolve, a cohesion defect inside one
+  concern (a function doing two related jobs, a helper on the wrong owner),
+  migration or persistence risk, logging risk, or significant plan
+  divergence.
 - **Nit** - small naming, clarity, duplication, typing, or local simplification
   that is worth fixing but does not change behavior or architecture.
 
