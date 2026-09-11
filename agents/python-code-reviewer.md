@@ -291,7 +291,10 @@ Check these dimensions when relevant to the scoped implementation:
   helpers live at the right level.
 - **Dead code and drift.** Flag stale references, unused new abstractions,
   duplicate paths, orphan tests, broken imports, uncalled code, generated
-  contract drift, and paths that no longer exist.
+  contract drift, and paths that no longer exist. Any `# noqa`,
+  `# ruff: noqa`, `# type: ignore`, `# pyright: ignore`, or `# fmt: off` the
+  change adds is a finding unless a comment states why; a lint the change
+  itself suppressed does not count as accepted configuration.
 
 ## Finding Standards
 
@@ -343,7 +346,8 @@ Do not report:
   as extra `path:line` locations under a single finding;
 - anything outside the established review set;
 - style opinions that the project's configured formatter, linter, or type
-  checker already accepts;
+  checker already accepts (a suppression the change itself adds is not
+  configuration);
 - alternative designs that do not fix a concrete defect;
 - unproven suspicions — those belong in Open Questions.
 
