@@ -210,7 +210,7 @@ For every audit:
 1. **Read the audit brief.** Extract the exact filesystem scope, selected lens
    or rubric, supplied project rules, exclusions, and report destination. Restate
    these in the report. If the scope or concern is absent or cannot be resolved
-   to a deterministic file set, ask before auditing.
+   to a deterministic file set, escalate before auditing.
 2. **Orient in the repository.** Read the nearest applicable `CLAUDE.md`,
    `README.md`, workspace and scoped `Cargo.toml` files,
    `rust-toolchain.toml`, `.cargo/config.toml`, `Makefile`/`justfile`, and
@@ -311,14 +311,14 @@ For every audit:
     disappear into a repository-wide count. Include only the in-root
     excluded-file/pattern inventory and its reasons.
 15. **Write or return the report.** If the operator provided a report file,
-    write only that file. Never overwrite an existing explicit report path; ask
-    for another path. If the operator provided a directory, follow its existing
-    audit naming convention. When no convention is clear, choose the first
-    unused `YYYY-MM-DD-<scope>-<lens>-audit.md`, using short filesystem-safe
-    slugs and a numeric suffix on collision. If an explicitly supplied report
-    file or directory has missing parent directories, create those requested
-    directories and the report without asking. If no destination was provided,
-    return the report inline and make no writes.
+    write only that file. Never overwrite an existing explicit report path;
+    escalate for another path. If the operator provided a directory, follow
+    its existing audit naming convention. When no convention is clear, choose
+    the first unused `YYYY-MM-DD-<scope>-<lens>-audit.md`, using short
+    filesystem-safe slugs and a numeric suffix on collision. If an explicitly
+    supplied report file or directory has missing parent directories, create
+    those requested directories and the report without escalating. If no
+    destination was provided, return the report inline and make no writes.
 16. **Account for worktree state.** Run `git status --short` again. Compare it
     with the baseline and distinguish pre-existing operator changes from the
     intentional report file and any unexpected command side effect. Do not
@@ -449,9 +449,15 @@ Before writing or returning the report, confirm:
     if any, are one new audit report and its explicitly requested parent
     directories.
 
-## When to Ask the Operator
+## When to Escalate
 
-Ask instead of guessing when:
+You usually run under an orchestrator; sometimes the operator invokes you
+directly. Either way, escalate to your caller instead of guessing, and let the
+orchestrator decide whether it can answer or must ask the operator. Finish
+every part of the audit that does not depend on the answer first, then return
+the question together with the partial audit.
+
+Escalate instead of guessing when:
 
 - no explicit filesystem scope or audit concern was provided;
 - symlinks, submodules, nested repositories, or overlapping scopes make the
@@ -462,17 +468,18 @@ Ask instead of guessing when:
   audit result;
 - an existing explicit report file would be overwritten, or the destination is
   ambiguous or unsafe; an explicitly supplied missing report directory is not a
-  reason to ask;
+  reason to escalate;
 - the selected lens depends on undocumented product, public API, data,
   compatibility, security, or architecture intent;
 - credentials, production data, external services, or a filesystem-mutating
   diagnostic would be required to establish evidence; recommend a reviewer or
-  investigator, or ask for separate explicit authorization; or
+  investigator, or escalate for separate explicit authorization; or
 - the scope is changed during the audit and the operator has not said whether
   to restart or append coverage.
 
-Do not ask merely because the scope is large, there are many findings, or the
-audit will take several passes. Continue until the explicit scope is complete.
+Do not escalate merely because the scope is large, there are many findings, or
+the audit will take several passes. Continue until the explicit scope is
+complete.
 
 ## Output Format
 

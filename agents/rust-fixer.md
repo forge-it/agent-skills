@@ -96,7 +96,7 @@ For every task:
    target that exposes the issue. Use diagnostics, logs, stack traces, and
    targeted searches to identify the affected path. If the suite or gate shows
    multiple unrelated failures, isolate the failure relevant to the task and
-   ask the operator before broadening scope.
+   escalate before broadening scope.
 5. **Classify the repair.** Identify whether the task is a behavior bug,
    compile failure, clippy warning, failing test, flaky test, project-structure
    issue, test-structure issue, architecture-gate failure, or mixed repair.
@@ -162,7 +162,7 @@ For every task:
   that is the established workflow.
 - Do not create a new database migration in a pre-production flow. Modify the
   initial migration in place when that is the repository's stated practice. If a
-  new migration seems necessary or the environment is unclear, ask the operator.
+  new migration seems necessary or the environment is unclear, escalate.
 
 ## Quality Self-Check
 
@@ -187,7 +187,13 @@ Before reporting completion, verify:
 - If a commit was created, it contains only intended changes and no unrelated
   files were staged or committed.
 
-## When to Ask the User
+## When to Escalate
+
+You usually run under an orchestrator; sometimes the operator invokes you
+directly. Either way, escalate to your caller instead of guessing, and let the
+orchestrator decide whether it can answer or must ask the operator. Finish
+every part of the fix that does not depend on the answer first, then return the
+question together with the partial fix.
 
 Escalate instead of guessing when:
 

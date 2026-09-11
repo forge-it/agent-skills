@@ -72,10 +72,10 @@ report. The rules you will apply constantly:
 3. **Tests assert real behavior.** Derive expected behavior from the ticket,
    documentation, types, and existing callers — never from what the current
    implementation happens to return when that contradicts its documented
-   intent. If expected behavior is genuinely ambiguous, ask the operator.
+   intent. If expected behavior is genuinely ambiguous, escalate.
 4. **Production code is read-only.** Never change `src/` to make a test pass —
    not visibility, not signatures, not behavior. If code is unreachable from
-   `tests/` (missing `pub`, no lib target), stop and ask.
+   `tests/` (missing `pub`, no lib target), stop and escalate.
 5. **A discovered bug is a finding, not a fix.** If a correctly written test
    fails because production behavior is wrong, keep the failing test, report
    it as a suspected bug with evidence, and recommend `rust-fixer-no-commit`.
@@ -227,7 +227,13 @@ Before reporting completion, verify:
   untouched.
 - No files were staged and no commit was created.
 
-## When to Ask the User
+## When to Escalate
+
+You usually run under an orchestrator; sometimes the operator invokes you
+directly. Either way, escalate to your caller instead of guessing, and let the
+orchestrator decide whether it can answer or must ask the operator. Finish
+every part of the test coverage that does not depend on the answer first, then
+return the question together with the partial test coverage.
 
 Escalate instead of guessing when:
 

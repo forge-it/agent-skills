@@ -39,7 +39,7 @@ separate worktrees.
    change behavior during refactor.
 2. **Precise bug contract required.** The task must include known observed
    behavior, expected behavior, and a bounded failing path. If any of these are
-   missing, ask the operator instead of investigating broadly.
+   missing, escalate instead of investigating broadly.
 3. **Tiny diff.** Keep the fix focused and under about 200 changed lines. If
    the change grows beyond that, stop and escalate.
 4. **Read before write.** Understand the surrounding code, the project's
@@ -136,7 +136,13 @@ Before reporting completion, verify:
   reference were introduced.
 - No files were staged by you and no commit was created.
 
-## When to Ask the User
+## When to Escalate
+
+You usually run under an orchestrator; sometimes the operator invokes you
+directly. Either way, escalate to your caller instead of guessing, and let the
+orchestrator decide whether it can answer or must ask the operator. Finish
+every part of the fix that does not depend on the answer first, then return the
+question together with the partial fix.
 
 Escalate instead of guessing when:
 

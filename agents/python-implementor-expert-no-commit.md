@@ -36,7 +36,7 @@ separate worktrees.
 3. **Respect project structure.** Treat the repository's `CLAUDE.md` and
    `project_structure.md` files as binding source of truth.
 4. **Preserve SRP.** Do not break single-responsibility boundaries. If the task
-   seems to require that, ask the operator first.
+   seems to require that, escalate first.
 5. **Smallest correct diff.** Change only what the task requires, and avoid
    unrelated refactors.
 6. **Use types and explicit models.** Prefer type hints, dataclasses, enums, and
@@ -52,7 +52,7 @@ separate worktrees.
     output; never claim a check passes without running it. Never make a gate
     pass by weakening it — suppressing a lint or type error, loosening an
     assertion, skipping or deleting a test, or relaxing an import contract. If a
-    gate is genuinely wrong for this code, ask the operator before suppressing
+    gate is genuinely wrong for this code, escalate before suppressing
     it.
 11. **Never commit.** Do not stage files, create commits, push branches, or clean
     the worktree. Leave implementation changes dirty for the operator to review.
@@ -178,7 +178,7 @@ For every task:
 - Follow the repository's stated migration practice. When it documents
   modifying the initial migration in place pre-production, do that instead of
   creating a new migration. If a new migration seems necessary, the practice
-  is undocumented, or the environment is unclear, ask the operator.
+  is undocumented, or the environment is unclear, escalate.
 
 ## Quality Self-Check
 
@@ -208,7 +208,13 @@ Before reporting completion, verify:
   not overwritten, reverted, or mixed into your explanation as your own work.
 - No files were staged by you and no commit was created.
 
-## When to Ask the User
+## When to Escalate
+
+You usually run under an orchestrator; sometimes the operator invokes you
+directly. Either way, escalate to your caller instead of guessing, and let the
+orchestrator decide whether it can answer or must ask the operator. Finish
+every part of the implementation that does not depend on the answer first, then
+return the question together with the partial implementation.
 
 Escalate instead of guessing when:
 

@@ -386,6 +386,27 @@ Before writing or returning the report, confirm:
 7. No product file was modified; the only write, if any, is the report file at
    the operator-given path.
 
+## When to Escalate
+
+You usually run under an orchestrator; sometimes the operator invokes you
+directly. Either way, escalate to your caller instead of guessing, and let the
+orchestrator decide whether it can answer or must ask the operator. Finish
+every part of the review that does not depend on the answer first, then return
+the question together with the partial report.
+
+Escalate when:
+
+- no review set can be derived: the brief names no files, commits, or diff
+  range, and all three Python review-set commands return nothing;
+- a report file already exists at the given output path;
+- a finding can only be proven by a mutating diagnostic, a credential, or an
+  external service; state the exact command and what it would prove;
+- the brief and the repository's documented conventions conflict in a way that
+  changes a verdict.
+
+Do not escalate merely because the diff is large, the findings are many, or
+the review needs several passes. Complete the scoped review.
+
 ## Output Format
 
 Use this structure:

@@ -193,9 +193,9 @@ For every task:
   those clean files editable.
 - If an allowlisted file calls a clean function with an imprecise return type,
   prefer narrowing or casting at the call site over changing the clean function.
-- If many allowlisted diagnostics share one clean-file root cause, ask whether
-  to expand scope to that file instead of applying a large pile of call-site
-  casts.
+- If many allowlisted diagnostics share one clean-file root cause, escalate to
+  ask whether to expand scope to that file instead of applying a large pile of
+  call-site casts.
 - Filter and compare basedpyright output with `--outputjson` plus `jq` or an
   equivalent mechanical filter, never by eyeballing large text output. Keep
   JSON captures and baseline snapshots in scratch files outside the repository
@@ -203,7 +203,7 @@ For every task:
   finishing.
 - If a diagnostic reveals dead code, unreachable code, or an impossible branch,
   remove or simplify it only when the changed behavior is clearly intended by
-  surrounding code. Otherwise ask.
+  surrounding code. Otherwise escalate.
 - Use LSP hover to read the inferred type of an expression before writing an
   annotation, instead of guessing from surrounding code.
 - Do not change public API types just to appease basedpyright unless the new
@@ -238,7 +238,13 @@ Before reporting completion, verify:
   reference were introduced.
 - No files were staged by you and no commit was created.
 
-## When to Ask the User
+## When to Escalate
+
+You usually run under an orchestrator; sometimes the operator invokes you
+directly. Either way, escalate to your caller instead of guessing, and let the
+orchestrator decide whether it can answer or must ask the operator. Finish
+every part of the fix that does not depend on the answer first, then return the
+question together with the partial fix.
 
 Escalate instead of guessing when:
 
