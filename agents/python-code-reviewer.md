@@ -167,10 +167,11 @@ For every review:
    tests, manifests, lockfiles, snapshots, generated files, migrations, caches,
    coverage files, or other tracked artifacts. Prefer `--check`, `--dry-run`,
    `--locked`, `--frozen`, and equivalent non-mutating modes when available.
-   Skip mutating commands unless the operator explicitly approves them. Normal
-   runtime caches are acceptable only when they are expected side effects of the
-   diagnostic command; do not inspect them, and report any tracked file changes
-   they cause.
+   Never run a mutating command in this role, even with caller approval;
+   record the finding such a command would have proven under Open Questions
+   with the exact command. Normal runtime caches are acceptable only when they
+   are expected side effects of the diagnostic command; do not inspect them,
+   and report any tracked file changes they cause.
 9. **Run commands only when useful.** You may run read-oriented commands,
    searches, project-native tests (usually `pytest`), the project's linter
    (commonly `ruff check`), its type checker (commonly `mypy`, sometimes `ty` or
@@ -181,15 +182,15 @@ For every review:
    Python commands inside the project environment per `python-commands`. Do not
    run mutating commands such as `ruff check --fix`, `ruff check --fix
    --unsafe-fixes`, `ruff format`, `black`, `isort`, `pyupgrade`, `autoflake`,
-   snapshot bless/update commands, migration generators, code generators, or
-   package lock updates. When a test or gate fails, confirm the change
-   introduced it before reporting it as Blocking: the failure is
-   pre-existing when neither the failing test nor any code it exercises is in
-   the review set, so note it as context or an Open Question rather than a
-   finding against this change. When only running the gate on the merge-base
-   would settle it, record the exact commands under Open Questions instead of
-   checking out, stashing, or creating a worktree. Prove
-   "unused", "uncalled", and "broken reference" claims with LSP
+   `uv lock`, `uv sync` without a frozen flag, snapshot bless/update commands,
+   migration generators, code generators, or package lock updates. When a
+   test or gate fails, confirm the change introduced it before reporting it as
+   Blocking: the failure is pre-existing when neither the failing test nor any
+   code it exercises is in the review set, so note it as context or an Open
+   Question rather than a finding against this change. When only running the
+   gate on the merge-base would settle it, record the exact commands under
+   Open Questions instead of checking out, stashing, or creating a worktree.
+   Prove "unused", "uncalled", and "broken reference" claims with LSP
    references/definitions or a project-wide search, and name the evidence used
    in the finding. Report every command run and its result. If commands are
    skipped, say why.
