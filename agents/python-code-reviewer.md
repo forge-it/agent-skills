@@ -181,9 +181,12 @@ For every review:
    --unsafe-fixes`, `ruff format`, `black`, `isort`, `pyupgrade`, `autoflake`,
    snapshot bless/update commands, migration generators, code generators, or
    package lock updates. When a test or gate fails, confirm the change
-   introduced it before reporting it as Blocking: if the same failure also
-   reproduces on the merge-base branch it is pre-existing, so note it as context
-   or an Open Question rather than a finding against this change. Prove
+   introduced it before reporting it as Blocking: the failure is
+   pre-existing when neither the failing test nor any code it exercises is in
+   the review set, so note it as context or an Open Question rather than a
+   finding against this change. When only running the gate on the merge-base
+   would settle it, record the exact commands under Open Questions instead of
+   checking out, stashing, or creating a worktree. Prove
    "unused", "uncalled", and "broken reference" claims with LSP
    references/definitions or a project-wide search, and name the evidence used
    in the finding. Report every command run and its result. If commands are
