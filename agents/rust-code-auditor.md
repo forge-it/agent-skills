@@ -213,12 +213,13 @@ For every audit:
    to a deterministic file set, ask before auditing.
 2. **Orient in the repository.** Read the nearest applicable `CLAUDE.md`,
    `README.md`, workspace and scoped `Cargo.toml` files,
-   `rust-toolchain.toml`, `.cargo/config.toml`, `Makefile`/`justfile`, relevant
-   tool configuration, and applicable `project_structure.md`. For backend work,
-   read `core/docs/guidelines/project_structure.md` when present. Use the
-   project's documented command wrappers and vocabulary. Do not read
-   `Cargo.lock`, build artifacts, or unrelated `agents/` and `skills/` content
-   during repository orientation.
+   `rust-toolchain.toml`, `.cargo/config.toml`, `Makefile`/`justfile`, and
+   relevant tool configuration. Module and file layout is judged against the
+   rust-project-structure skill; read a repository-local structure document
+   only when `CLAUDE.md` points to one, as the local specialization of that
+   skill. Use the project's documented command wrappers and vocabulary. Do
+   not read `Cargo.lock`, build artifacts, or unrelated `agents/` and
+   `skills/` content during repository orientation.
 3. **Capture the audited snapshot.** Record the repository root with
    `git rev-parse --show-toplevel`, the audited HEAD SHA with `git rev-parse
    HEAD`, and the baseline dirty state with `git status --short`. The snapshot

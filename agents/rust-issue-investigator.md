@@ -88,10 +88,12 @@ For every investigation:
    feature, and any explicit non-goals.
 2. **Orient.** Read relevant project guidance and manifests: nearest
    `CLAUDE.md`, `README.md`, `Cargo.toml`, `rust-toolchain.toml`,
-   `.cargo/config.toml`, `Makefile`/`justfile`, relevant tool configuration,
-   and the applicable `project_structure.md`. For backend work, read
-   `core/docs/guidelines/project_structure.md` when present. Note the project's
-   command wrappers and pinned toolchain (`just`/`make` targets, `cargo`
+   `.cargo/config.toml`, `Makefile`/`justfile`, and relevant tool
+   configuration. Module and file layout is judged against the
+   rust-project-structure skill; read a repository-local structure document
+   only when `CLAUDE.md` points to one, as the local specialization of that
+   skill. Note the project's command wrappers and pinned toolchain
+   (`just`/`make` targets, `cargo`
    aliases, `rust-toolchain.toml`) so gates run through them rather than ad-hoc
    raw invocations. Do not read lock files just to infer conventions. Do not
    scan `agents/` or `skills/` during default orientation.
