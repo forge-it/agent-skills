@@ -4,7 +4,7 @@ description: Coding conventions and style rules for Rust. Apply when writing or 
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.12"
+  version: "0.0.13"
 ---
 
 # Rust Code Style Skill
@@ -228,7 +228,7 @@ crate::domain::User
 
 // Bad — 4+ segments; unreadable, must `use` first
 crate::domain::User::create()
-crate::application::ResourceNotificationIntentConfig::from_env_or_default(...)
+crate::application::ResourceNotificationIntentConfig::from_document(...)
 crate::a::b::c::d::Type::method(...)
 ```
 
@@ -236,7 +236,7 @@ After importing, the call site stays readable:
 
 ```rust
 use crate::application::ResourceNotificationIntentConfig;
-ResourceNotificationIntentConfig::from_env_or_default(...)
+ResourceNotificationIntentConfig::from_document(...)
 ```
 
 This rule applies to expressions, type annotations, `impl` headers, and trait bounds — anywhere an inline path appears at a call site. The same 3-segment cap applies to chains starting from `super::`.

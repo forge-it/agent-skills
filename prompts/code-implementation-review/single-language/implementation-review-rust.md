@@ -29,7 +29,7 @@ Errors, async, and idioms:
 
 Proof — do the tests prove the change:
 - For every behavior the change set adds or alters, name the test that fails if the behavior breaks. A behavior with no such test is a finding.
-- Tests that assert implementation detail instead of behavior, and tests that cannot fail. Diff the changed test files against the change-scope base and flag weakening: loosened assertions, deleted cases, new `#[ignore]`.
+- Tests that assert implementation detail instead of behavior, and tests that cannot fail. Diff the changed test files against the change-scope base and flag weakening: loosened assertions, deleted cases, new `#[ignore]` (a precondition `#[ignore = "requires …"]` on a deployment check, under the project's deployment-check root, is that category's convention and is not weakening).
 - Migrations in the change set: ordering, downgrade path, and whether the previous code version can run against the new schema during a rolling deploy. If the project's docs state a migration policy, verify the change set obeys it.
 
 Cross-cutting:

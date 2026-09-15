@@ -10,7 +10,7 @@ description: >-
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.2"
+  version: "0.0.3"
 ---
 
 # Repo Root Files Pattern
@@ -70,22 +70,31 @@ describe and configure that one service only.
 | `README.md` | What this component does, how to configure it, how to run it locally. | Yes |
 | `ROADMAP.md` | Per-component milestones and phases, linked from the root roadmap. | Recommended |
 | `CLAUDE.md` | Component-specific AI agent instructions — more detailed than the root. | When using AI agents |
-| `.env` | Local development values (real secrets). **Never committed.** | Yes (local-only) |
-| `.env.template` | Checked-in scaffold: every variable name, its dev default, and a comment explaining each one. No real secrets. | Yes |
-| `.env.deploy.local` | Checked-in local-prod values: variable values suitable for `docker compose up` against local containers (e.g. service hostnames instead of `localhost`, real or realistic SMTP credentials). **May contain low-sensitivity real values for a dev cluster.** | When the component is containerised |
+| `config.toml` | Committed deployment policy for a native development run: the versioned TOML document the process loads — bind address, endpoints, pool sizes, timeouts. **No secrets, ever.** | Yes (for a process that loads configuration) |
+| `config.local-deploy.toml` | Committed deployment policy for the `docker compose` run: container hostnames and internal ports instead of `localhost` and host-mapped ports. No secrets. | When the component is containerised |
+| `.env` | Bootstrap values (config path, secret-source selector) plus development secret fixtures in environment mode. **Never committed.** | Yes (local-only) |
+| `.env.template` | Checked-in scaffold of `.env`: every variable name, a safe placeholder, and a comment explaining each one. No real secrets. | Yes |
+| `.env.deploy.local` | Checked-in bootstrap for the `docker compose` run plus **low-sensitivity dev-cluster secret fixtures only**. Deployment policy is not here — it is in `config.local-deploy.toml`. | When the component is containerised |
 | `.gitignore` | Component-level exclusion: `/target/` or `/node_modules/`, `/.env`, `/.env.*` with explicit negations for `.env.template` and `.env.deploy.local`. | Yes |
 | `Cargo.toml` / `pyproject.toml` / `package.json` | Component build manifest. Note what is *not* here: a component task runner. The root `justfile` is the single command surface and delegates to each component's toolchain — see the anti-pattern below. | Language-dependent |
 
 ## The Three Environment Files
 
 This is the most error-prone part of the pattern. Each component has exactly
-three env-related files with distinct roles.
+three env-related files with distinct roles. What they carry is deliberately
+narrow: **bootstrap values and secret fixtures, nothing else.** Deployment
+policy — endpoints, ports, pool sizes, timeouts — lives in the committed TOML
+documents above, and a credential-bearing URL such as
+`postgres://user:password@host/db` appears in none of these files. Which
+value is bootstrap, which is a secret, and which belongs in the TOML is the
+[configuration authority pattern](../decisions/configuration_authority_pattern.md)'s
+decision; this pattern only places the files.
 
 | File | Committed? | Contains real secrets? | Used by |
 |---|---|---|---|
-| `.env` | No | Yes (local dev) | Developer running the component natively |
-| `.env.template` | Yes | No (placeholder or safe dev defaults) | New contributors copying it to `.env` |
-| `.env.deploy.local` | Yes | Maybe (low-risk dev-cluster credentials only) | `docker compose up` for local-prod testing |
+| `.env` | No | Yes (development fixtures) | Developer running the component natively |
+| `.env.template` | Yes | No (placeholders) | New contributors copying it to `.env` |
+| `.env.deploy.local` | Yes | Maybe (low-risk dev-cluster fixtures only) | `docker compose up` for local-prod testing |
 
 ### `.env.template` conventions
 
@@ -93,9 +102,11 @@ Observed in ironbox across `core/`, `worker/`, and `web/`:
 
 - Start with `# shellcheck disable=SC2034` so shell linters do not flag unused
   variable warnings when the file is sourced.
-- Every variable is present. Where a variable needs a real secret, include
-  a safe dev default or a clearly named placeholder (not an empty value,
-  which leaves contributors guessing the type).
+- Every variable is present. Where a variable is a secret fixture, include a
+  safe dev default or a clearly named placeholder (not an empty value, which
+  leaves contributors guessing the type).
+- Only bootstrap values and secret fixtures appear. A hostname, port, or
+  timeout in this file is a defect: it belongs in `config.toml`.
 - Inline comments explain non-obvious variables: their purpose, valid values,
   and when they apply (e.g. "Set to `true` in production (HTTPS)").
 - Keep the template in sync with `.env` — same variable names, same ordering.
@@ -105,46 +116,46 @@ Minimal template example (backend component):
 
 ```dotenv
 # shellcheck disable=SC2034
-DATABASE_URL=postgres://app:dev_password@localhost:5432/appdb
-SERVICE_PORT=8000
-BASE_URL=http://localhost:8000
+# Bootstrap — the only non-secret values the environment carries.
+APP_CONFIGURATION_PATH=config.toml
+APP_SECRET_SOURCE=environment   # development and tests only; production uses `file`
 
+# Development secret fixtures, read only in environment mode. The database
+# host, port, and name, and the SMTP host and port, live in config.toml —
+# only the credential is here.
+APP_DATABASE_PASSWORD=dev_password
+APP_SMTP_PASSWORD=dev_password
 # 32-byte base64-encoded key. Generate with: openssl rand -base64 32
-SECRETS_ENCRYPTION_KEY=REPLACE_WITH_GENERATED_KEY
-
-# SMTP (points at the Mailpit dev container in local dev)
-SMTP_HOST=localhost
-SMTP_PORT=1025
-SMTP_USERNAME=app
-SMTP_PASSWORD=dev_password
-SMTP_SECURITY=none
+APP_SECRETS_ENCRYPTION_KEY=REPLACE_WITH_GENERATED_KEY
 ```
+
+`APP_` stands for the project's own prefix. The matching `config.toml` holds
+the non-secret half — `[server] port = 8000`, `[database] host = "localhost"`,
+`[smtp] host = "localhost"` — so the two files never carry the same value.
 
 ### `.env.deploy.local` conventions
 
-This file holds values that differ between a native-dev run (everything on
-`localhost` with dev ports) and a `docker compose` run (services reach each
-other via container hostnames and standard internal ports).
+This file selects the compose-run configuration document and carries the
+secret fixtures for that run. Everything that differs between a native-dev
+run and a `docker compose` run — container hostnames instead of `localhost`,
+internal standard ports instead of host-mapped dev ports — is a difference
+between `config.toml` and `config.local-deploy.toml`, not between two env
+files.
 
 ```dotenv
 # shellcheck disable=SC2034
-# Container hostname — differs from .env.template (localhost)
-DATABASE_URL=postgres://app:dev_password@postgres:5432/appdb
+APP_CONFIGURATION_PATH=config.local-deploy.toml
+APP_SECRET_SOURCE=environment   # compose passes these through; production uses `file`
 
-SERVICE_PORT=8000
-BASE_URL=http://localhost:8703   # host-facing URL, mapped by docker compose
-
-# Real or low-risk credentials for the dev cluster only
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=465
-SMTP_USERNAME=forge.itc@gmail.com
-SMTP_PASSWORD="abcd efgh ijkl mnop"
-SMTP_SECURITY=tls
+# Low-risk dev-cluster fixtures only
+APP_DATABASE_PASSWORD=dev_password
+APP_SMTP_PASSWORD=REPLACE_WITH_DEV_CLUSTER_SMTP_PASSWORD
+APP_SECRETS_ENCRYPTION_KEY=REPLACE_WITH_GENERATED_KEY
 ```
 
-Key difference from `.env.template`: hostnames are container names
-(`postgres`, `rabbitmq`, `core`) instead of `localhost`; ports are internal
-standard ports (`5432`, `5672`) instead of host-mapped dev ports.
+A containerised component at delivery tier 1 or above of the configuration
+authority pattern replaces environment mode with Compose `secrets:` files, and
+the fixtures leave this file; the bootstrap lines stay.
 
 ### Per-component `.gitignore` pattern
 

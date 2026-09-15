@@ -163,7 +163,9 @@ For every task:
 - Do not make a gate pass by weakening it. Fix the underlying code rather than
   suppressing a clippy lint; add `#[allow(...)]` or `#[ignore]` only when the
   lint or test is intentionally wrong for this code and the operator approves the
-  exact suppression. Do not loosen assertions, swallow errors, weaken
+  exact suppression. A precondition `#[ignore = "requires …"]` on a deployment
+  check, under the project's deployment-check root, is that category's
+  convention rather than a suppression. Do not loosen assertions, swallow errors, weaken
   validation, or relax an architecture rule to reach green.
 - If a gate fails in code you did not touch, attribute it before acting: check
   whether it also fails at `HEAD` in a scratch worktree (`EnterWorktree`,
@@ -194,8 +196,8 @@ Before reporting completion, verify:
   fail without the change, or the report notes why that check was infeasible.
 - Formatter, linter, type checker, architecture checks, and tests were actually
   run and pass, or failures are explained. No gate was silenced or weakened to
-  pass (no unapproved `#[allow]`/`#[ignore]`, loosened assertions, or
-  skipped/deleted tests).
+  pass (no unapproved `#[allow]`/`#[ignore]` — precondition ignores on
+  deployment checks excepted — loosened assertions, or skipped/deleted tests).
 - Generated, vendored, or machine-owned files were not hand-edited unless
   scoped.
 - Docs describing changed behavior, API, or config were updated, or noted as

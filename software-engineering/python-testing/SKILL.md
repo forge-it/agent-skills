@@ -4,7 +4,7 @@ description: Guidelines for writing effective Python tests with pytest. Use when
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.8"
+  version: "0.0.9"
 ---
 
 # Python Testing Skill
@@ -116,6 +116,11 @@ Each `conftest.py` layer has a distinct responsibility:
 | `tests/unit/conftest.py` | Isolation | Fakes, in-memory adapters, patched dependencies |
 | `tests/integration/conftest.py` | State | DB session, transaction rollback (`autouse`), seeding helpers |
 | `tests/api/conftest.py` | HTTP | Test client, auth headers, request builders |
+
+One kind of test never lives under `tests/` at all: a **deployment check**, whose subject is the project's own deployed topology, read from a local-prod deploy the operator started.
+The root `conftest.py`'s `autouse` session fixtures apply to every directory beneath it, and a child `conftest.py` cannot opt out — so a deployment check placed under `tests/` boots the shared stack it has no use for.
+It lives instead in a sibling root outside `testpaths` (added if the project has none), carries the `deployment` marker as a label only, and runs through its own `local-<component>-deploy-check` recipe.
+`patterns/testing/deployment_check_pattern.md` owns the category and holds the verification.
 
 Every piece of test support code has exactly one home. This routing table is the single source of truth — the sections below refer back to it:
 

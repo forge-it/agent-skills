@@ -14,7 +14,7 @@ description: >-
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.8"
+  version: "0.0.9"
 ---
 
 # Greenfield Project Setup (Orchestrator)
@@ -73,11 +73,11 @@ name; *pattern* = read the doc), and the gate that proves it is live.
 | 1 | Workspace + toolchain | rust: SKILL `rust-workspace-setup` + `rust-project-setup`; python: SKILL `python-project-setup` (a multi-package repo also *reads* conventions/`python` — its greenfield recipe, not this skill, owns creating the uv workspace root) | `cargo build` succeeds / `uv sync` succeeds **and the package actually imports** — `uv sync` exits 0 on a `src/` layout with no `[build-system]`, so it alone proves nothing |
 | 2 | Component skeletons | SKILL `rust-hexagonal-architecture` + `rust-project-structure` / `python-ddd` / `frontend-vue-development` | each component compiles |
 | 3 | Architecture invariant gates | rust workspace: *read* `rust-architecture-test-setup` (catalogue only) → SKILL `rust-conventions-crate-setup`; rust single crate: SKILL `rust-architecture-test-setup`; python: SKILL `python-import-linter-setup` + *read* conventions/`python` for the conventions package; vue: SKILL `frontend-vue-eslint-setup` | the gate **passes clean AND fails on a planted violation** — the member-local gate fails in the owning component and no other; every member has a gate, proven by the workspace-scoped coverage rule |
-| 4 | Backend wiring + lifecycle | *composition_pattern* → *bootstrap_pattern* → *runtime_pattern* | app boots; workers drain on SIGTERM |
-| 5 | Task runner | SKILL `justfile-setup` | `just` recipes (dev / local-prod / prod / lint / test-all) run, **plus one recipe per gate family** — on a Rust workspace `cargo test --workspace --test structure`; on a Python repo a per-member `cd <member> && uv run lint-imports` plus `cd <member> && uv run pytest` (never `uv run --package X pytest` from the root — it aborts collection) |
+| 4 | Backend wiring + lifecycle | *configuration_authority_pattern* → *composition_pattern* → *bootstrap_pattern* → *runtime_pattern* | app boots from one typed configuration document plus one typed secret input, and no module outside the configuration boundary reads the environment; workers drain on SIGTERM |
+| 5 | Task runner | SKILL `justfile-setup` | `just` recipes (dev / local-prod / prod / lint / test-all) run, **plus one recipe per gate family** — on a Rust workspace `cargo test --workspace --test structure`; on a Python repo a per-member `cd <member> && uv run lint-imports` plus `cd <member> && uv run pytest` (never `uv run --package X pytest` from the root — it aborts collection). Once the repo has a local-prod deploy, the `local-<component>-deploy-check` family from *deployment_check_pattern* joins the deploy recipes — never `<component>-check`, never `test-all`, and together with its first check, never ahead of it: a recipe written before its first member is indistinguishable from one whose selector is misspelled |
 | 6 | Local infra + parallel test isolation | *local_port_allocation_pattern* + *parallel_test_isolation_pattern* | integration tests pass **in parallel**, no collisions |
 | 7 | Scalability (opt-in, default-on for SaaS) | *worker_pattern* + *worker_fleet_pattern* + the shared task-contracts package — rust: a workspace crate (`rust-workspace-setup`); python: a uv workspace member (see *worker_pattern*'s Python mapping) | worker boots and consumes a test task |
-| 8 | Day-1 cross-cutting decisions (ADRs) | *observability_posture_pattern*; *frontend_api_type_mirroring_pattern* (if vue+backend); *worker_fleet_pattern* topology + identity ADRs (if worker); port allocation (phase 6); the test-isolation strategy — and on Rust, whether repositories own a pool or take an executor, since that decides whether rollback isolation is ever available (phase 6); the convention-enforcement policy and its permission protocol (phase 3); the task-runner growth mechanism (`import`, never `mod`) | each decision recorded as an ADR in `docs/decisions/` |
+| 8 | Day-1 cross-cutting decisions (ADRs) | *observability_posture_pattern*; *frontend_api_type_mirroring_pattern* (if vue+backend); *worker_fleet_pattern* topology + identity ADRs (if worker); port allocation (phase 6); the test-isolation strategy — and on Rust, whether repositories own a pool or take an executor, since that decides whether rollback isolation is ever available (phase 6); the convention-enforcement policy and its permission protocol (phase 3); the task-runner growth mechanism (`import`, never `mod`); the configuration authority classes and the secret-delivery tier with its move-up triggers (*configuration_authority_pattern* — a small project records tier 0 or 1 and commits to no store); the deployment-check category and its first member when a local-prod deploy exists (*deployment_check_pattern*); on a worker (phase 7 only), the side-effect class of each side-effecting task kind — platform-owned artifact or externally owned mutation (*worker_pattern*) | each decision recorded as an ADR in `docs/decisions/` |
 | 9 | Navigation + docs | *claude_md_pattern* + *docs_artifact_layout_pattern* + *repo_root_files_pattern* | root + per-component `CLAUDE.md` and `docs/` trees exist; root files present |
 | 10 | Automation gates | SKILL `agent-hooks-setup` + `ci-setup`; *dependency_audit_pattern* | hooks fire locally; CI is green on a trial PR **and invokes the task runner, never a hand-listed crate/member set**; audit command runs |
 | 11 | Continuous practices (wire in, not one-shot) | SKILL `rust-testing` / `python-testing` + `python-commands`, `*-code-style`, `rust-design-principles` / `rust-design-idioms`, `rest-api-design`, `reconcile-docs` | referenced by `CLAUDE.md`, enforced by phase-10 hooks + CI |
@@ -163,9 +163,11 @@ The foundation is live only when **all** of these pass together:
 - [ ] every workspace member owns a gate, proven by the conventions library's coverage rule on both stacks — note `cargo test --workspace --test structure` passes when a gate is missing, so it proves nothing here, and both rules assert the gate *file* exists, not that it calls every rule
 - [ ] every gate is reachable from the task runner, and CI invokes the runner instead of a hand-listed crate/member set
 - [ ] every convention rule has a `should_flag`/`should_pass` fixture pair, and they actually run
-- [ ] no gate test is disabled or landed red — `grep -rn '#\[ignore' --include='*.rs' .` returns nothing, and `grep -rn '\(@pytest\.mark\|pytestmark = pytest\.mark\)\.\(skip\|xfail\)' --include='*.py' $(git ls-files '*src/tests/architecture/*.py')` returns nothing (scoped to gate directories: a `skipif` in an ordinary suite is legitimate, so a repo-wide grep here only teaches you to wave the check through)
+- [ ] no gate test is disabled or landed red — `git ls-files -z '*tests/structure.rs' '*tests/structure/*.rs' | xargs -0 -r grep -n '#\[ignore'` returns nothing (scoped to gate files: a deployment check under *deployment_check_pattern* carries a precondition `#[ignore = "…"]` legitimately, so a repo-wide grep would flag the one place it belongs), and `git ls-files -z '*src/tests/architecture/*.py' | xargs -0 -r grep -n '\(@pytest\.mark\|pytestmark = pytest\.mark\)\.\(skip\|xfail\)'` returns nothing (scoped to gate directories: a `skipif` in an ordinary suite is legitimate, so a repo-wide grep here only teaches you to wave the check through). The `xargs -r` form matters: `grep -r … $(git ls-files …)` with an empty expansion silently greps the whole repository and flags the deployment check it was scoped to skip
 - [ ] every `GRANTED_*` permission ledger is still empty — `grep -rn 'GRANTED_' --include='*.rs' .` shows only empty collections
 - [ ] `rustfmt --check`, `clippy -D warnings`, `ruff check`, `ruff format --check`, `basedpyright`, `vue-tsc` clean
+- [ ] no environment read outside the configuration boundary — the gates from *configuration_authority_pattern* fail on a planted `os.environ[...]` or `std::env::var` read in an application module, and pass once it is removed
+- [ ] if a local-prod deploy exists: its deployment check runs through `local-<component>-deploy-check` against `just local-deploy-up`, and neither CI nor `test-all` reaches it
 - [ ] unit + integration tests pass **in parallel** (isolation works)
 - [ ] `just test-all` (the single CI entry recipe) runs locally
 - [ ] agent hooks are installed and fire on a trial commit
@@ -215,9 +217,11 @@ The foundation is live only when **all** of these pass together:
 
 **Patterns (read the doc):** project_structure/`composition_pattern`;
 lifecycle/`bootstrap_pattern`, `runtime_pattern`; scalability/`worker_pattern`,
-`worker_fleet_pattern`; testing/`parallel_test_isolation_pattern`;
-conventions/`rust`, `python`; decisions/`local_port_allocation_pattern`,
-`frontend_api_type_mirroring_pattern`, `observability_posture_pattern`;
+`worker_fleet_pattern`; testing/`parallel_test_isolation_pattern`,
+`deployment_check_pattern`; conventions/`rust`, `python`;
+decisions/`local_port_allocation_pattern`,
+`frontend_api_type_mirroring_pattern`, `observability_posture_pattern`,
+`configuration_authority_pattern`;
 documentation/`claude_md_pattern`, `docs_artifact_layout_pattern`,
 `repo_root_files_pattern`; automation/`dependency_audit_pattern`.
 

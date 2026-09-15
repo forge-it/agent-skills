@@ -4,7 +4,7 @@ description: Use when bootstrapping a new monorepo that mixes Rust, Python, and/
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.6"
+  version: "0.0.7"
 ---
 
 # Justfile Setup
@@ -70,7 +70,7 @@ spans two categories, break it into two recipes and have the outer one call both
 | **Test** | Run tests for one component | `dev-<component>-test` |
 | **Full test** | Run every component's tests in sequence | `test-all` |
 | **Format** | Apply auto-formatting | `fmt`, `fmt-rust`, `fmt-web`, `fmt-python` |
-| **Local-prod deploy** | Build + run via Docker Compose with a prod-like config | `local-deploy-up`, `local-deploy-down`, `local-<component>-deploy-up/down` |
+| **Local-prod deploy** | Build + run via Docker Compose with a prod-like config; read-only checks of that running deploy | `local-deploy-up`, `local-deploy-down`, `local-<component>-deploy-up/down`, `local-<component>-deploy-check` |
 | **Production build** | Build the final Docker image for shipping | `prod-<component>-build` |
 | **Test-resource reclaim** | Drop leaked per-test databases; templates separately, on demand | `db-sweep`, `db-sweep-templates` |
 | **Utilities** | One-off helpers (key generation, client installs, etc.) | freeform names |
@@ -371,6 +371,28 @@ local-worker-deploy-up:
 local-worker-deploy-down:
   docker compose -f worker/docker/docker-compose.local.yaml down -v
 
+# Deployment checks read the RUNNING local-prod stack; the recipe comment names
+# the precondition. Operator-invoked only: never called by CI, `test-all`, or
+# `<component>-check`, because the precondition is normally absent. Shape per
+# patterns/testing/deployment_check_pattern.md — on a Rust workspace a dev-only
+# checks crate, so no `#[ignore]` is needed; `--test-threads=1` because the
+# checks read one fixed deploy; a name filter on EVERY recipe, because one
+# checks crate serves all of them and unfiltered it runs the fleet check too.
+# [rust] Precondition: `just local-deploy-up`
+local-core-deploy-check:
+  cargo test -p deployment-checks --test deployment deploy_smoke -- --nocapture --test-threads=1
+
+# [rust] Precondition: `just local-deploy-up`, then `just local-worker-deploy-up`
+# scaled to at least two replicas
+local-worker-deploy-check replicas="2":
+  WORKER_FLEET_REPLICAS={{replicas}} cargo test -p deployment-checks --test deployment fleet_identity -- --nocapture --test-threads=1
+
+# [python] Precondition: `just local-deploy-up`. `-n 0` because the project's
+# pytest addopts carries `-n auto`, and xdist would swallow the `-s` output the
+# operator reads; the checks root sits outside `testpaths`, so it is named.
+local-service-deploy-check:
+  cd service && uv run pytest -n 0 -s -m deployment deployment_checks
+
 # Full local-prod stack — starts core, web, then waits for core's HTTP port
 # before starting the worker (compose `depends_on` cannot cross projects)
 local-deploy-up:
@@ -491,7 +513,7 @@ responsibility:
 | `just/env.just` | component env-file creation | `<component>-env` |
 | `just/dev.just` | dev and test-stack lifecycle | `dev-up`, `dev-down`, `dev-<component>-up` |
 | `just/test.just` | focused checks and the canonical gate | `dev-<component>-test`, `<component>-check`, `test-all` |
-| `just/deploy.just` | local-prod deployment and image builds | `local-deploy-*`, `prod-<component>-build` |
+| `just/deploy.just` | local-prod deployment and image builds | `local-deploy-*`, `prod-<component>-build`, `local-<component>-deploy-check` |
 | `just/format.just` | formatting entrypoints | `fmt`, `fmt-rust`, `fmt-web` |
 | `just/tools.just` | operator utilities and host-tool installation | key generation, client installs |
 
@@ -696,6 +718,7 @@ justfile handles orchestration.
 | `just fmt` | Auto-format all components |
 | `just local-deploy-up` | Start the full local-prod Docker Compose stack |
 | `just local-deploy-down` | Stop the local-prod stack |
+| `just local-<component>-deploy-check` | Read-only check of the running local-prod deploy (operator-invoked; never CI, `test-all`, or `<component>-check`) |
 | `just prod-<component>-build` | Build the production Docker image for one component |
 | `just <component>-env` | Create `<component>/.env` from template if missing |
 | `just db-sweep` | Drop leaked per-test databases (manual; see the section) |

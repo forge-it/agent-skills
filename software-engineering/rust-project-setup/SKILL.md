@@ -4,7 +4,7 @@ description: Guidelines for bootstrapping a Rust project with consistent toolcha
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.1.1"
+  version: "0.1.2"
 ---
 
 # Rust Project Setup
@@ -244,16 +244,23 @@ dependencies = ["format", "lint", "test"]
 
 ### Environment Variables
 
-Use environment variables for configuration that varies between environments.
+Task-runner environment variables configure *tools and tasks* — never the
+application. The application reads its settings from one typed configuration
+document and its secrets from a separate input, and the only values the
+environment may carry for it are bootstrap values: the document's path and the
+secret-source selector (`patterns/decisions/configuration_authority_pattern.md`).
+A credential-bearing `DATABASE_URL` in a task file is exactly the leak that
+pattern exists to prevent.
 
 ```toml
 [env]
 RUST_BACKTRACE = "1"
-DATABASE_URL = { value = "postgres://localhost/dev", condition = { env_not_set = ["DATABASE_URL"] } }
+MYAPP_CONFIGURATION_PATH = { value = "config/dev.toml", condition = { env_not_set = ["MYAPP_CONFIGURATION_PATH"] } }
+MYAPP_SECRET_SOURCE = { value = "environment", condition = { env_not_set = ["MYAPP_SECRET_SOURCE"] } }
 
 [tasks.test-with-db]
-description = "Run tests with database"
-env = { DATABASE_URL = "postgres://localhost/test" }
+description = "Run tests against the test configuration document"
+env = { MYAPP_CONFIGURATION_PATH = "config/test.toml" }
 command = "cargo"
 args = ["test"]
 
@@ -295,18 +302,18 @@ Tasks should fail fast and provide clear error messages when something goes wron
 
 ```toml
 [tasks.verify-env]
-description = "Verify required environment variables are set"
+description = "Verify the bootstrap variables are set (never a secret — those live in the secret input)"
 script = [
     '''
-    if [ -z "$DATABASE_URL" ]; then
-        echo "ERROR: DATABASE_URL is not set"
+    if [ -z "$MYAPP_CONFIGURATION_PATH" ]; then
+        echo "ERROR: MYAPP_CONFIGURATION_PATH is not set"
         exit 1
     fi
-    if [ -z "$API_KEY" ]; then
-        echo "ERROR: API_KEY is not set"
+    if [ -z "$MYAPP_SECRET_SOURCE" ]; then
+        echo "ERROR: MYAPP_SECRET_SOURCE is not set (file | environment)"
         exit 1
     fi
-    echo "Environment verified"
+    echo "Bootstrap verified"
     '''
 ]
 

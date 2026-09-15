@@ -4,7 +4,7 @@ description: Guidelines for writing effective Rust tests. Use when writing or mo
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.1.2"
+  version: "0.1.3"
 ---
 
 # Rust Testing Skill
@@ -370,18 +370,21 @@ tests/
 │   └── application/
 │       └── backup_flow.rs   # Service-with-real-adapters tests
 ├── e2e.rs                   # Module entry point for end-to-end tests
-└── e2e/
-    └── api/                 # First e2e subdomain; workflow subdomains grow beside it
-        ├── support.rs       # pub mod infra; (TestApp lives here)
-        ├── support/
-        │   └── infra.rs
-        ├── health.rs
-        └── salaries.rs
+├── e2e/
+│   └── api/                 # First e2e subdomain; workflow subdomains grow beside it
+│       ├── support.rs       # pub mod infra; (TestApp lives here)
+│       ├── support/
+│       │   └── infra.rs
+│       ├── health.rs
+│       └── salaries.rs
+└── structure.rs             # Architecture gate entry point; rust-architecture-test-setup
+                             # owns tests/structure/. Deployment checks are NOT here —
+                             # see patterns/testing/deployment_check_pattern.md
 ```
 
 ### 9. Module Entry Point Files (CRITICAL)
 
-Each test category requires a module entry point file (`unit.rs`, `integration.rs`, `e2e.rs`) that declares its submodules. This is how Rust discovers and compiles the test files.
+Each test category requires a module entry point file that declares its submodules — one entry point per test target present in the crate: `unit.rs`, `integration.rs`, `e2e.rs`, `structure.rs` where the architecture gate from `rust-architecture-test-setup` is installed, and `deployment.rs` where the single-crate shape of the deployment category exists. This is how Rust discovers and compiles the test files.
 
 The wrapper module (`mod unit { … }`) is load-bearing: the entry point file is the crate root of its test binary, and the wrapper is what makes Rust resolve the submodule files under `tests/unit/…` instead of directly under `tests/`. Do not remove it.
 
@@ -394,7 +397,7 @@ mod infra;
 mod fixtures;
 ```
 
-Each becomes a crate-root module, so support files reach them as `crate::infra`, `crate::fixtures`, and so on.
+Each becomes a crate-root module, so support files reach them as `crate::infra`, `crate::fixtures`, and so on. One entry point never does this: a `deployment.rs` entry point (the single-crate shape of `patterns/testing/deployment_check_pattern.md`) declares no `#[path]` into `common/`, because mounting `common/infra.rs` would boot the shared Docker stack the moment the binary loads — and a deployment check reads a stack the operator already started.
 
 ```rust
 // tests/unit.rs
@@ -517,6 +520,11 @@ Organize tests into categories:
 - **e2e/**: Full-stack tests, organized into subdomains that each own a `support/` module. `api/` (HTTP request/response through the real in-process server) is the canonical first subdomain; workflow subdomains (e.g. `backup/`, `billing/`) are added beside it as the product grows.
 
 "API tests" and "e2e tests" are not two different categories: API tests are the `e2e/api/` subdomain. Section 6 defines what each category asserts and shows one example per category; Section 8 shows the directory layout.
+
+Two further categories exist and are owned elsewhere:
+
+- **structure/** (`tests/structure.rs`): the architecture gate — the shape of the source tree itself. Installed and specified by `rust-architecture-test-setup`; run by `<component>-check`.
+- **deployment**: checks whose *subject* is the project's own deployed topology — the built image booted and answers, two replicas hold distinct identities — read from a local-prod deploy the operator started. On a workspace it is a dev-only checks crate, never a target in this tree; on a single crate it is `tests/deployment.rs`. It never runs in the gate. Specified by `patterns/testing/deployment_check_pattern.md`; the membership question is whether the deployed topology is the subject, not whether the test needs something the harness cannot build (a test using a real vendor server as a fixture stays in `integration/`).
 
 ### 13. End-to-End Test Harness — TestApp (HIGH)
 
@@ -719,6 +727,7 @@ mod consume {
 - **No fixed shared paths.** When a test writes into a shared fixture (an SSH target, a mounted volume), write into a per-test subdirectory, never a fixed path.
 - **Tear down what you create.** A test that creates external state ends with explicit teardown (`test_database.teardown().await`, bucket deletion). For a resource with a deterministic name, also ensure it is absent *before* the act, so a previously failed run cannot interfere.
 - **`#[serial(...)]` is a last resort.** Use the `serial_test` crate's `#[serial(<group>)]` only for a genuine shared singleton that cannot be namespaced per test (a shared mail inbox, a global database lock). Treat every new serial group as a red flag, and record which singleton it guards. `serial_test` is process-local: it serializes tests within one test process only, not across processes.
+- **Deployment checks are the one exemption from the rules above.** A check whose subject is the deployed topology (`patterns/testing/deployment_check_pattern.md`) *reads* fixed, operator-provisioned infrastructure — fixed container names, fixed host ports, one shared database — so it cannot own or suffix its resources. It runs serially, through its own recipe with `--test-threads=1`, and never inside the gate. Nothing else is exempt.
 
 ```rust
 // tests/e2e/api/auth.rs
@@ -759,7 +768,7 @@ mod register_endpoint {
 ## Anti-Patterns to Avoid
 
 1. **Tests in source files**: Using `#[cfg(test)]` modules in `src/` instead of `tests/` directory
-2. **Missing module entry points**: Forgetting to create `unit.rs`, `integration.rs`, or `e2e.rs` to declare submodules
+2. **Missing module entry points**: Forgetting to create the entry point file for a test target present in the crate (`unit.rs`, `integration.rs`, `e2e.rs`; `structure.rs` where the gate is installed; `deployment.rs` where the single-crate deployment category exists) to declare its submodules
 3. **Using _test suffix**: Adding a `_test` suffix to test files or test modules — test files mirror the source file name exactly and test modules are named after the function/type being tested, since `tests/` already provides context
 4. **Testing timestamps**: Asserting exact timing instead of business outcomes — inject a clock port when time is part of the behaviour (Section 4)
 5. **Comments in test files**: Doc comments or inline comments anywhere in a test file — a comment signals a naming or structure problem; support files may carry a brief orientation header
@@ -774,7 +783,7 @@ mod register_endpoint {
 14. **Over-relying on end-to-end tests**: Keep e2e tests minimal and focused on critical paths; most logic should be tested at unit level
 15. **Mocking in integration tests**: Using `mockall`, `wiremock`, `httpmock`, or a hand-written fake in an integration test. Integration tests run against real infrastructure; mocking tools are unit-test tools (Sections 1, 2). If the real dependency cannot be stood up, the test is a unit test or an e2e test — not an integration test.
 16. **Helpers in test files**: Free helper functions, value factories, fixtures, or constants at module scope inside a test file. Test files are tests-only — move them to `support/` or `tests/common/` (Section 16).
-17. **Fixed or shared resource names**: Static database/bucket/user names, fixed ports, or fixed shared paths in tests — every resource is UUIDv7-suffixed and every port OS-assigned (Section 17)
+17. **Fixed or shared resource names**: Static database/bucket/user names, fixed ports, or fixed shared paths in tests — every resource is UUIDv7-suffixed and every port OS-assigned (Section 17); deployment checks, which read a fixed deploy, are the one exemption
 18. **Bare `is_ok` assertions**: Asserting only `assert!(result.is_ok())` as the final assertion hides the error and the value — extract with `.expect("context")` and assert on the value, or match the error variant with `matches!`
 
 ## Quick Reference
@@ -806,9 +815,9 @@ mod register_endpoint {
 
 ### Structure
 - All tests in `tests/` directory, never in source files; the crate needs a `src/lib.rs` library target
-- Create module entry point files: `tests/unit.rs`, `tests/integration.rs`, `tests/e2e.rs`
+- Create one module entry point file per test target present in the crate: `tests/unit.rs`, `tests/integration.rs`, `tests/e2e.rs`, plus `tests/structure.rs` where the architecture gate is installed and `tests/deployment.rs` where the single-crate deployment category exists
 - Test files and test modules must never use a `_test` suffix
-- Organize into `unit/`, `integration/`, and `e2e/` subdirectories; e2e subdomains each own a `support/`
+- Organize into `unit/`, `integration/`, and `e2e/` subdirectories; e2e subdomains each own a `support/`. Deployment checks live outside this tree (`patterns/testing/deployment_check_pattern.md`) and never in the gate
 - Mirror source directory structure: `src/domain/salaries.rs` → `tests/unit/domain/salaries.rs`; adapters: `src/infrastructure/db.rs` → `tests/integration/infrastructure/db.rs`
 - Cross-category helpers in `tests/common/`, reached with `#[path]` from each entry point that needs them — never a `mod.rs`, which is banned everywhere; category-specific helpers in per-category `support/` (Section 15)
 - `mocks.rs` is unit-support only — an integration `support/` has no mocks

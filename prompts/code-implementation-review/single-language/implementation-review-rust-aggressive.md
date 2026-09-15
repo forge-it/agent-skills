@@ -35,7 +35,7 @@ Pass 3 — divergence and proof hunt:
 - Walk the plan promise by promise: for each, the code that delivers it (cite file:line) or the finding that it is missing or partial.
 - Walk the change set change by change: anything the plan never asked for, and whether it is justified support work or scope creep.
 - For every behavior the change set adds or alters, name the test that fails if the behavior breaks. A behavior with no such test is a finding.
-- Diff the changed test files against the change-scope base and flag weakening: loosened assertions, deleted cases, new `#[ignore]`, tests that cannot fail.
+- Diff the changed test files against the change-scope base and flag weakening: loosened assertions, deleted cases, new `#[ignore]` (a precondition `#[ignore = "requires …"]` on a deployment check, under the project's deployment-check root, is not weakening), tests that cannot fail.
 - Migrations in the change set: ordering, downgrade path, rolling-deploy compatibility, and the project's own migration policy.
 
 Across all passes:

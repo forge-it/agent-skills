@@ -168,7 +168,9 @@ For every investigation:
   count such as `RUST_TEST_THREADS`, test order, and relevant environment) so a
   fixer can reproduce it deterministically. Do not recommend masking flakes with
   sleeps, retries, broad timeout increases, or `#[ignore]` unless the report
-  clearly labels that as a last-resort mitigation.
+  clearly labels that as a last-resort mitigation. (A precondition
+  `#[ignore = "requires …"]` on a deployment check is that category's
+  convention, not a mitigation.)
 - For missing behavior, first prove whether the public route, command, use
   case, trait method, match arm, configuration, or adapter wiring exists. Do
   not assume "missing feature" when the behavior is implemented but unreachable

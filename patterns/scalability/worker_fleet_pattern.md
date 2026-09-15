@@ -15,7 +15,7 @@ description: >-
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.2"
+  version: "0.0.3"
 ---
 
 # Worker Fleet Pattern
@@ -162,6 +162,16 @@ first worker ships is an afternoon.
 - **Platform-derived worker names**; never a fixed container name.
 - **Disablement is the only non-self-healing state**, and it is an explicit
   operator decision.
+- **The identity decision is verified, not just recorded.** A deployment
+  check — the fleet-identity member of
+  [deployment_check_pattern](../testing/deployment_check_pattern.md) — reads
+  the local-prod deploy scaled to two replicas and asserts, in this pattern's
+  own terms: the two replicas of one image hold distinct platform-derived
+  names; the registration table holds one runtime-created row per name; the
+  two active fingerprints differ; each row is enabled; and no operator step
+  created either row. It runs through its own `local-<component>-deploy-check`
+  recipe, never in the gate. A promise in this list that nothing verifies is
+  prose.
 - **Identity is not authorization.** A handshake proves the peer holds the
   private key for an enrolled name — a certificate by itself is public material
   and proves nothing. Every privileged call then re-validates two further things

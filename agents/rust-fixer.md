@@ -137,7 +137,9 @@ For every task:
 - For flaky tests, reproduce enough times to establish the pattern, then look
   for order dependence, time dependence, randomness, shared state, and
   concurrency races. Do not mask flakes with sleeps, broad timeout increases,
-  `#[ignore]`, or retries unless the operator approves that mitigation.
+  `#[ignore]`, or retries unless the operator approves that mitigation. (A
+  precondition `#[ignore = "requires …"]` on a deployment check is that
+  category's convention, not a flake mitigation.)
 - For project-structure or test-structure fixes, act on explicit structure gate
   failures, guard findings, or operator-scoped layout defects. Follow
   `project_structure.md` and the nearest analogous source or test file. Do not

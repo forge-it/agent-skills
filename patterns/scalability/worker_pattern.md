@@ -14,7 +14,7 @@ description: >-
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.3"
+  version: "0.0.4"
 ---
 
 # Scalable Worker Pattern
@@ -251,6 +251,34 @@ after a `LEASE_HELD_REQUEUE_DELAY` to avoid a hot retry loop. A redelivery of
 a task that is already terminal (`Completed` or `Failed`) resolves to
 `LeaseRejection::AlreadyTerminal` — the delivery is acked and dropped (the work
 is already done; no re-execution).
+
+**Lease fencing is exactly-once for the task *lifecycle*, not for the task's
+*external side effect*.** Between "the side effect completed in the outside
+world" and "the control plane recorded the terminal outcome" the worker can
+die. The successor that reclaims the stale lease sees no evidence of the
+completed work and runs the whole pipeline again. Two rules hold from the
+first side-effecting task kind onward:
+
+- **Every external identity derives from the stable operation identity plus
+  the lease token** — an object key, a staging name, a helper resource name —
+  never from the clock or from a fresh UUID minted at side-effect time. A
+  retry then lands on the same identity, a successor can recognise its
+  predecessor's work, and orphans are enumerable for garbage collection.
+- **Classify the side effect before writing the first one, and record the
+  class in the phase-8 ADR.** *Creation of a platform-owned artifact* (a
+  backup object in storage the platform controls) may be staged, proven
+  complete by durable evidence, and adopted by a successor instead of re-run.
+  *Mutation of an externally owned system* (writing into a customer's
+  database or filesystem) is never lazily adopted: it stages, validates, then
+  cuts over through the smallest atomic primitive the target offers, and any
+  fallback to direct in-place mutation is explicit and never silent.
+
+The staging protocols themselves — manifest tables, adoption calls,
+reconcilers, garbage collectors — are product-scale mechanics decided when the
+first such task kind lands, not at commit 1. The reference codebase (ironbox)
+proposes its own staging protocols in two ADRs, one for platform-owned backup
+artifacts and one for externally owned restores; this pattern extracts only
+the two rules above.
 
 **Classified delivery actions (worker-side retry policy).** The `Attempt` maps
 every control-plane error to exactly one of three delivery actions:
@@ -619,6 +647,11 @@ Three rules make that structure correct, and all three are load-bearing:
 - **Lease fencing makes every handler idempotent under at-least-once delivery.**
   A redelivered task that is already leased or terminal is settled without
   re-execution.
+- **Lease fencing is exactly-once for the lifecycle, not for the side effect.**
+  Every external identity derives from the stable operation identity plus the
+  lease token, and each side-effecting task kind's class — platform-owned
+  artifact, or externally owned mutation — is decided and recorded before the
+  first one lands.
 - **Classified delivery actions.** Every control-plane error maps to exactly one
   of ack-drop, nack-drop, or nack-requeue — the policy is explicit, not
   accidental.
@@ -692,6 +725,12 @@ Three rules make that structure correct, and all three are load-bearing:
   not check whether its work is already done will duplicate side effects on every
   redelivery. Use lease fencing (core-side) or explicit idempotency keys (inside
   the handler) to make re-execution a no-op.
+
+- **A side-effect identity minted at side-effect time** — an object key or a
+  staging name built from `now()` or a fresh UUID. A successor cannot recognise
+  its predecessor's work, so every crash between the side effect and its
+  terminal report becomes a duplicate execution, and the orphans it leaves
+  cannot be enumerated for cleanup.
 
 - **Shared database ownership between the API and the worker.** The worker that
   writes its own task state directly into the API's database couples the two

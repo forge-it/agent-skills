@@ -4,7 +4,7 @@ description: Guidelines for structuring Rust business applications around a cent
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.5"
+  version: "0.0.6"
 ---
 
 # Hexagonal Architecture Skill
@@ -353,30 +353,46 @@ The `main` function has two responsibilities: bring the application online and c
 ```rust
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let config = Config::from_env()?;
+    // Two typed inputs from the configuration boundary. `main` reads no
+    // environment variable itself (configuration_authority_pattern).
+    let bootstrap = BootstrapInputs::read(&ProcessEnvironmentLookup)?;
+    let config = AppConfig::load(&bootstrap)?;
+    let secrets = SecretGeneration::load(&bootstrap)?;
     tracing_subscriber::fmt::init();
 
     // Create adapters — main knows *which* implementations to use
-    let repository = SqliteAuthorRepository::new(&config.database_url).await?;
+    let pool = sqlx::SqlitePool::connect(&config.database.path).await?;
+    let repository = SqliteAuthorRepository::new(pool);
     let metrics = PrometheusMetrics::new();
-    let notifier = EmailNotifier::new(&config.smtp_url);
+    let notifier = EmailNotifier::new(&config.smtp, &secrets.smtp_password);
 
     // Wire adapters into the service
     let author_service = DefaultAuthorService::new(repository, metrics, notifier);
 
     // Inject service into server and run
-    let server_config = HttpServerConfig { port: &config.server_port };
+    let server_config = HttpServerConfig { port: &config.server.port };
     let http_server = HttpServer::new(author_service, server_config).await?;
     http_server.run().await
 }
 ```
+
+**No environment reads in main.** `ProcessEnvironmentLookup`, inside
+`infrastructure/config/`, is the only type that touches the process
+environment, and `BootstrapInputs` holds the only values read from it — the
+configuration document's path and the secret-source selector. Everything an
+adapter needs arrives as a field of the typed configuration or of the typed
+secret generation, which carries its values in redacting types. Which value is
+configuration, which is a secret, and how each is delivered is decided by
+`patterns/decisions/configuration_authority_pattern.md`, not here.
 
 **No framework leakage in main.** Even if the server uses axum internally, main doesn't know about axum. The `HttpServer` wrapper encapsulates route configuration, middleware, ports, and timeouts. If axum changes its API, only `HttpServer` internals change — main stays untouched.
 
 ```rust
 // main.rs imports — all proprietary, no third-party framework types
 use hexarch::application::author::DefaultAuthorService;
-use hexarch::config::Config;
+use hexarch::infrastructure::config::{
+    AppConfig, BootstrapInputs, ProcessEnvironmentLookup, SecretGeneration,
+};
 use hexarch::infrastructure::api::server::{HttpServer, HttpServerConfig};
 use hexarch::infrastructure::email::EmailNotifier;
 use hexarch::infrastructure::metrics::prometheus::PrometheusMetrics;

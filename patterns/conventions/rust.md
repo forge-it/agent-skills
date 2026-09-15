@@ -14,7 +14,7 @@ description: >-
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.1"
+  version: "0.0.2"
 ---
 
 # Convention Enforcement Pattern (Rust — the ArchUnit Pattern)
@@ -952,7 +952,13 @@ deliberately keeps separate. Do not count it as gate coverage.
   rule instantly. Baselines rot and permanently blur "clean". Prefer
   clean-to-zero, or loud red by explicit decision.
 - **An immortal ratchet.** `#[ignore = "advisory"]` with no owner and no date.
-  It outlives everyone's memory of why it was temporary.
+  It outlives everyone's memory of why it was temporary. Keep it distinct from
+  a **precondition ignore** — `#[ignore = "requires a running local-prod
+  deploy"]` on a deployment check
+  ([deployment_check_pattern](../testing/deployment_check_pattern.md)) — which
+  names an external precondition and never becomes runnable by fixing code.
+  Rules against `#[ignore]` target ratchets; the deployment category is the
+  one legitimate home of precondition ignores.
 - **Migrating an inherited allowlist unexamined.** Check whether the exempted
   case is even alive first — inherited carve-outs are often grandfathering
   something already dead.

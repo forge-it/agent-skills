@@ -4,7 +4,7 @@ description: Opinionated guidelines for structuring Python business applications
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.1.1"
+  version: "0.1.2"
 ---
 
 # Python Domain-Driven Design Skill
@@ -522,14 +522,15 @@ A gateway is the adapter to anything that is not the application's own database:
 # infrastructure/gateway/payment.py
 import httpx
 
-from myapp.infrastructure.config.settings import PAYMENT_API_BASE_URL, PAYMENT_API_TOKEN
+from myapp.infrastructure.config.document import PaymentGatewaySettings
+from myapp.infrastructure.config.secret import Secret
 
 
 class PaymentGateway:
-    def __init__(self, base_url: str = PAYMENT_API_BASE_URL, token: str = PAYMENT_API_TOKEN):
+    def __init__(self, settings: PaymentGatewaySettings, api_token: Secret):
         self._client = httpx.AsyncClient(
-            base_url=base_url,
-            headers={"Authorization": f"Bearer {token}"},
+            base_url=settings.base_url,
+            headers={"Authorization": f"Bearer {api_token.expose()}"},
         )
 
     async def authorize(self, order_id: str, amount_cents: int) -> str:
@@ -541,7 +542,7 @@ class PaymentGateway:
         return response.json()["authorizationId"]
 ```
 
-The gateway hides protocol details (HTTP verbs, headers, JSON shape) and translates external errors into application-level exceptions when needed.
+The gateway hides protocol details (HTTP verbs, headers, JSON shape) and translates external errors into application-level exceptions when needed. Its settings arrive as a typed object and its token as a redacting `Secret` — never as module-level constants read from the environment at import time, and never with a default argument that reaches into configuration. The composition root passes both in. `infrastructure/config/` holds `bootstrap.py`, `document.py`, `secret.py`, and `secret_input.py` — the only modules that touch a configuration source; which values are configuration and which are secrets is decided by `patterns/decisions/configuration_authority_pattern.md`.
 
 ### 10. Consuming Another Bounded Context Goes Through An Anti-Corruption Layer (CRITICAL)
 

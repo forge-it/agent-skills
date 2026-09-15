@@ -4,7 +4,7 @@ description: Use when bootstrapping CI for a new monorepo with Rust, Python, and
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.7"
+  version: "0.0.8"
 ---
 
 # CI Setup
@@ -318,6 +318,7 @@ you add in `justfile-setup` first.
 | Installing architecture gates locally but not in CI | The gates are advisory — developers learn to ignore them | Every gate that runs locally must also run in CI with a non-zero exit on failure |
 | Re-spelling gate commands in the workflow instead of invoking a recipe | The workflow becomes a second source of truth; a gate added locally is silently absent in CI, or weakened in CI without touching the recipe | Every job runs `just <component>-check`; the gate list lives in the recipe |
 | Ordering a component's gates slowest-first | A formatting slip waits behind a full compile before reporting | Order the recipe cheapest-first (`fmt --check`, then clippy, then the structure gate) |
+| Wiring a `local-<component>-deploy-check` recipe into a CI job, `test-all`, or `<component>-check` | Its precondition — a running local-prod deploy — is normally absent, so the job fails for a reason unrelated to the change, and the recipe gets weakened until it passes | A deployment check is not a gate, so the "every gate that runs locally must also run in CI" row does not apply to it: a gate's precondition is the source tree, which CI always has; this one's precondition is a running deploy, which CI does not. Deployment checks are operator-invoked only (`patterns/testing/deployment_check_pattern.md`). CI calls `test-all` and the `<component>-check` recipes and nothing from the deploy family |
 
 ## Quick reference — CI jobs
 

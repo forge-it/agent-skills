@@ -45,18 +45,26 @@ report. The rules you will apply constantly:
   `tests/unit/support/mocks.rs`.
 - **S6/S12**: pick the category by scope — unit (mocked ports), integration
   (real infrastructure: adapters, or services wired to real adapters), e2e
-  (full stack in subdomains, `api/` first, minimal).
+  (full stack in subdomains, `api/` first, minimal). Two further categories
+  are owned elsewhere and written only when the task names them: `structure`
+  (the architecture gate) and `deployment` — a check whose *subject* is the
+  project's own deployed topology, read from a local-prod deploy the operator
+  started (`patterns/testing/deployment_check_pattern.md`). A test that merely
+  needs a real vendor server as a fixture is still integration.
 - **S7/S10**: `mod <function>` + `should_<behavior>[_when_<condition>]`; no
   `test_` prefix, no `_test` suffix.
 - **S8/S9/S11**: all tests under `tests/`, mirroring `src/`; every new test
   file must be declared in its category entry point (`unit.rs`,
-  `integration.rs`, `e2e.rs`) or it silently never compiles.
+  `integration.rs`, `e2e.rs`; `deployment.rs` for a deployment check, which
+  mounts nothing from `common/`) or it silently never compiles.
 - **S13**: e2e API tests run through the in-process `TestApp` on port 0.
 - **S15/S16**: test files contain only `use` imports and `mod` test blocks;
   every helper, factory, fixture, mock, and constant goes to the category's
   `support/` or `tests/common/` — reuse existing ones before writing new ones.
 - **S17**: parallel-safety by construction — UUIDv7-suffixed resources, no
   fixed ports, explicit teardown, `#[serial]` only for genuine singletons.
+  Deployment checks are the one carve-out: they observe an operator-provisioned
+  deploy's fixed names and ports, create nothing, and run serially.
 - **references/**: before creating any file under `tests/common/`, any `support/`
   module, or a `TestApp` harness, read the rust-testing skill's
   `references/support-module-implementations.md`, `references/mock-implementations.md`,
@@ -207,17 +215,20 @@ Before reporting completion, verify:
   actually ran in the gate output, not merely compiled.
 - Test files contain only `use` imports and `mod` test blocks; all helpers,
   factories, fixtures, mocks, and constants live in `support/` or
-  `tests/common/` (S15, S16).
+  `tests/common/` (S15, S16) — a deployment check's helpers in its own
+  `support/`, never `tests/common/`.
 - No mocks anywhere under integration tests (S1); no fixed ports, static
-  resource names, or shared paths (S17); every created external resource is
-  torn down.
+  resource names, or shared paths (S17; deployment checks excepted, since
+  they read fixed, operator-provisioned resources); every created external
+  resource is torn down.
 - Names follow `mod <function>` + `should_<behavior>` with no `test_` prefix
   or `_test` suffix (S7, S10); no comments in test files.
 - Every new test was shown to fail when its expectation was broken, or the
   report notes why that check was infeasible.
 - Formatter, clippy, the full test suite, and the structure gate (when
   present) were actually run; output is reported honestly; no gate was
-  silenced or weakened (no unapproved `#[allow]`/`#[ignore]`, no loosened
+  silenced or weakened (no unapproved `#[allow]`/`#[ignore]` — a precondition
+  `#[ignore = "requires …"]` on a deployment check excepted — no loosened
   assertions, no deleted tests).
 - `git diff` touches nothing outside `tests/` except an approved
   `[dev-dependencies]` change; existing passing tests were not restructured.
