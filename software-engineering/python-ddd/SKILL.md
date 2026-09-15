@@ -4,7 +4,7 @@ description: Opinionated guidelines for structuring Python business applications
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.1.0"
+  version: "0.1.1"
 ---
 
 # Python Domain-Driven Design Skill
@@ -338,7 +338,7 @@ async with SqlAlchemyAsyncUnitOfWork() as unit_of_work:
     await unit_of_work.commit()
 ```
 
-**Repositories are accessed as typed attributes, not by lookup.** `unit_of_work.products.find_by_serial_number(...)` is type-checked end to end: the IDE knows what methods exist; mypy/pyright catches typos; refactors are safe. `unit_of_work.get_repository(Product).find_by_serial_number(...)` works but throws away type information at the dictionary lookup and gives you nothing in return.
+**Repositories are accessed as typed attributes, not by lookup.** `unit_of_work.products.find_by_serial_number(...)` is type-checked end to end: the IDE knows what methods exist; basedpyright catches typos; refactors are safe. `unit_of_work.get_repository(Product).find_by_serial_number(...)` works but throws away type information at the dictionary lookup and gives you nothing in return.
 
 **Sessions never leave the UoW.** Application services hold UoW factories, not sessions. Repositories receive the session from the UoW in `__aenter__`. The domain never sees either.
 

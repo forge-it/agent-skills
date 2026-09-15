@@ -5,7 +5,7 @@ vibe: Turns the DDD layering doc into a check that fails when an import points t
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.1"
+  version: "0.0.2"
 ---
 
 # Python Import-Linter Architecture Setup
@@ -155,7 +155,7 @@ uv run lint-imports        # exits non-zero on any broken contract
 
 Wire that command into whatever already runs your fast checks — a `just`
 recipe, a Makefile target, a `pre-commit` hook — and into CI **next to `ruff`
-and `mypy`**:
+and `basedpyright`**:
 
 ```bash
 # justfile
@@ -283,7 +283,7 @@ opening a DB session itself instead of going through a service).
 - This gate enforces `python-ddd` §1 (inward-only layer dependencies) and the
   framework-free domain. It does **not** restructure anything — it fails the
   build when an import violates the model you already chose.
-- Pair it with `python-code-style` (run `ruff` + `mypy` alongside `lint-imports`).
+- Pair it with `python-code-style` (run `ruff` + `basedpyright` alongside `lint-imports`).
 - `import-linter` only sees **imports**. The judgment-residue invariants — domain
   models are dataclasses not Pydantic/`DeclarativeBase`, repository method naming
   (`get`/`find_by_`/`list_`), no god-methods, correct UoW usage, thin routers —

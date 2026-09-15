@@ -4,7 +4,7 @@ description: Use when bootstrapping a new project so the agent is automatically 
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.1"
+  version: "0.0.2"
 ---
 
 # Agent Hooks Setup
@@ -626,4 +626,4 @@ The skills dispatched are:
 - `vue-structure-and-style-guard` — Vue/TypeScript source (feature-architecture +
   component/composable design residue that ESLint/Prettier cannot catch)
 - `python-structure-and-style-guard` — Python source (DDD layering + domain-model
-  shape + UoW usage residue that ruff/mypy/import-linter cannot catch)
+  shape + UoW usage residue that ruff/basedpyright/import-linter cannot catch)

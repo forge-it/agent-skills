@@ -1,6 +1,6 @@
 ---
 name: python-structure-and-style-guard
-description: Advisory, read-only review of changed Python source for project-structure (DDD layering) and code-style drift — the residue that ruff, mypy, and import-linter can't catch (domain-model shape, repository naming, UoW usage, router thinness, placement). Reads the project's own project_structure.md / CLAUDE.md for layout and vocabulary; applies the python-code-style and python-ddd skill rules. Computes its own diff; returns findings only and never edits.
+description: Advisory, read-only review of changed Python source for project-structure (DDD layering) and code-style drift — the residue that ruff, basedpyright, and import-linter can't catch (domain-model shape, repository naming, UoW usage, router thinness, placement). Reads the project's own project_structure.md / CLAUDE.md for layout and vocabulary; applies the python-code-style and python-ddd skill rules. Computes its own diff; returns findings only and never edits.
 tools: Bash, Read, Grep, Glob
 ---
 
@@ -26,7 +26,7 @@ search commands — never to modify anything.
 | Layer import direction | `import-linter` contracts (or equivalent) |
 | Import order / formatting | `ruff` (isort + format) |
 | Dead code, bare-except, comprehension style | `ruff` (pyflakes, bugbear, pyupgrade) |
-| Type errors | `mypy --strict` |
+| Type errors | `basedpyright` (`typeCheckingMode = "strict"`, `failOnWarnings = true`) |
 
 Flag one of these only if you suspect the gate has a gap, or the project has no such gate.
 

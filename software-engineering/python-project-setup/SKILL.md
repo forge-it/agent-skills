@@ -4,7 +4,7 @@ description: Use when bootstrapping a NEW Python project or a new Python compone
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.5"
+  version: "0.0.6"
 ---
 
 # Python Project Setup
@@ -26,17 +26,17 @@ Everything else — command invocation, layering, which lint rules apply, what t
 tests look like — belongs to a skill listed at the bottom.
 
 Every behavioral claim below was reproduced against **uv 0.7.20, ruff 0.16.2,
-mypy 1.18.2**, and the two mypy claims re-verified on **mypy 2.3.1**, which is what
-this skill pins — a greenfield project has no reason to start a major version
-behind. Three claims are tool-version-bound and are the ones to re-check on an
+and basedpyright 1.40.1** (built on pyright 1.1.414), which is what this skill
+pins. Four claims are tool-version-bound and are the ones to re-check on an
 upgrade: ruff's `target-version` inference from `requires-python`, hatchling's
-wheel-inference failure on a name mismatch, and `[tool.uv] dev-dependencies`
-still being accepted as the legacy form.
+wheel-inference failure on a name mismatch, `[tool.uv] dev-dependencies` still
+being accepted as the legacy form, and basedpyright's default
+`typeCheckingMode` being `recommended` rather than `strict`.
 
 > **Scope gate — this skill adds no task runner and no second command surface.**
 > `just` is the project's single command surface; the rationale lives in
 > `justfile-setup`. No `[tool.poe]`, no `tox`/`nox` task aliases, no `Makefile`,
-> no `[project.scripts]` entry that exists only to wrap `ruff` or `mypy`. A
+> no `[project.scripts]` entry that exists only to wrap `ruff` or `basedpyright`. A
 > `[project.scripts]` console entry point for the application itself is fine —
 > `uv init --package` writes one.
 
@@ -90,15 +90,16 @@ Use `uv python pin` to update the `.python-version` file to a compatible version
 That one is loud, so it fixes itself.
 
 **A pin above the floor is silent, and therefore the dangerous case.** Pin
-`3.13` with `requires-python = ">=3.11"` and nothing fails, but the two halves of
-the toolchain now target different versions. Verified on a file using
-`typing.override` (added in 3.12): **mypy passed** — with no `python_version`
-configured it checks against the interpreter it runs under, 3.13, not the
-declared 3.11 floor — and **ruff inferred `target-version = 3.11`** from
-`requires-python`, whose rules do not model stdlib availability either. So a
-3.11-incompatible file passes every local gate while the manifest promises 3.11
-support, until a 3.11 environment runs the code. An application has no reason to
-declare a range wider than the version it runs.
+`3.14` with `requires-python = ">=3.12"` and nothing fails, but the two halves of
+the toolchain now target different versions. Verified on a file calling
+`uuid.uuid7()` (added in 3.14): **basedpyright passed** — with no `pythonVersion`
+configured it checks against the interpreter it runs under, 3.14, not the
+declared 3.12 floor (`--verbose` prints `Assuming Python version 3.14.6`) — and
+**ruff inferred `target-version = 3.12`** from `requires-python`, whose rules do
+not model stdlib availability either. So a 3.12-incompatible file passes every
+local gate while the manifest promises 3.12 support, until a 3.12 environment
+runs the code. An application has no reason to declare a range wider than the
+version it runs.
 
 ### Bootstrap command
 
@@ -171,7 +172,7 @@ dependencies = []
 [dependency-groups]
 dev = [
     "ruff==0.16.2",
-    "mypy==2.3.1",
+    "basedpyright==1.40.1",
     # Test tier. WHICH tools a project needs is `python-testing`'s call (and
     # `parallel_test_isolation_pattern`'s, for xdist and filelock); pinning them
     # here is this skill's, because this is the group and the `==` rule lives here.
@@ -197,9 +198,10 @@ select = ["E", "F", "I", "UP", "B", "SIM", "PTH", "TID", "PLC0415"]
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
 
-[tool.mypy]
-strict = true
-files = ["src"]
+[tool.basedpyright]
+typeCheckingMode = "strict"
+include = ["src"]
+failOnWarnings = true
 ```
 
 **Getting the exact pins.** The versions above are the ones verified for this
@@ -208,9 +210,9 @@ versions, then rewrite each specifier as `==` at the version `uv.lock` reports
 and run `uv lock` to record the narrowed specifier:
 
 ```bash
-uv add --dev ruff mypy             # resolves them and records them in uv.lock
-grep -A1 '^name = "ruff"' uv.lock  # → version = "0.16.2"
-grep -A1 '^name = "mypy"' uv.lock  # → version = "2.3.1"
+uv add --dev ruff basedpyright             # resolves them and records them in uv.lock
+grep -A1 '^name = "ruff"' uv.lock          # → version = "0.16.2"
+grep -A1 '^name = "basedpyright"' uv.lock  # → version = "1.40.1"
 ```
 
 **Layout.** `pyproject.toml`, `.python-version`, the committed `uv.lock`, and
@@ -297,7 +299,7 @@ Mechanics:
 
 Two tools cover everything: **ruff is both the linter (`ruff check`) and the
 formatter (`ruff format`)** — no separate `black`, no separate `isort`, and import
-sorting is ruff's `I` family — and **mypy** is the type checker. Both are
+sorting is ruff's `I` family — and **basedpyright** is the type checker. Both are
 configured in the manifest, pinned in the dev group, and must exit non-zero on a
 violation. **Advisory-only lint is an anti-pattern in this library**: a check
 that cannot fail does not hold a convention, it describes one.
@@ -311,10 +313,16 @@ branch red with no source change. Bump the pin deliberately, in its own commit,
 with the resulting fixes.
 
 **2. Configured in `pyproject.toml`** — the `[tool.ruff]`, `[tool.ruff.lint]` and
-`[tool.mypy]` tables above, with no `.ruff.toml`, `mypy.ini`, or `setup.cfg`
-alongside them. `target-version` is deliberately absent: ruff infers it from
+`[tool.basedpyright]` tables above, with no `.ruff.toml`, `pyrightconfig.json`,
+or `setup.cfg` alongside them. A `pyrightconfig.json` is not merely redundant:
+when one exists, basedpyright reads it **instead of** the whole
+`[tool.basedpyright]` table (verified — an empty `{}` beside the manifest dropped
+`strict` and the planted errors with it, and the default rule set ran in their
+place). `target-version` is deliberately absent: ruff infers it from
 `requires-python` (verified — `>=3.13` resolves to target version 3.13), and one
-declaration of the target beats two that can drift.
+declaration of the target beats two that can drift. `pythonVersion` is absent
+for the same reason: basedpyright takes it from the interpreter, which the pin
+holds equal to the floor.
 
 **3. Verified to actually fail.** Confirmed exit codes:
 
@@ -322,7 +330,7 @@ declaration of the target beats two that can drift.
 |---|---|---|
 | `uv run ruff check .` | 0 (`All checks passed!`) | **1** |
 | `uv run ruff format --check .` | 0 | **1** (`File would be reformatted`) |
-| `uv run mypy` | 0 | **1** |
+| `uv run basedpyright` | 0 | **1** |
 
 Never suppress these with `--exit-zero`, `|| true`, or a `continue-on-error` CI
 step. If a rule is wrong, remove the rule.
@@ -344,44 +352,88 @@ already in the `select` above:
 forbids writing `-> None`: `ANN201` reports `Missing return type annotation for
 public function` with `help: Add return type annotation: None` (verified). Two
 gates demanding opposite things means one of them gets suppressed everywhere.
+basedpyright has no such rule to disable: it infers return types, so under
+`strict` a function with typed parameters and no return annotation is simply
+typed `None` (verified — `def announce(message: str): print(message)` is clean).
 
-### The type-check invocation, and `[tool.mypy] files`
+### The type-check invocation, and `[tool.basedpyright] include`
 
 **The manifest decides the scope; the invocation carries no path.** Run
-`uv run mypy` — bare. An explicit path **overrides** `files`: with
-`files = ["src"]` and an error planted in `tests/`, `uv run mypy` exits 0 while
-`uv run mypy .` exits 1 (verified). The bare form is what `justfile-setup`'s
-component check recipe and `ci-setup`'s Python job invoke, so what a developer
-verifies is exactly what the task runner and CI check.
+`uv run basedpyright` — bare. An explicit path **overrides** `include`: with
+`include = ["src"]` and an error planted in `tests/`, `uv run basedpyright`
+exits 0 while `uv run basedpyright .` exits 1 (verified). The bare form is what
+`justfile-setup`'s component check recipe and `ci-setup`'s Python job invoke, so
+what a developer verifies is exactly what the task runner and CI check. Imports
+resolve because basedpyright finds the environment itself: with no `pythonPath`
+or `venvPath` configured it uses `./.venv` when that directory exists, and only
+otherwise the `python` on `PATH`. In the default uv layout both are the project
+environment, so the editable install of `src/` and every locked dependency are
+found with no `--pythonpath` flag (verified — `--verbose` prints
+`Execution environment: …/service/.venv/bin/python`). The corollary is a trap:
+a stale `.venv` inside the component directory wins over the environment
+`uv run` provides. In a uv workspace, where `uv run` uses the root environment,
+a leftover member `.venv` silently supplies both the search paths and the
+`pythonVersion`. Delete it rather than paper over it with `--pythonpath`.
 
-What `files` holds depends on the layout `python-ddd` gives you:
+What `include` holds depends on the layout `python-ddd` gives you:
 
 - **Tests inside the package root** (`src/tests/unit/...`, the `python-ddd`
-  convention) — `files = ["src"]` already covers them and `strict = true`
-  type-checks tests from commit 1. Nothing to add later; expect strict findings
-  in test modules and fix them rather than loosening the setting.
-- **Tests in a top-level `tests/`** — `files = ["src", "tests"]`, with `"tests"`
-  added in the same change that adds the first test module, not before.
+  convention) — `include = ["src"]` already covers them and `strict` type-checks
+  tests from commit 1. Nothing to add later; expect strict findings in test
+  modules and fix them rather than loosening the setting.
+- **Tests in a top-level `tests/`** — `include = ["src", "tests"]`, with
+  `"tests"` added in the same change that creates the directory, not before.
 
-That ordering matters because of one trap: `files` must list only directories
-containing at least one `.py` file. Both a missing directory and an existing but
-empty one make mypy exit **2** before checking anything:
+That ordering matters because of one trap: every entry in `include` must exist.
+A missing directory makes basedpyright print
 
 ```
-mypy: can't read file 'tests': No such file or directory
-There are no .py[i] files in directory 'tests'
+File or directory "/…/service/tests" does not exist.
 ```
 
-Exit code 2 is a *usage* error, not a clean run — a CI step that only checks for
-"not 1" reads it as success.
+and exit **3** — but it still checks every other entry and still reports what it
+finds there, so the summary line describes the rest of the tree, not the missing
+entry (verified: with `tests/` absent and an error planted in `src/`, the output
+ends `1 error, 0 warnings, 0 notes` and the exit code is 3). An existing but
+still-empty directory is fine — verified, exit 0. Exit code 3 is the code pyright
+documents for an unreadable configuration file, and basedpyright uses it for a
+missing `include` entry too. A `just` recipe or CI step fails on any non-zero
+exit, so the gate stays loud there; only a hand-written check that matches on
+exit 1 alone misreads it.
 
 ### The type checker
 
-`mypy` in `strict` mode is this library's default, and what its CI and `justfile`
-templates invoke. `basedpyright` (or `pyright`) is an acceptable substitute — the
-three requirements are unchanged: pinned in the dev group, configured in
-`pyproject.toml` (`[tool.basedpyright]`), and failing the build. Configure only
-one; two type checkers means two sets of suppression comments.
+**`basedpyright` in `strict` mode is this library's type checker** — the one its
+CI and `justfile` templates invoke, and the one its Python fixer agent and review
+prompts already speak. It is a fork of pyright distributed on PyPI with its own
+Node runtime (`nodejs-wheel-binaries`, locked alongside it), so `uv sync` is the
+whole installation and no system Node is required (verified with Node removed
+from `PATH`). Do not add `mypy` beside it: two type checkers means two sets of
+suppression comments, and the one CI does not run is the one that decays.
+
+Three settings, each doing one job:
+
+- **`typeCheckingMode = "strict"` must be written, not assumed.** basedpyright's
+  default mode is `recommended`, which enables every rule as a warning or an
+  error — including a basedpyright-exclusive family (`reportAny`,
+  `reportExplicitAny`, `reportUnusedCallResult`, …) that `strict` leaves off —
+  and fails on the warnings. Verified: with the mode omitted, a five-line file
+  with one `Any` parameter produced five warnings and exit 1; the same file under
+  `strict` is clean. `strict` is the rule set this library standardizes on. A
+  project that wants the `recommended` or `all` set opts in deliberately, in its
+  own commit, with the resulting fixes — never by leaving the key out.
+- **`include = ["src"]`** scopes the check; the previous section explains why
+  the invocation carries no path.
+- **`failOnWarnings = true`** makes a warning fail the build. Without it a
+  diagnostic at `warning` level is advisory — verified, `0 errors, 1 warning`
+  exits 0 — so any rule someone downgrades to `"warning"` would drop out of the
+  gate silently. With it the same run exits 1. This is what keeps requirement 3
+  true for every rule, not just the ones at `error` level. It has one cost to
+  know about: under `strict` exactly one rule is warning-level out of the box,
+  `reportMissingModuleSource`, which fires when a package's types ship in a
+  separate stub distribution and the runtime package itself is absent (verified
+  with `types-requests` installed and `requests` not: `1 warning`, exit 1).
+  Install the runtime package beside its stubs; do not turn the key off.
 
 ---
 
@@ -476,19 +528,21 @@ test "$lock_check_status" -eq 2 || fail "5: expected exit 2 from --locked, got $
 git checkout -- pyproject.toml
 uv sync --locked || fail "5: not restored after undo"
 
-# 6. Tooling passes on a clean tree.
+# 6. Tooling passes on a clean tree — and nothing shadows the manifest's
+#    type-checker table (a pyrightconfig.json replaces it wholesale).
+test ! -e pyrightconfig.json || fail "6: pyrightconfig.json shadows [tool.basedpyright]"
 uv run ruff check .          || fail "6: ruff check"
 uv run ruff format --check . || fail "6: ruff format"
-uv run mypy                  || fail "6: mypy"
+uv run basedpyright          || fail "6: basedpyright"
 
 # 7. Tooling FAILS on a planted violation — the check that matters most.
 printf 'import os\n' > src/backend_service/planted_violation.py
 uv run ruff check . ; ruff_status=$?
 printf 'def broken() -> int:\n    return "text"\n' > src/backend_service/planted_violation.py
-uv run mypy ; mypy_status=$?
+uv run basedpyright ; type_check_status=$?
 rm src/backend_service/planted_violation.py
 test "$ruff_status" -eq 1 || fail "7: ruff did not fail (got $ruff_status)"
-test "$mypy_status" -eq 1 || fail "7: mypy did not fail (got $mypy_status)"
+test "$type_check_status" -eq 1 || fail "7: basedpyright did not fail (got $type_check_status)"
 
 # 8. A pin below the floor is a hard error. Choose a below-floor minor version
 #    `uv python list` already shows as installed — otherwise uv must download it,
@@ -500,7 +554,7 @@ cp .python-version.backup .python-version && rm .python-version.backup
 test "$mismatch_status" -eq 2 || fail "8: expected exit 2 on pin below floor, got $mismatch_status"
 
 # 9. Clean again.
-uv sync --locked && uv run ruff check . && uv run mypy \
+uv sync --locked && uv run ruff check . && uv run basedpyright \
   && echo "phase 1 complete" || fail "9: tree not clean"
 ```
 
@@ -513,9 +567,9 @@ build.
 
 1. **A pin and a floor that disagree**, or no `.python-version` at all. With no
    pin, uv picks an interpreter of its own choosing and nothing reports which.
-   Below the floor it is a hard error; above it, mypy checks the interpreter it
-   runs under while ruff targets the floor, so version-incompatible code passes
-   every local gate.
+   Below the floor it is a hard error; above it, basedpyright checks the
+   interpreter it runs under while ruff targets the floor, so
+   version-incompatible code passes every local gate.
 2. **A greenfield floor below 3.14.** `>=3.13` or lower on new work is banned, no
    matter what the developer's machine has installed. It silently forfeits stdlib
    the patterns depend on — `uuid.uuid7()`, and with it the time-ordered resource
@@ -530,9 +584,20 @@ build.
    `pip install -e ".[dev]"` in a workflow. It writes into an environment the
    lockfile is supposed to describe, and the drift stays invisible until
    `uv sync` removes it.
-5. **Passing a path to the type checker** (`uv run mypy .`). The explicit path
-   overrides `[tool.mypy] files`, so the invocation, not the manifest, decides
-   the scope — and the two disagree the moment a directory is added.
+5. **Passing a path to the type checker** (`uv run basedpyright .`). The explicit
+   path overrides `[tool.basedpyright] include`, so the invocation, not the
+   manifest, decides the scope — and the two disagree the moment a directory is
+   added.
+6. **A `pyrightconfig.json` in the component root — the directory the check runs
+   from — or `--project` pointing at a file outside the repository.** Either
+   replaces the entire `[tool.basedpyright]` table without a warning (a copy in
+   a subdirectory is simply ignored — verified), so the checker runs a
+   configuration the repository does not contain and CI cannot reproduce. In a
+   project this skill set up, the manifest is the only configuration.
+7. **Leaving `typeCheckingMode` unset.** That is not "the defaults" — it is
+   basedpyright's `recommended` set, with rules the rest of this library never
+   chose and `failOnWarnings` already on, so the first `Any` fails the build for
+   a reason nobody wrote down.
 
 ## Relationship to Other Skills and Patterns
 
@@ -541,9 +606,11 @@ build.
   why that alone is not enough.
 - **`justfile-setup` (skill)** — owns the task runner, every command name, and
   the rationale for a single command surface. Its Python recipes invoke what
-  this skill configures (`uv run ruff check .`, `uv run mypy`, `uv run pytest`).
+  this skill configures (`uv run ruff check .`, `uv run basedpyright`,
+  `uv run pytest`).
 - **`python-ddd` (skill)** — phase 2. Owns what goes *inside* `src/`, including
-  where tests live (`src/tests/`), which decides what `[tool.mypy] files` holds.
+  where tests live (`src/tests/`), which decides what `[tool.basedpyright] include`
+  holds.
 - **`python-import-linter-setup` (skill)** — phase 3. Owns the architecture gate
   and its `[tool.importlinter]` contracts, including adding `import-linter` to
   the dev group.

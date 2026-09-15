@@ -1,10 +1,10 @@
 ---
 name: python-structure-and-style-guard
-description: Dispatches the python-structure-and-style-guard subagent for an advisory review of changed Python source — the project-structure (DDD layering) and code-style residue that ruff, mypy, and import-linter can't catch (domain-model shape, repository naming, UoW usage, router thinness, placement). Run before a commit or PR, or when a commit-review gate asks for it.
+description: Dispatches the python-structure-and-style-guard subagent for an advisory review of changed Python source — the project-structure (DDD layering) and code-style residue that ruff, basedpyright, and import-linter can't catch (domain-model shape, repository naming, UoW usage, router thinness, placement). Run before a commit or PR, or when a commit-review gate asks for it.
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.1"
+  version: "0.0.2"
 ---
 
 # Python Structure & Style Guard

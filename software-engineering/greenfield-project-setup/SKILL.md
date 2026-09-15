@@ -14,7 +14,7 @@ description: >-
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.7"
+  version: "0.0.8"
 ---
 
 # Greenfield Project Setup (Orchestrator)
@@ -165,7 +165,7 @@ The foundation is live only when **all** of these pass together:
 - [ ] every convention rule has a `should_flag`/`should_pass` fixture pair, and they actually run
 - [ ] no gate test is disabled or landed red — `grep -rn '#\[ignore' --include='*.rs' .` returns nothing, and `grep -rn '\(@pytest\.mark\|pytestmark = pytest\.mark\)\.\(skip\|xfail\)' --include='*.py' $(git ls-files '*src/tests/architecture/*.py')` returns nothing (scoped to gate directories: a `skipif` in an ordinary suite is legitimate, so a repo-wide grep here only teaches you to wave the check through)
 - [ ] every `GRANTED_*` permission ledger is still empty — `grep -rn 'GRANTED_' --include='*.rs' .` shows only empty collections
-- [ ] `rustfmt --check`, `clippy -D warnings`, `ruff check`, `ruff format --check`, type checks clean
+- [ ] `rustfmt --check`, `clippy -D warnings`, `ruff check`, `ruff format --check`, `basedpyright`, `vue-tsc` clean
 - [ ] unit + integration tests pass **in parallel** (isolation works)
 - [ ] `just test-all` (the single CI entry recipe) runs locally
 - [ ] agent hooks are installed and fire on a trial commit

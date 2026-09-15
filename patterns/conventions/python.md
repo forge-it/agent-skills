@@ -17,7 +17,7 @@ description: >-
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.8"
+  version: "0.0.9"
 ---
 
 # Python Convention Enforcement Pattern
@@ -127,7 +127,7 @@ engineering task rather than a maintenance liability.
 | 1. Config-only | **ruff** (`flake8-tidy-imports.banned-api`, `per-file-ignores`, import conventions), **import-linter** contracts in `pyproject.toml` | banned APIs, banned imports, layering, package independence, module cycles | ✅ |
 | 2. Custom lint plugin | **flake8 plugin** (public entry-point API), **pylint checker**, **semgrep** / **ast-grep** YAML rules | rules you want reported *in the editor* at edit time | ✅ |
 | 3. Architecture-as-tests | **pytest + `ast`** via the conventions package | declaration shape, placement, layout, vocabulary — the residue tiers 1–2 can't express | ✅ |
-| 4. Type-level | **mypy plugin API** | rules needing inferred types | ⚠️ upstream calls it experimental: "backwards incompatible changes may be made without a deprecation period" |
+| 4. Type-level | *(no rung — see the routing rules below)* | rules needing inferred types | n/a |
 
 Routing rules to tiers:
 
@@ -153,8 +153,13 @@ Routing rules to tiers:
 - **Tier 2 is optional and additive.** Reach for it when a rule deserves an
   editor squiggle rather than a test failure. Don't run the same rule in two
   tiers.
-- **Tier 4 only when a rule is genuinely un-approximable.** Most "needs types"
-  rules are really "needs the declaration", which tier 3 has exactly.
+- **Tier 4 has no rung in this library.** `basedpyright`, the library's type
+  checker, exposes no plugin API, and mypy's plugin API — which upstream calls
+  experimental, warning that "backwards incompatible changes may be made without
+  a deprecation period" — would mean running a second type checker for one
+  rule. Most "needs types" rules are really "needs the declaration", which tier
+  3 has exactly; a rule that truly needs inferred types goes to the review pass
+  (`python-structure-and-style-guard`), not to a gate.
 
 **On PyTestArch / pytest-archon:** both are credible ArchUnit ports, both
 scoped to the import-dependency dimension — which `import-linter` does better
@@ -185,7 +190,13 @@ services/
 members = ["packages/*", "services/*"]
 
 [dependency-groups]                  # PEP 735 — dev-only, never shipped
-dev = ["pytest==9.1.1", "ruff==0.16.2", "import-linter==2.13", "ironbox-conventions"]
+dev = [
+    "pytest==9.1.1",
+    "ruff==0.16.2",
+    "basedpyright==1.40.1",
+    "import-linter==2.13",
+    "ironbox-conventions",
+]
 
 [tool.uv.sources]                    # inherited by every member
 ironbox-conventions = { workspace = true }
@@ -1445,7 +1456,8 @@ codebase, for one rule.
   `pytest.skip`), the rule teaches suppression instead of compliance.
 - **Reimplementing layering in `ast`** when `import-linter` expresses it
   declaratively and catches transitive cases.
-- **Reaching for a mypy plugin** for a rule the declaration already answers.
+- **Reaching for a second type checker** (a mypy plugin) for a rule the
+  declaration already answers.
 - **`# noqa` / exemption sprawl** as the response to a rule firing. Fix the
   code, or change the rule in one place, deliberately.
 - **Seeding the package with a whole style guide.** Brittle rules nobody

@@ -4,7 +4,7 @@ description: Use when bootstrapping CI for a new monorepo with Rust, Python, and
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.6"
+  version: "0.0.7"
 ---
 
 # CI Setup
@@ -41,7 +41,7 @@ Run this once. After the workflow exists and passes, you do not re-run the skill
 |-----------|-----|----------------|
 | Rust | `rust-check` | `just core-check` → `fmt --all --check`, then `clippy --all-targets --all-features -D warnings`, then `cargo test --workspace --test structure` (hexagonal layering). Cheapest-first, and workspace-wide so no crate is left unchecked |
 | Vue | `web-check` | `just web-check` → ESLint feature-architecture boundaries, format check, `vue-tsc` |
-| Python | `python-check` | `just service-check` → `ruff format --check`, `ruff check`, `mypy`, `lint-imports`, and `pytest src/tests/architecture` (conventions gate: gate coverage and the interpreter floor) |
+| Python | `python-check` | `just service-check` → `ruff format --check`, `ruff check`, `basedpyright`, `lint-imports`, and `pytest src/tests/architecture` (conventions gate: gate coverage and the interpreter floor) |
 
 **Every job invokes a `just` recipe, never a raw command.** That is the whole
 anti-drift mechanism: a gate can only be added, changed, or weakened in the
@@ -178,8 +178,8 @@ jobs:
           tool: just
 
       - name: Quality gate
-        # ruff format --check, ruff check, mypy (no path — the manifest owns the
-        # scope), lint-imports, and the conventions gate.
+        # ruff format --check, ruff check, basedpyright (no path — the
+        # manifest owns the scope), lint-imports, and the conventions gate.
         run: just service-check
 ```
 
@@ -334,6 +334,8 @@ you add in `justfile-setup` first.
   `core-check` runs.
 - `python-import-linter-setup` — installs the `lint-imports` contracts that
   `service-check` runs.
+- `python-project-setup` — pins and configures, in `pyproject.toml`, the `ruff`
+  and `basedpyright` gates that `service-check` runs.
 - `frontend-vue-eslint-setup` — installs the ESLint boundary rules that
   `web-check` runs.
 - `justfile-setup` — owns every recipe these jobs invoke. A gate is only reachable

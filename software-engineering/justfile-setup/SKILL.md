@@ -4,7 +4,7 @@ description: Use when bootstrapping a new monorepo that mixes Rust, Python, and/
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.5"
+  version: "0.0.6"
 ---
 
 # Justfile Setup
@@ -239,11 +239,11 @@ web-check:
   npm --prefix web run format:check
   npm --prefix web run check
 
-# [python] Run ruff + mypy + import-linter — run before every commit
+# [python] Run ruff + basedpyright + import-linter — run before every commit
 service-check:
   cd service && uv run ruff format --check .
   cd service && uv run ruff check .
-  cd service && uv run mypy
+  cd service && uv run basedpyright
   cd service && uv run lint-imports
   cd service && uv run pytest src/tests/architecture
 

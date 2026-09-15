@@ -105,20 +105,43 @@ For every task:
 
 2. **Orient narrowly.** Read only the guidance and manifests needed to run
    Python and basedpyright: nearest `CLAUDE.md`, `README.md`, `pyproject.toml`,
-   `pyrightconfig.json`, `basedpyrightconfig.json`, `Makefile`/`justfile`,
+   `pyrightconfig.json`, `Makefile`/`justfile`,
    `tox.ini`, `.python-version`, and relevant tool configuration. Do not read
    lock files just to infer conventions.
 
-3. **Find the basedpyright command.** Use the operator-provided command when
-   present. Otherwise prefer the project's documented type-check command. If no
-   project command is documented, use:
+3. **Find the basedpyright command.** Take the first that applies:
 
-   ```bash
-   basedpyright --pythonpath .venv/bin/python --project ~/pyrightconfig.json .
-   ```
+   1. The operator-provided command, when present.
+   2. The project's documented type-check command — a `just <component>-check`
+      recipe or equivalent. Run the basedpyright step it contains, as written.
+   3. When the repository configures basedpyright itself — a
+      `[tool.basedpyright]` table in `pyproject.toml`, or a committed
+      `pyrightconfig.json` in the directory the check runs from — run it bare
+      from that directory, inside the project environment:
 
-   If that command is invalid for the repository, adapt only enough to use the
-   repository's documented virtualenv, interpreter, or config path.
+      ```bash
+      uv run basedpyright
+      ```
+
+      The in-tree configuration owns the scope: pass no path and no
+      `--project`. A `--project` pointing at any other file replaces the
+      repository's configuration entirely, so the run would check a
+      configuration the repository does not contain. If both a
+      `pyrightconfig.json` and a `[tool.basedpyright]` table exist, the JSON
+      file wins and the table is inert — treat the JSON file as the
+      configuration and state that in the report.
+   4. Only when the repository ships **no** basedpyright configuration at all,
+      fall back to the operator's personal configuration:
+
+      ```bash
+      basedpyright --pythonpath .venv/bin/python --project ~/pyrightconfig.json .
+      ```
+
+      State in the final report that the repository has no in-tree
+      configuration, so this run reproduces nothing CI can check.
+
+   If the chosen command is invalid for the repository, adapt only enough to use
+   the repository's documented virtualenv, interpreter, or config path.
 
 4. **Run basedpyright, baseline the output, and filter diagnostics.** Run the
    command with `--outputjson` and save the full JSON to a scratch file: this
@@ -267,7 +290,8 @@ Escalate instead of guessing when:
 When reporting back, keep the summary concise:
 
 - **Dirty Python allowlist**: files captured at task start.
-- **Basedpyright command**: command used and final scoped result.
+- **Basedpyright command**: command used, whether its configuration came from
+  the repository or from the operator's fallback, and final scoped result.
 - **Scoped diagnostics fixed**: count and short category summary.
 - **Remaining scoped diagnostics**: each with the exact blocker, or none.
 - **Regression check**: confirmation that no new diagnostics exist anywhere

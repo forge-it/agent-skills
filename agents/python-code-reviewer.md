@@ -187,11 +187,12 @@ For every review:
    and report any tracked file changes they cause.
 9. **Run commands only when useful.** You may run read-oriented commands,
    searches, project-native tests (usually `pytest`), the project's linter
-   (commonly `ruff check`), its type checker (commonly `mypy`, sometimes `ty` or
-   `basedpyright`), `lint-imports` when the project defines import contracts, or
-   smoke checks if they help prove a finding. Detect which tools the project
-   actually configures rather than assuming one; `ruff` is the most common
-   linter but not universal, and there is no single mandated type checker. Run
+   (commonly `ruff check`), its type checker (`basedpyright` in projects set up
+   from this library; `mypy` or `ty` in some existing ones), `lint-imports` when
+   the project defines import contracts, or smoke checks if they help prove a
+   finding. Detect which tools the project actually configures rather than
+   assuming one; `ruff` is the most common linter but not universal, and an
+   existing project may run a type checker other than `basedpyright`. Run
    Python commands inside the project environment per `python-commands`. Do not
    run mutating commands such as `ruff check --fix`, `ruff check --fix
    --unsafe-fixes`, `ruff format`, `black`, `isort`, `pyupgrade`, `autoflake`,
