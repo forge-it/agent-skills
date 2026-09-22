@@ -4,13 +4,13 @@ description: Dispatches the vue-structure-and-style-guard subagent for an adviso
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.3"
+  version: "0.0.4"
 ---
 
 # Vue Structure & Style Guard
 
 Thin dispatcher. The review runs in the **`vue-structure-and-style-guard`
-subagent** (Sonnet 4.6, read-only tools, isolated context) so the checklist and
+subagent** (read-only tools, isolated context) so the checklist and
 the file reads never load into this session — you only get the findings back.
 
 ## Steps

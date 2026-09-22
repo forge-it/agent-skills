@@ -4,13 +4,13 @@ description: Dispatches the rust-structure-and-style-guard subagent for an advis
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.3"
+  version: "0.0.4"
 ---
 
 # Rust Structure & Style Guard
 
 Thin dispatcher. The review runs in the **`rust-structure-and-style-guard`
-subagent** (Sonnet 4.6, read-only tools, isolated context) so the checklist and
+subagent** (read-only tools, isolated context) so the checklist and
 the file reads never load into this session — you only get the findings back.
 
 ## Steps
