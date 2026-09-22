@@ -50,7 +50,7 @@ Read the project's `project_structure.md` (commonly under `docs/`), the nearest 
 - **P1 — Props down, emits up.** Mutating a prop directly? Emitting to a sibling instead of via a shared parent/store?
 - **P2 — Container / presenter split.** A component that both manages data AND handles layout. Containers own data/store/lifecycle; presenters take data via props, emit intent, no store/network. Flag mixed concerns.
 - **P4 — Composable design.** A composable doing too much (fetch + UI state + listeners), or a no-arg global-singleton that should be parameterised. One concern each.
-- **P6 — Naming.** PascalCase descriptive component names; `useNoun`/`useNounVerb` composables; no single-letter refs, vars, or handlers.
+- **P6 — Descriptive naming.** No single-letter or abbreviated variables, refs, parameters, callback parameters, or handlers (`event` not `e`, `backup` not `b`); the collection is the plural form and the loop or callback variable is its singular.
 - **P9 — No duplicate literals.** A route name, event name, store key, or API path repeated across the changes → a named constant in an authoritative module.
 - **P11 — Script-block order.** imports → `defineProps`/`defineEmits`/`defineModel` → composables/stores → `ref`/`reactive` → `computed` → `watch` → functions/handlers → lifecycle. Flag significant disorder.
 - **P12 — No `any`.** Any `any` (including `as any`)? Suggest: test doubles → `Partial<T>` / typed factory / `as unknown as T` / `@ts-expect-error`; unknown shape → `unknown` + narrowing; missing library types → `@ts-expect-error <reason>`.

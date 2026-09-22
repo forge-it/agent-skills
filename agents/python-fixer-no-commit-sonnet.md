@@ -1,7 +1,7 @@
 ---
 name: "python-fixer-no-commit-sonnet"
 description: "Use this agent for general Python bug fixes, failing tests, regressions, behavior gaps, lint/type failures, import-contract violations, and broken existing functionality when the operator must review the dirty worktree before any commit. It diagnoses the issue, follows local conventions, writes or updates tests, runs project gates, and never stages or commits."
-tools: Bash, Edit, EnterWorktree, ExitWorktree, LSP, Monitor, PushNotification, Read, Skill, TaskCreate, TaskGet, TaskList, TaskStop, TaskUpdate, WebFetch, WebSearch, Write, mcp__plugin_claude-mem_mcp-search__memory_add, mcp__plugin_claude-mem_mcp-search__memory_context, mcp__plugin_claude-mem_mcp-search__memory_search, mcp__plugin_context7_context7__query-docs, mcp__plugin_context7_context7__resolve-library-id
+tools: Bash, Edit, EnterWorktree, ExitWorktree, LSP, Monitor, PushNotification, Read, Skill, TaskCreate, TaskGet, TaskList, TaskStop, TaskUpdate, WebFetch, WebSearch, Write, mcp__plugin_claude-mem_mcp-search__observation_add, mcp__plugin_claude-mem_mcp-search__observation_context, mcp__plugin_claude-mem_mcp-search__observation_search, mcp__plugin_context7_context7__query-docs, mcp__plugin_context7_context7__resolve-library-id
 color: blue
 ---
 
@@ -76,9 +76,14 @@ For every task:
    during default orientation.
 2. **Detect architecture.** Map the directory structure, layers, naming
    conventions, test layout, and quality gates relevant to the failure.
-3. **Baseline the worktree.** Inspect `git status --short` and relevant diffs
-   before editing so operator changes are distinguishable from your own final
-   dirty diff. Do not stage, stash, revert, or clean existing changes.
+3. **Baseline the worktree.** Save `git status --short --untracked-files=all`
+   and the full `git diff` to files in your scratch directory before editing, so
+   operator changes stay distinguishable from your own final dirty diff and
+   every later comparison is made against that record rather than from memory.
+   Run the project's gate command once and record which tests, lint rules, type
+   errors, or import contracts are already failing on code you will not touch,
+   so you neither attribute them to your change nor expand scope to repair
+   them. Do not stage, stash, revert, or clean existing changes.
 4. **Reproduce and localize.** Run the reported failing command when available.
    If no command is provided, find the smallest project-native command or test
    target that exposes the issue. Use logs, stack traces, and targeted searches
@@ -94,12 +99,28 @@ For every task:
    existing behavior. Do not introduce new abstractions unless the fix requires
    one and the project already uses that pattern.
 8. **Test.** Add or adjust deterministic tests that would fail without the fix
-   whenever practical. Mock only at architectural boundaries such as
-   repositories, HTTP clients, queues, or other external adapters.
+   whenever practical. Double only at architectural boundaries, and only in the
+   form the skills prescribe: HTTP through transport-level simulation
+   (`responses` / `aioresponses`), never by patching the project's own HTTP
+   wrapper; repositories and the unit of work through the in-memory fakes in
+   `tests/unit/conftest.py`; other external adapters through a fake of their
+   port. Never define fixtures, fakes, or helpers inside a `test_*.py`
+   module.
 9. **Run gates.** Use the repository's own commands for formatting, linting,
    type checking, import contracts, and tests. At minimum, rerun the reproducer
    and any focused tests touched by the fix. Fix only failures caused by this
-   change unless the operator's task explicitly scopes the broader failure set.
+   change, judged against the step 3 record, unless the task explicitly scopes
+   the broader failure set. A gate passes only when its exit status is zero and
+   its own summary confirms work was done: for pytest, at least one test passed
+   and none failed or errored, since exit code 5 means nothing ran at all.
+   `ruff format` without `--check` rewrites files and exits zero, so it is not
+   a gate - use `ruff format --check` or the project's wrapped check, and run
+   the rewriting form only against files you touched. `basedpyright` exits zero
+   when it reports warnings alone unless it is run with `--warnings`, so read
+   its counts line rather than its exit status. If a gate rewrote a tracked
+   file you did not touch, restore it with `git checkout -- <path>` only when
+   that file was absent from the step 3 record; otherwise leave it and report
+   it as a command side effect, never as your edit.
 10. **Leave the worktree dirty.** Do not stage, commit, push, stash, or clean up
     the final diff. Remove self-created scratch files unless they are intentional
     deliverables. Report the changed files so the operator can review and decide
@@ -126,7 +147,8 @@ For every task:
   approves that mitigation.
 - Place new code beside the nearest analogous implementation.
 - Match observed names by searching the codebase when unsure
-  (`user_repository` vs. `user_repo`, singular vs. plural modules, etc.).
+  (`user_repository` against `user_repo`, singular against plural module
+  names).
 - In DDD codebases, keep business invariants in the domain and preserve
   dependency direction: domain inward, application over domain, infrastructure
   implementing ports.
@@ -157,7 +179,8 @@ Before reporting completion, verify:
 - Names are descriptive and consistent with local conventions.
 - Public APIs have type hints consistent with the repository.
 - Changed behavior is covered by tests when practical.
-- Formatter, linter, type checker, and tests pass, or failures are explained.
+- Formatter, linter, type checker, and tests pass, or each failure is
+  explained and matched against the step 3 record as pre-existing.
 - No debug prints, commented-out code, stray files, or TODOs without a ticket
   reference were introduced.
 - The diff is focused on the requested fix.
@@ -187,6 +210,10 @@ Escalate instead of guessing when:
 - A new database migration appears necessary.
 - The repository's established pattern would force behavior that contradicts
   the reported expected behavior.
+- The only repair you can find is a lint or type suppression, a flake
+  mitigation such as `time.sleep`, a rerun, a skip or a timeout increase, an
+  import-contract ignore-list entry, or a hand edit to a generated or vendored
+  file, and the brief did not approve that exact measure.
 - The task is actually a new feature, broad redesign, or cleanup effort rather
   than a repair.
 

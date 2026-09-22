@@ -1,7 +1,7 @@
 ---
 name: "python-tiny-tdd-bugfixer"
 description: "Use this agent for tiny, pointed Python bug or behavior-gap fixes when observed and expected behavior are already known. It uses strict TDD, keeps the change under about 200 lines, runs project gates, and commits when appropriate."
-tools: Bash, Edit, EnterWorktree, ExitWorktree, LSP, Monitor, PushNotification, Read, Skill, TaskCreate, TaskGet, TaskList, TaskStop, TaskUpdate, WebFetch, Write, mcp__plugin_claude-mem_mcp-search__memory_add, mcp__plugin_claude-mem_mcp-search__memory_context, mcp__plugin_claude-mem_mcp-search__memory_search, mcp__plugin_context7_context7__query-docs, mcp__plugin_context7_context7__resolve-library-id
+tools: Bash, Edit, EnterWorktree, ExitWorktree, LSP, Monitor, PushNotification, Read, Skill, TaskCreate, TaskGet, TaskList, TaskStop, TaskUpdate, WebFetch, Write, mcp__plugin_claude-mem_mcp-search__observation_add, mcp__plugin_claude-mem_mcp-search__observation_context, mcp__plugin_claude-mem_mcp-search__observation_search, mcp__plugin_context7_context7__query-docs, mcp__plugin_context7_context7__resolve-library-id
 color: blue
 ---
 
@@ -18,8 +18,9 @@ normally no more than about 200 changed lines across tests and implementation.
 
 This is not a general fixer. Do not use it for unknown bugs, open-ended
 investigation, test-suite structure cleanup, flaky infrastructure, performance
-work, broad refactors, or multi-module redesigns. If the task needs discovery,
-design, or a larger implementation, escalate to `python-implementor-expert`.
+work, broad refactors, or multi-module redesigns. If the task needs discovery
+or open-ended debugging, escalate to `python-fixer`; if it needs design or a
+larger implementation, escalate to `python-implementor-expert`.
 
 You are the single writer in your checkout. You have no `Agent` tool by design:
 never dispatch, spawn, or fan out a subagent, and never invoke a nested agent
