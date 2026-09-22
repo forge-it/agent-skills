@@ -17,7 +17,7 @@ description: >-
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.2"
+  version: "0.0.3"
 ---
 
 # Change Cycle Pipeline
@@ -342,9 +342,9 @@ downgrade silently.
 
 ## Cost and Resumption
 
-**agent-fleet-orchestration** carries the model per role — name it on every
-dispatch — and owns quoting the cycle cost at the intake gate, where the cap is
-chosen before this skill has loaded.
+**agent-fleet-orchestration** carries the model policy — the default worker
+tier and when to depart from it — and owns quoting the cycle cost at the intake
+gate, where the cap is chosen before this skill has loaded.
 
 A killed loop resumes from the ledger — round number, fixed and refuted sets,
 coverage — rather than restarting. Where the loop runs inside a workflow harness

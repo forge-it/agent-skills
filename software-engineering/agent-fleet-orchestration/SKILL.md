@@ -3,21 +3,19 @@ name: agent-fleet-orchestration
 description: >-
   STOP — if you were dispatched as a subagent to execute a briefed task, this
   skill is not for you: it governs the top-level session only. Do the task you
-  were briefed with instead. Use when you ARE that top-level session, driving a
-  multi-step task through a fleet of specialized subagents — settling how the
-  task will run, decomposing the work, and dispatching explorers, investigators,
-  implementors, fixers, and reviewers rather than editing many files or running
-  long gate loops yourself. Use ONCE at the start of a non-trivial task, before
-  the first dispatch, whatever the deliverable is: a code change, a plan, a plan
-  review, or a code review. Never reload it: once loaded it governs the whole
-  task; re-opening the gate is a decision, not a reload. Symptoms it prevents:
-  committing to a supervision level or round cap the operator never chose, the
-  orchestrator becoming the implementor, serial dispatch of independent work,
-  parallel writers colliding, vague briefs, and relaying raw subagent dumps.
+  were briefed with instead. Use when you ARE that top-level session and a
+  non-trivial task is about to run through a fleet of specialized subagents
+  rather than by your own hand. Use ONCE, before the first dispatch, whatever
+  the deliverable is: a code change, a plan, a plan review, or a code review.
+  Never reload it: once loaded it governs the whole task; re-opening the gate
+  is a decision, not a reload. Symptoms it prevents: committing to a
+  supervision level or round cap the operator never chose, the orchestrator
+  becoming the implementor, serial dispatch of independent work, parallel
+  writers colliding, vague briefs, and relaying raw subagent dumps.
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.4"
+  version: "0.0.5"
 ---
 
 # Agent Fleet Orchestration
@@ -44,6 +42,10 @@ the right specialized worker for each piece, and integrates what comes back.
 > *execution* of its concern (search, investigation, implementation, fixing,
 > review).
 
+Never run the orchestrator *as* a dispatched agent: a subagent returns one
+final message and cannot talk back mid-flight, which is right for a leaf task
+and wrong for the conductor.
+
 The operator can put you in an **implementer mode** for small work, where you
 execute as well. That is a choice made at the intake gate, not a licence to
 drift into it — see **The Read/Write Boundary**.
@@ -51,16 +53,6 @@ drift into it — see **The Read/Write Boundary**.
 Skills named in **bold** throughout are pointers, not a startup manifest. Load
 one when you reach the work it governs — loading four process skills before the
 first dispatch spends context on decisions you have not made yet.
-
-## You Are the Main Loop, Not a Subagent
-
-The orchestrator is the interactive session the operator talks to. It stays
-live across the whole task, reads files to reason, and dispatches workers.
-
-A **subagent** is the opposite: dispatched into an isolated context, it cannot
-talk back mid-flight and returns exactly **one final message**. That is right
-for a leaf task, wrong for the conductor — never run the orchestrator *as* a
-dispatched agent.
 
 ## When Not to Use
 
@@ -87,7 +79,7 @@ re-open it from context, never by reloading this skill.
 | Review depth — code | **narrow loop (default: 1 lens, refuted, fixed)** / gate-only / simple panel (2–3 lenses, no verifier, no fixer) / full loop — 6–9 lenses, **only on explicit operator confirmation with the cost quoted**, never self-selected | the deliverable is a plan or a review |
 | Pipeline variant — plan or code review | simple / complex | the deliverable is a code change |
 | Spec input — plan or code review | the plan path or ticket key to review against, plus the git base for a code review | the deliverable is a code change |
-| Round cap | N rounds / until zero findings — **quote the cost in the same message**: lenses dispatched × rounds, plus one verifier per unique finding | the depth has no fix step (gate-only, simple panel) |
+| Round cap | N rounds / until zero findings — **quote the cost in the same message**: lenses dispatched × rounds, plus one verifier per unique finding | the depth has no fix step (gate-only, simple panel), or the deliverable is a plan or a review |
 | Operator gate | per cycle / at the end | supervision is vibe, or the deliverable is a plan or a review |
 | Parallel worktrees | yes / no | you are the implementer, or the deliverable is a plan or a review |
 
@@ -97,7 +89,8 @@ table below does not name is still legitimate.
 **Precedent is not an answer.** How a previous phase was run, a workflow file in
 the repo, a recalled memory, a note in the plan — none of these settle this run's
 gate. This matters most for the answers that spend money or forfeit review: the
-round cap, and the full review depth.
+round cap, and the full review depth. Selecting the full depth from precedent
+spends the operator's most expensive option on your own authority.
 
 **In vibe mode the intake gate is the last interactive moment.** Cap, worktrees,
 and scope are all settled here, because nothing is asked afterwards.
@@ -115,11 +108,12 @@ fit one reviewable cycle. Run **superpowers:brainstorming**, then
 | Code | vibe + you implement | **change-cycle-pipeline**; you write, subagents review, verify, and fix |
 | Code | supervised + fleet + gate per cycle | **change-cycle-pipeline** — the default for plan-driven work |
 | Code | supervised + fleet + gate at end | **change-cycle-pipeline**; cycles still exist, only the loop and gate move to the end |
+| Code | supervised + you implement + narrow or full loop | **change-cycle-pipeline**; you write, subagents review, verify, and fix; the operator gate runs at the cadence chosen |
 | Code | supervised + you implement + gate-only | You edit, then run the project's gate — that is the whole claim, and it is not a review |
 | Code | supervised + you implement + simple panel | You edit, then dispatch 2–3 lenses from `/home/cristi/Projects/agent-skills/prompts/code-implementation-review/`; no verifier, no fixer — read the findings and decide |
 | Plan | — | **superpowers:brainstorming** → **superpowers:writing-plans**; **technical-design-discussions** for the decisions you escalate; `Explore` agents for the facts |
-| Plan review | — | `/home/cristi/Projects/agent-skills/prompts/plan-review/subagents/` — pick by stack, then plain vs `-complex`. Fill `<X>` (the plan path) and pick `<Y>` (your output prefix); these prompts have no `<Z>` |
-| Code review | — | `/home/cristi/Projects/agent-skills/prompts/code-implementation-review/subagents/` — pick by stack, then plain vs `-complex`, then `-ticket` when the spec is a Jira issue rather than a plan file (`-ticket` exists for python only; for another stack, say so and use the plain variant against a plan). Fill `<X>` (plan path or ticket key) and `<Z>` (the git base), and pick `<Y>`. No plan and no ticket means there is nothing to review *against* — settle that with the operator before dispatching |
+| Plan review | — | `/home/cristi/Projects/agent-skills/prompts/plan-review/subagents/` — pick by stack (`python`, `rust`, `vue`, `react`, `python-vue`, `python-react`, `rust-vue`, `rust-react`), then plain vs `-complex`. Fill `<X>` (the plan path) and pick `<Y>` (your output prefix); these prompts have no `<Z>` |
+| Code review | — | `/home/cristi/Projects/agent-skills/prompts/code-implementation-review/subagents/` — pick by the same stacks, then plain vs `-complex`, then `-ticket` when the spec is a Jira issue rather than a plan file (`-ticket` exists for python only; for another stack, say so and use the plain variant against a plan). Fill `<X>` (plan path or ticket key) and `<Z>` (the git base), and pick `<Y>`. No plan and no ticket means there is nothing to review *against* — settle that with the operator before dispatching |
 
 ### Vibe Mode
 
@@ -175,6 +169,10 @@ Route by **role**, then pick the language variant matching the files. The exact
 agent names live in the operator's fleet (listed at session start / under
 `agents/`); these are the roles you dispatch and typical names.
 
+A precise brief is the orchestrator's real output. "Fix the bug" with no
+reproduction, expected behavior, or scope wastes a worker round-trip; the brief
+carries all three, plus the constraint the worker must not cross.
+
 | Task / signal | Worker role | Typical agent (pick language variant) |
 |---------------|-------------|----------------------------------------|
 | "where is X", "how does Y work", find usages, map a subsystem | Explorer (read-only) | `Explore` |
@@ -190,29 +188,29 @@ agent names live in the operator's fleet (listed at session start / under
 | Catch structure/style drift a linter can't (naming, cohesion, placement) | Structure/style guard | `{rust,python,vue,react}-structure-and-style-guard` |
 | Exhaustively audit a scoped tree against a rubric, especially SRP | Auditor (read-only) | `{rust,python}-code-auditor` |
 | Turn one audit finding into an implementation-ready refactor handoff | Designer (read-only) | `{rust,python}-code-designer` |
+| Assess a change set or a scoped tree for exploitable flaws, any language — **only when the operator asks for it**; never self-selected, never folded into a review loop | Security reviewer (read-only) | `generalistic-security-expert` |
 | Design an implementation strategy | Planner | `Plan`, or write the plan yourself |
 
 ### Which Model per Role
 
-Agent definitions carry no `model:` line at all, by convention, so a worker
-lands on whatever tier is ambient — usually the cheap one. **Name the model on
-the dispatch instead.**
+Model resolution on a dispatch runs: the `model` you pass → the agent
+definition's `model:` line → `CLAUDE_CODE_SUBAGENT_MODEL` → the session's own
+model. Agent definitions carry no `model:` line, by convention, so a dispatch
+that names no model lands on `CLAUDE_CODE_SUBAGENT_MODEL` — the operator's
+default worker tier, `sonnet`: cheap and good enough for implementation,
+fixing, review, verification, and exploration alike. **Do not name a model on
+an ordinary dispatch**; naming one overrides the operator's default.
 
-| Role | Model | Why |
-|------|-------|-----|
-| Implementor | `opus` | Cheap implementation is a false economy: it produces findings, and each one costs a review round, a verifier, and a fix |
-| Verifier / refuter | `opus` | A wrong refute silently deletes a real defect — the one role where a cheap error leaves no trace |
-| Fixer | `opus` | Applies findings to code it did not write, under a plan constraint |
-| Final gate | `opus` | The last claim before the operator sees it |
-| Review lens | `sonnet`, high effort | Many run in parallel against an explicit brief; breadth beats depth, and corroboration filters the noise |
-| Explorer, investigator | `sonnet` | Locating and reproducing |
-| Structure/style guard | `sonnet` | Mechanical: applies a fixed rule set to a diff |
-| Auditor | `opus` | Reads an entire tree and judges design debt; a cheap miss is a defect nobody else is looking for |
-| Designer | `opus` | Its output is the brief an implementor executes against — an error here propagates into code |
+Depart from it deliberately, and say why in one line — in the ledger when there
+is nobody to tell:
 
-Scale it to the work, not just the role: a one-line fix does not need a strong
-fixer, and a subtle concurrency bug deserves a strong investigator. The table is
-the default you depart from deliberately.
+| Departure | When |
+|-----------|------|
+| `opus` on one dispatch | A cheap miss would be expensive and hard to see: a concurrency or authorization defect to localize; a verifier ruling on a finding whose fix is hard to reverse — schema, migration, public API, wire format; the fixer applying such a fix |
+| `fable` | **Only when the operator explicitly asks for it on this task.** It is reserved for the rare work they name; the stakes as you read them are never a reason |
+
+The orchestrator itself runs on the Opus tier or above — the session's choice,
+not this skill's.
 
 **Commit vs no-commit:** default to the **`-no-commit`** variant so the operator
 reviews the dirty worktree before anything is committed. Use commit variants only
@@ -258,26 +256,12 @@ ask. See **code-change-workflow** for the escalation baseline.
 
 Vibe mode suspends this: decide and record, per **Vibe Mode** above.
 
-## Anti-Patterns to Avoid
-
-- **Answering the gate from precedent.** A remembered previous run is not this
-  run's operator. Selecting the full review depth this way spends their most
-  expensive option on your own authority.
-- **Vague briefs.** "Fix the bug" with no repro, expected behavior, or scope
-  wastes a worker round-trip. A precise brief is the orchestrator's real output.
-
 ## Quick Reference
 
-1. Run the intake gate first — it is the last interactive moment in vibe mode.
-2. Read to reason — dispatch to execute.
-3. In a fleet mode, inline edit only one trivial line, no test, no gate loop; in
-   an implementer mode, promote out when the task stops being small.
-4. Route by role → pick the language variant → name the model → default
-   `-no-commit`.
-5. Independent work → parallel in one message; parallel writers → worktrees;
-   the operator's parallelism answer is a ceiling.
-6. Dependent work → investigate → plan → implement → review → fix.
-7. Delivering a code change in a fleet mode, or at a depth that fixes (narrow or
-   full loop) → **change-cycle-pipeline**. Narrow is the default; full is the
-   exception.
-8. Relay the integrated conclusion, not the raw subagent output.
+```
+intake gate (once) → read to reason, dispatch to execute
+  → route by role → language variant → -no-commit and the default model unless departing deliberately
+  → independent work in parallel, dependent work in sequence, parallel writers in worktrees
+  → a code change in a fleet mode, or at a depth that fixes, runs change-cycle-pipeline
+  → relay the integrated conclusion, never the raw dump
+```
