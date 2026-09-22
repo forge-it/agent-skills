@@ -26,7 +26,7 @@ Each skill includes:
 | [technical-design-discussions](software-engineering/technical-design-discussions/SKILL.md) | Design conversations: verify sources, weigh trade-offs, recommend, record ADRs |
 | [git-workflow](software-engineering/git-workflow/SKILL.md) | Git branch naming, commits, and version control |
 | [database-management](software-engineering/database-management/SKILL.md) | Database schema management and migration strategies |
-| [python-code-style-v1](software-engineering/python-code-style-v1/SKILL.md) | Python code style for clean, maintainable code |
+| [python-code-style](software-engineering/python-code-style/SKILL.md) | Python code style for clean, maintainable code |
 | [python-commands](software-engineering/python-commands/SKILL.md) | Running Python through the project's package manager, inside the right virtualenv |
 | [python-project-setup](software-engineering/python-project-setup/SKILL.md) | Python interpreter pinning, `uv` + committed lockfile, and the commit-1 `pyproject.toml` |
 | [python-testing](software-engineering/python-testing/SKILL.md) | Python testing best practices using pytest |
@@ -105,7 +105,7 @@ agent-skills/
     │   └── SKILL.md
     ├── database-management/
     │   └── SKILL.md
-    ├── python-code-style-v1/
+    ├── python-code-style/
     │   └── SKILL.md
     ├── python-commands/
     │   └── SKILL.md

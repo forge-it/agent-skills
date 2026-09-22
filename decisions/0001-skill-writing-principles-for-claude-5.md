@@ -1,8 +1,8 @@
 # ADR 0001: Skill-writing principles for Claude 5 models
 
-- **Status:** Proposed — experimental, NOT yet approved. Approval requires observed behavioral proof from the `python-code-style-v1` live test. Until then, no other skill may be rewritten to this pattern.
-- **Date:** 2026-07-29
-- **Pilot:** `software-engineering/python-code-style-v1/SKILL.md` (455 → 100 lines rewrite of `python-code-style`, which is disabled via `SKILL.md.disabled` for the duration of the test)
+- **Status:** Accepted — the live test concluded and the rewrite was promoted. This ADR now governs rewrites of the remaining skills.
+- **Date:** 2026-07-29 (accepted 2026-09-21)
+- **Pilot:** `software-engineering/python-code-style/SKILL.md` (455 → 100 lines). The rewrite replaced the original in place; the parallel `python-code-style-v1/` directory and the disabled `SKILL.md.disabled` are gone.
 
 ## Context
 
@@ -39,5 +39,5 @@ Skills (re-)written for Claude 5 models follow six principles:
 - Rewritten skills drop to roughly a quarter of their size, reducing per-task context cost for every Python/Rust/Vue task that loads them.
 - The model gains latitude where rules used to be wrongly absolute; house invariants gain explicit "deliberate deviation" protection against being normalized away.
 - Review agents keep working unchanged across the migration because rule citations stay stable.
-- Until approval, the repo runs mixed-style: one experimental skill, the rest legacy. The README link and any by-name references to a disabled original are broken for the test window.
-- If approved, this ADR governs the rewrite of the remaining skills and the "write for less capable models" authoring guidance is retired. If rejected, `python-code-style-v1/` is deleted and the original restored.
+- The repo runs mixed-style until the remaining skills are rewritten: `python-code-style` follows this pattern, the rest are still legacy. That is expected, not drift.
+- The rewrite is promoted, so this ADR governs the rewrite of the remaining skills and the "write for less capable models" authoring guidance is retired. Rewrites still follow the workflow above — parallel directory, two Fable review rounds, author decides — one skill at a time rather than a bulk pass.

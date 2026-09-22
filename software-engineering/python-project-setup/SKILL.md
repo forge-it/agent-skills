@@ -337,7 +337,7 @@ step. If a rule is wrong, remove the rule.
 
 ### Which rules to select
 
-`python-code-style-v1` owns the style rules themselves but names no ruff codes,
+`python-code-style` owns the style rules themselves but names no ruff codes,
 so the mapping from its prose rules to enforceable families is made here and is
 already in the `select` above:
 
@@ -348,7 +348,7 @@ already in the `select` above:
 | No function-level imports | `PLC0415` (`import-outside-top-level`), selected as a single code because the whole `PLC` family is far broader |
 | Errors, unused names, import order, modern syntax, bug patterns, simplification | `E`, `F`, `I`, `UP`, `B`, `SIM` |
 
-**Never enable the `ANN` family.** It contradicts `python-code-style-v1`, which
+**Never enable the `ANN` family.** It contradicts `python-code-style`, which
 forbids writing `-> None`: `ANN201` reports `Missing return type annotation for
 public function` with `help: Add return type annotation: None` (verified). Two
 gates demanding opposite things means one of them gets suppressed everywhere.

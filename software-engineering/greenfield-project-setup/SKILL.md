@@ -213,7 +213,7 @@ The foundation is live only when **all** of these pass together:
 `rust-project-structure`, `python-ddd`, `frontend-vue-development`,
 `rust-design-principles`, `rust-design-idioms`, `rest-api-design`,
 `rust-testing`, `python-testing`, `python-commands`, `rust-code-style`,
-`python-code-style-v1`, `frontend-vue-code-style`, `reconcile-docs`.
+`python-code-style`, `frontend-vue-code-style`, `reconcile-docs`.
 
 **Patterns (read the doc):** project_structure/`composition_pattern`;
 lifecycle/`bootstrap_pattern`, `runtime_pattern`; scalability/`worker_pattern`,

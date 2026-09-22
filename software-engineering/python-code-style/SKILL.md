@@ -1,5 +1,5 @@
 ---
-name: python-code-style-v1
+name: python-code-style
 description: Defines code style conventions for Python. Use whenever writing, reviewing, refactoring, or fixing any Python code — implementing a feature, fixing a bug, writing or modifying tests, or making any other change to a .py file.
 license: UNLICENSED
 metadata:
