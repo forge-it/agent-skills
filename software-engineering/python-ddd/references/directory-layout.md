@@ -74,9 +74,9 @@ src/myapp/
     │   ├── tables.py                      # Table(...) declarations
     │   └── mappers.py                     # map_imperatively(...) calls
     ├── repository/
-    │   ├── products.py                    # SqlAlchemyProductRepository + FakeProductRepository
-    │   └── users.py                       # SqlAlchemyUserRepository + FakeUserRepository
-    ├── unit_of_work.py                    # SqlAlchemyAsyncUnitOfWork + FakeUnitOfWork
+    │   ├── products.py                    # SqlAlchemyProductRepository
+    │   └── users.py                       # SqlAlchemyUserRepository
+    ├── unit_of_work.py                    # SqlAlchemyAsyncUnitOfWork
     ├── config/
     │   ├── app_config.py
     │   └── settings.py
@@ -99,3 +99,5 @@ src/myapp/
 ```
 
 Migrations live in `src/migrations/` (a sibling of `src/myapp/`) per Alembic convention. The Alembic `env.py` imports `metadata` from `myapp.infrastructure.orm.orm`.
+
+In-memory fakes (`FakeProductRepository`, `FakeUnitOfWork`, fake gateway and ACL adapters) are test infrastructure and do not appear in this tree. They live in `tests/unit/conftest.py` per `python-testing`, so production packaging never carries test doubles.

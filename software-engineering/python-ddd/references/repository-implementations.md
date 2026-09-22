@@ -1,6 +1,6 @@
 # Repository Implementations — Concrete and Fake
 
-This file contains the complete `SqlAlchemyProductRepository` and `FakeProductRepository` implementations. The normative rules governing repository design live in `software-engineering/python-ddd/SKILL.md` §4. Both implementations live together in `infrastructure/repository/products.py` in a real project; the abstract port they implement lives in `domain/repositories/products.py`.
+This file contains the complete `SqlAlchemyProductRepository` and `FakeProductRepository` implementations. The normative rules governing repository design live in `software-engineering/python-ddd/SKILL.md` §4. In a real project the concrete adapter lives in `infrastructure/repository/products.py`, the fake lives in `tests/unit/conftest.py` because it is test infrastructure, and the abstract port they both implement lives in `domain/repositories/products.py`.
 
 ## `SqlAlchemyProductRepository` — Concrete Infrastructure Adapter
 
@@ -68,7 +68,7 @@ class SqlAlchemyProductRepository(AbstractProductRepository):
 Satisfies the same abstract port. Used in service unit tests via `FakeUnitOfWork`. No database, no session — the state lives in a plain dict. Tests construct it with pre-populated products and assert on its state after the use case runs.
 
 ```python
-# infrastructure/repository/products.py (continued)
+# tests/unit/conftest.py
 from typing import Optional
 
 

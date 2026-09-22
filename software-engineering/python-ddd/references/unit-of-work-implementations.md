@@ -1,6 +1,6 @@
 # Unit of Work Implementations — Concrete and Fake
 
-This file contains the complete `SqlAlchemyAsyncUnitOfWork` and `FakeUnitOfWork` implementations. The normative rules governing the Unit of Work live in `software-engineering/python-ddd/SKILL.md` §5. Both implementations live together in `infrastructure/unit_of_work.py` in a real project; the abstract port they implement lives in `domain/unit_of_work.py`.
+This file contains the complete `SqlAlchemyAsyncUnitOfWork` and `FakeUnitOfWork` implementations. The normative rules governing the Unit of Work live in `software-engineering/python-ddd/SKILL.md` §5. In a real project the concrete Unit of Work lives in `infrastructure/unit_of_work.py`, `FakeUnitOfWork` lives in `tests/unit/conftest.py` beside the fake repositories it wires, and the abstract port they both implement lives in `domain/unit_of_work.py`.
 
 ## `SqlAlchemyAsyncUnitOfWork` — Concrete Infrastructure Adapter
 
@@ -48,11 +48,9 @@ class SqlAlchemyAsyncUnitOfWork(AbstractUnitOfWork):
 Satisfies the same abstract port. Accepts pre-populated fake repositories in its constructor. `committed` and `rolled_back` flags let tests assert that the use case persisted (or refused to persist) without touching a database.
 
 ```python
-# infrastructure/unit_of_work.py (continued)
+# tests/unit/conftest.py
 from typing import Optional, Self
 
-from myapp.infrastructure.repository.products import FakeProductRepository
-from myapp.infrastructure.repository.users import FakeUserRepository
 from myapp.domain.models.licensing.products import Product
 from myapp.domain.models.iam.users import User
 

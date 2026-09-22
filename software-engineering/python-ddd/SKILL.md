@@ -4,7 +4,7 @@ description: Opinionated guidelines for structuring Python business applications
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.1.2"
+  version: "0.1.3"
 ---
 
 # Python Domain-Driven Design Skill
@@ -257,7 +257,7 @@ The concrete implementation goes in `infrastructure/`:
 
 **No generic base repository.** Each aggregate gets its own class with its own methods. A generic `SqlAlchemyAsyncRepository[T]` parameterised by model is an attractive nuisance: it pulls every concept's queries into a common base and obscures which methods each aggregate actually needs. This is **SRP**: each repository class has *one* reason to change (the queries its aggregate needs).
 
-**In-memory fakes are part of the pattern.** Every abstract repository gets a sibling in-memory implementation, used in service unit tests.
+**In-memory fakes are part of the pattern.** Every abstract repository gets an in-memory implementation used in service unit tests. It is test infrastructure: it lives in `tests/unit/conftest.py`, not under `src/` — see Rule 5.
 
 The fake satisfies the exact same abstract port the SQLAlchemy implementation does. Tests construct services with a `FakeUnitOfWork` whose `products` attribute is a `FakeProductRepository`, exercise the use case, then assert on the state of the fake. No mocks, no patches, no databases. The pattern's payoff: every application service has a unit test that runs in milliseconds and exercises the actual control flow.
 
@@ -402,15 +402,7 @@ class ProductCreationService:
 **A unit test for the service:**
 
 ```python
-# tests/unit/application/services/licensing/test_products.py
-import pytest
-
-from myapp.infrastructure.unit_of_work import FakeUnitOfWork
-from myapp.application.services.licensing.products import ProductCreationService
-from myapp.domain.exceptions import ProductAlreadyExistsError
-from myapp.domain.models.licensing.products import Product
-
-
+# tests/unit/conftest.py — fakes and fixtures, never the test module
 @pytest.fixture
 def fake_unit_of_work() -> FakeUnitOfWork:
     return FakeUnitOfWork()
@@ -422,6 +414,15 @@ def service(fake_unit_of_work: FakeUnitOfWork) -> ProductCreationService:
         unit_of_work_factory=lambda: fake_unit_of_work,
         notification_gateway=FakeNotificationGateway(),
     )
+```
+
+```python
+# tests/unit/application/services/licensing/test_products.py
+import pytest
+
+from myapp.application.services.licensing.products import ProductCreationService
+from myapp.domain.exceptions import ProductAlreadyExistsError
+from myapp.domain.models.licensing.products import Product
 
 
 class TestProductCreationService:
@@ -814,16 +815,21 @@ domain/repositories/
 domain/unit_of_work.py     # AbstractUnitOfWork (port, declares repo attributes)
 
 infrastructure/repository/
-├── products.py            # SqlAlchemyProductRepository + FakeProductRepository
-├── users.py               # SqlAlchemyUserRepository + FakeUserRepository
-└── invoices.py            # SqlAlchemyInvoiceRepository + FakeInvoiceRepository
+├── products.py            # SqlAlchemyProductRepository
+├── users.py               # SqlAlchemyUserRepository
+└── invoices.py            # SqlAlchemyInvoiceRepository
 
-infrastructure/unit_of_work.py   # SqlAlchemyAsyncUnitOfWork + FakeUnitOfWork
+infrastructure/unit_of_work.py   # SqlAlchemyAsyncUnitOfWork
+
+tests/unit/conftest.py     # FakeProductRepository, FakeUserRepository,
+                           # FakeInvoiceRepository, FakeUnitOfWork
 ```
 
-The abstract repository (port) lives in `domain/repositories/<aggregate>.py` because the domain *needs* the capability the repository provides. The concrete SQLAlchemy implementation (adapter) lives in `infrastructure/repository/<aggregate>.py` because the infrastructure layer *provides* the capability. Concrete and fake implementations live in the same file: they implement the same port and are read together. Application services depend only on the abstract types.
+The abstract repository (port) lives in `domain/repositories/<aggregate>.py` because the domain *needs* the capability the repository provides. The concrete SQLAlchemy implementation (adapter) lives in `infrastructure/repository/<aggregate>.py` because the infrastructure layer *provides* the capability. Application services depend only on the abstract types.
 
-The same pattern applies to the UoW: the abstract port (`domain/unit_of_work.py`) declares which repositories the application can use; both the SQLAlchemy and fake implementations (in `infrastructure/unit_of_work.py`) wire those attributes to concrete or in-memory repositories respectively.
+**Fakes are test infrastructure, not production code.** An in-memory fake satisfies the same port, but nothing shipped imports it, so it does not belong under `src/`. Fakes live in `tests/unit/conftest.py`, per `python-testing`. Keeping them there means production packaging never carries test doubles and the fakes sit with the fixtures that hand them to tests.
+
+The same pattern applies to the UoW: the abstract port (`domain/unit_of_work.py`) declares which repositories the application can use; the SQLAlchemy implementation (`infrastructure/unit_of_work.py`) wires those attributes to concrete repositories, and `FakeUnitOfWork` in `tests/unit/conftest.py` wires them to in-memory ones.
 
 #### Rule 6 — No Weak Bucket Folders (HIGH)
 
@@ -904,7 +910,7 @@ Suppose you are adding `Invoice` to an application that already has `Product` an
 7. **Tables** — add `invoices` and `invoice_lines` `Table(...)` declarations to `infrastructure/orm/tables.py`.
 8. **Imperative mapping** — add `run_billing_mapper()` to `infrastructure/orm/mappers.py` and call it from `run_all_mappers()`.
 9. **Migration** — `poetry run alembic revision --autogenerate -m "add invoices and invoice_lines tables"`; review the generated script; commit it.
-10. **Concrete repository** — `infrastructure/repository/invoices.py`: `SqlAlchemyInvoiceRepository` implementing the port against `self._session`, plus `FakeInvoiceRepository` (in-memory) for tests.
+10. **Concrete repository** — `infrastructure/repository/invoices.py`: `SqlAlchemyInvoiceRepository` implementing the port against `self._session`. Its in-memory `FakeInvoiceRepository` goes in `tests/unit/conftest.py`.
 11. **Wire the repository into the concrete UoW** — `infrastructure/unit_of_work.py`: assign `self.invoices = SqlAlchemyInvoiceRepository(session=self._session)` in `__aenter__`; assign the fake in `FakeUnitOfWork.__init__`.
 12. **Application service** — `application/services/billing/invoices.py`: define `InvoiceCreationService`, `InvoiceVoidingService`, accepting a `unit_of_work_factory` via `__init__`. Open the UoW, use `unit_of_work.invoices.<method>`, call `await unit_of_work.commit()` explicitly.
 13. **Application validations and validator** — `application/validations/billing.py`, `application/validators/billing.py`.
@@ -922,7 +928,7 @@ Suppose a new read-only `support` context needs customer companies that the `iam
 1. **Read DTO** — `application/dtos/support.py`: define `Company` (referenced as `support_dtos.Company`) as a plain dataclass shaped for *Support's* needs, not IAM's. This is application-owned, not a `domain/models/` entity.
 2. **Capability port** — `application/services/support/customer_directory.py`: an abstract `CustomerDirectory` with `find_company(company_id) -> Optional[support_dtos.Company]`. Named for the capability, in Support's language.
 3. **ACL adapter** — same file: `IamCustomerDirectory(CustomerDirectory)` opens the `iam` UoW, reads via its repositories, and translates `iam.Company → support_dtos.Company` in a private method. This is the **only** file in `support/` that imports `iam.*`.
-4. **Fake adapter** — same file: `FakeCustomerDirectory(companies=[...])` for unit tests, mirroring the fake-repository pattern.
+4. **Fake adapter** — `tests/unit/conftest.py`: `FakeCustomerDirectory(companies=[...])` for unit tests, mirroring the fake-repository pattern.
 5. **Consuming service** — `application/services/support/companies.py`: `SupportCompanyService` takes the `CustomerDirectory` port via `__init__` (default the real adapter), assembles and returns the DTO. Compose additional ACL ports here when the view spans several contexts.
 6. **Presentation** — `presentation/schemas/support.py` + `presentation/mappers/support.py`: schema and a mapper that take `support_dtos.Company` — never `iam.Company`.
 7. **Router** — `presentation/routers/support/companies.py`: thin handler calling the service and mapping the DTO to the schema.
