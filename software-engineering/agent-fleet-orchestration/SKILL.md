@@ -17,7 +17,7 @@ description: >-
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.3"
+  version: "0.0.4"
 ---
 
 # Agent Fleet Orchestration
@@ -178,23 +178,25 @@ agent names live in the operator's fleet (listed at session start / under
 | Task / signal | Worker role | Typical agent (pick language variant) |
 |---------------|-------------|----------------------------------------|
 | "where is X", "how does Y work", find usages, map a subsystem | Explorer (read-only) | `Explore` |
-| Reproduce a bug, localize root cause, gather evidence before any fix | Investigator | `{rust,python}-issue-investigator` |
-| Implement a ticket / feature / task | Implementor | `{rust,python,vue}-implementor-expert` (`python-implementor-syneto-expert` for Syneto OS) |
-| Fix a bug, failing test, regression, clippy/lint/type error, import-contract or architecture-gate failure | Fixer | `{rust,python}-fixer`; `python-basedpyright-fixer-no-commit` for type-only |
-| Tiny bug, expected behavior already known, small change, strict TDD | Tiny bugfixer | `python-tiny-tdd-bugfixer` |
-| Write or extend test coverage for existing code | Test writer | `rust-test-writer`; other languages: an implementor or fixer with a tests-only brief |
-| Review an implementation against a brief or plan | Code reviewer | `{rust,python}-code-reviewer` |
+| Reproduce a bug, localize root cause, gather evidence before any fix | Investigator | `{rust,python,vue,react}-issue-investigator` |
+| Implement a ticket / feature / task | Implementor | `{rust,python,vue,react}-implementor-expert` (`python-implementor-syneto-expert` for Syneto OS) |
+| Fix a bug, failing test, regression, clippy/lint/type error, import-contract or architecture-gate failure | Fixer | `{rust,python}-fixer`; the frontend ships no-commit only — `{vue,react}-fixer-no-commit`; `python-basedpyright-fixer-no-commit` for type-only |
+| Tiny bug, expected behavior already known, small change, strict TDD | Tiny bugfixer | `{rust,python}-tiny-tdd-bugfixer`; no frontend variant — use a fixer with a tight brief |
+| Write or extend test coverage for existing code | Test writer | `{rust,python}-test-writer`; frontend: an implementor or fixer with a tests-only brief |
+| Review an implementation against a brief or plan | Code reviewer | `{rust,python,vue,react}-code-reviewer` |
 | Run one review lens over a diff | Lens reviewer | a general-purpose agent carrying a prompt file from `/home/cristi/Projects/agent-skills/prompts/code-implementation-review/` verbatim |
 | Refute or confirm one finding | Verifier / skeptic | a general-purpose agent carrying the Stage 3 skeptic brief from that directory's `subagents/pipeline-<stack>.md` verbatim |
 | Certify that a converged cycle actually passes | Final gate | a fresh general-purpose agent, read-only, running the Brief's Acceptance commands and returning an evidence table — never the context that drove the loop |
-| Catch structure/style drift a linter can't (naming, cohesion, placement) | Structure/style guard | `{rust,python,vue}-structure-and-style-guard` |
+| Catch structure/style drift a linter can't (naming, cohesion, placement) | Structure/style guard | `{rust,python,vue,react}-structure-and-style-guard` |
+| Exhaustively audit a scoped tree against a rubric, especially SRP | Auditor (read-only) | `{rust,python}-code-auditor` |
+| Turn one audit finding into an implementation-ready refactor handoff | Designer (read-only) | `{rust,python}-code-designer` |
 | Design an implementation strategy | Planner | `Plan`, or write the plan yourself |
 
 ### Which Model per Role
 
-Agent definitions carry `model: inherit`, which silently lands workers on
-whatever tier is ambient — usually the cheap one. **Name the model on the
-dispatch instead.**
+Agent definitions carry no `model:` line at all, by convention, so a worker
+lands on whatever tier is ambient — usually the cheap one. **Name the model on
+the dispatch instead.**
 
 | Role | Model | Why |
 |------|-------|-----|
@@ -204,7 +206,9 @@ dispatch instead.**
 | Final gate | `opus` | The last claim before the operator sees it |
 | Review lens | `sonnet`, high effort | Many run in parallel against an explicit brief; breadth beats depth, and corroboration filters the noise |
 | Explorer, investigator | `sonnet` | Locating and reproducing |
-| Structure/style guard | pinned in the agent | Mechanical — already `sonnet` by definition |
+| Structure/style guard | `sonnet` | Mechanical: applies a fixed rule set to a diff |
+| Auditor | `opus` | Reads an entire tree and judges design debt; a cheap miss is a defect nobody else is looking for |
+| Designer | `opus` | Its output is the brief an implementor executes against — an error here propagates into code |
 
 Scale it to the work, not just the role: a one-line fix does not need a strong
 fixer, and a subtle concurrency bug deserves a strong investigator. The table is
