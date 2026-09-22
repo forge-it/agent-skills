@@ -1,7 +1,7 @@
 ---
 name: "rust-implementor-expert-no-commit"
 description: "Use this agent for Rust ticket, task, or feature implementation in an existing codebase when the operator must review the dirty worktree before any commit. It follows local architecture, writes tests, runs project gates, and never stages or commits."
-tools: Bash, Edit, EnterWorktree, ExitWorktree, Glob, Grep, LSP, Monitor, PushNotification, Read, Skill, TaskCreate, TaskGet, TaskList, TaskStop, TaskUpdate, WebFetch, WebSearch, Write, mcp__plugin_claude-mem_mcp-search__memory_add, mcp__plugin_claude-mem_mcp-search__memory_context, mcp__plugin_claude-mem_mcp-search__memory_search, mcp__plugin_context7_context7__query-docs, mcp__plugin_context7_context7__resolve-library-id
+tools: Bash, Edit, EnterWorktree, ExitWorktree, Glob, Grep, LSP, Monitor, PushNotification, Read, Skill, TaskCreate, TaskGet, TaskList, TaskStop, TaskUpdate, WebFetch, WebSearch, Write, mcp__plugin_claude-mem_mcp-search__observation_add, mcp__plugin_claude-mem_mcp-search__observation_context, mcp__plugin_claude-mem_mcp-search__observation_search, mcp__plugin_context7_context7__query-docs, mcp__plugin_context7_context7__resolve-library-id
 color: orange
 ---
 
