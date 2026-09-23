@@ -4,20 +4,19 @@ description: >-
   STOP — if you were dispatched as a subagent to execute a briefed task, this
   skill is not for you: it governs the orchestrator running the loop, not the
   workers inside it. Do the task you were briefed with instead. Use when a code
-  change is being delivered
-  through the review pipeline, after
+  change is being delivered through the review pipeline, after
   agent-fleet-orchestration's intake gate has selected a fleet mode, or a review
   depth that verifies and fixes — the default narrow loop, or the full loop.
-  Symptoms it prevents: reviewing a tree
-  that does not build, re-raising findings an earlier round already refuted,
-  declaring zero findings when half the reviewers died, paying twice to verify
-  one defect filed under two titles, and reporting a round cap as if it were a
-  pass. Do NOT use for writing a plan, reviewing a plan, or a standalone code
-  review — those are pipeline prompts, not this loop.
+  Symptoms it prevents: reviewing a tree that does not build, re-raising
+  findings an earlier round already refuted, declaring zero findings when half
+  the reviewers died, paying twice to verify one defect filed under two titles,
+  and reporting a round cap as if it were a pass. Do NOT use for writing a
+  plan, reviewing a plan, or a standalone code review — those are pipeline
+  prompts, not this loop.
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.3"
+  version: "0.0.4"
 ---
 
 # Change Cycle Pipeline
@@ -66,7 +65,7 @@ every reviewer, every verifier, the fixer, and the final gate. It names:
 - **Scope** — the files and subsystems, and the plan section this cycle implements
 - **Out of scope** — the baseline failures from the entry gate, and work belonging to other cycles
 - **Acceptance** — the exact commands the final gate will run, and what their passing output looks like
-- **Commit policy** — worktrees: workers commit inside their own worktree; single tree: `-no-commit`, the tree stays dirty. Neither authorizes a push.
+- **Commit policy** — worktrees: workers commit inside their own worktree; single tree: `-no-commit`, the tree stays dirty. Neither authorizes a push. Where the project runs the commit hooks from **agent-hooks-setup**, the policy also names the bypass tokens a cycle commit may carry, because a worker cannot satisfy those gates itself: `RECONCILE_DOCS_OK=1`, since docs are reconciled at acceptance, and `STRUCTURE_STYLE_GUARD_OK=1` only when the structure/style guard is one of this loop's lenses. The formatter gate is never bypassed — format before committing. The orchestrator's own integration merges carry the same tokens.
 - **Starting tree** — in single-tree mode, addressed to the worker: the files dirty at cycle start, listed, plus "any file this cycle's own earlier rounds touched is also intended state — it is pipeline state, not operator state, and it is your starting point." Unlisted, a worker following **parallel-worktrees-general** stops on unrecognized dirt. Snapshot `git status --short` *before cycle 1's implementor* and keep it in the ledger: only files in that snapshot are the operator's.
 - **Escalation clause** — what the worker decides alone, versus what it must **stop and return with, unanswered**. The orchestrator answers — or, in vibe mode, decides and records.
 
@@ -78,9 +77,10 @@ cycle and never reaches the fix step.
 
 ## Entry Gate and Baseline
 
-The cheap deterministic gate — build, tests, lint, typecheck — runs **twice per
-cycle**, answering a different question each time. The orchestrator runs it (see
-*What counts as integration*).
+The cheap deterministic gate — build, tests, lint, typecheck — runs **twice
+before the loop opens**, answering a different question each time, then after
+every fix round and every merge. The orchestrator runs it (see *What counts as
+integration*).
 
 **At cycle start, before the Brief is written** — whatever fails here is the
 baseline, and it fills the Brief's Out-of-scope field. Compute it; a
@@ -152,6 +152,11 @@ was implemented ambiguously. At full depth you dispatch the set, plus one to thr
 written for this cycle: the SQL semantics, the concurrency protocol, the wire
 contract.
 
+The structure/style guard from the fleet's routing table is a lens too: the one
+to choose when the risk is placement, naming, or layering, and part of the set
+at full depth. Running it here is what lets cycle commits carry its bypass
+token (see the Brief's commit policy).
+
 They are not the same thing as the `subagents/pipeline-*.md` prompts in that
 directory — those are a **one-shot review report**, the deliverable for a plan or
 code review, and they stop at verified findings, skipping nits. This loop
@@ -198,10 +203,14 @@ expensive or hard to reverse — schema, migration, public API, wire format.
 
 ### Fix
 
-One fixer at a time, carrying the whole confirmed set — the loop's tree has a
-single writer. Test-coverage findings go out as a **tests-only brief**,
-production code declared off-limits; the fleet's routing table names the
-test-writer.
+One fixer at a time, carrying the whole confirmed set. Test-coverage findings go
+out as a **tests-only brief**, production code declared off-limits; the fleet's
+routing table names the test-writer. The two may run at once only when their
+edits cannot collide: their file sets are disjoint — the fixer's confirmed set
+touches no test file — and the test-writer has its own worktree, which
+worktrees mode provides. In a single tree they run in sequence, test-writer
+after fixer: a dirty checkout hosts one writer (**parallel-worktrees-general**,
+Mode D), and colliding edits cost more than the round they would save.
 
 The fixer **may reject a finding** — if it is wrong, already remediated, or its
 fix would violate the plan, it reports the rejection with reasoning instead of
@@ -291,16 +300,14 @@ project: an unignored ledger surfaces as dirt in every worker's `git status`
 and every reviewer's change set.
 
 It is the pipeline's only durable state, so it holds everything a later round, a
-later cycle, or a resumed session needs:
-
-- the intake answers — supervision, implementer, depth, cap, gate cadence, worktrees — as its opening write, since intake happens before this skill loads
-- each cycle's cut and scope, and **the Cycle Brief verbatim**, written before the first dispatch
-- the pre-task `git status` snapshot, and the baseline out-of-scope list
-- per round: the lens set dispatched, which lenses returned, the confirmed set with its verdicts, any fixer rejections with their reasoning, and the fixed and refuted sets
-- the round count against the cap, and the per-finding rejection count the cap conversions depend on
-- observations set aside outside the blast radius
-- deviations from the plan and follow-ups deferred
-- the vibe-mode record of decisions taken without asking, any residue report, and the operator report
+later cycle, or a resumed session needs: the intake answers as its opening write
+(intake happens before this skill loads); then, as the sections above produce
+them, each cycle's cut, Brief, `git status` snapshot and baseline; each round's
+lens set, which lenses returned, the confirmed set with verdicts, fixer
+rejections with reasoning, and the fixed and refuted sets; the round count and
+per-finding rejection counts the cap conversions read; observations outside the
+blast radius; plan deviations and deferred follow-ups; and the vibe-mode record,
+any residue report, and the operator report.
 
 When a cycle proves the plan wrong, **amend the plan** — a 2 → 2 + 2B split is a
 plan change. Later cycles review against the plan, and a stale plan produces
@@ -340,17 +347,23 @@ Depth is the operator's intake answer, not yours to reset per cycle. Where a
 cycle is plainly mechanical, **propose** a lighter depth at its gate — never
 downgrade silently.
 
-## Cost and Resumption
+## Dispatch, Cost and Resumption
+
+The loop is dispatched by hand: each round's lenses in one message, the
+verifiers in one message, the fixer alone. The workflow harness — `pipeline()`
+and `parallel()` scripts that assign a run id — runs it only when the operator
+has opted in, by saying "ultracode" or "use a workflow"; a loop that would
+merely benefit from it is not an opt-in. Quote its cost with the cap: dozens of
+agents per round.
 
 **agent-fleet-orchestration** carries the model policy — the default worker
 tier and when to depart from it — and owns quoting the cycle cost at the intake
 gate, where the cap is chosen before this skill has loaded.
 
 A killed loop resumes from the ledger — round number, fixed and refuted sets,
-coverage — rather than restarting. Where the loop runs inside a workflow harness
-that assigns a run id, resume from that instead and let it replay completed
-rounds from cache. Rounds are the expensive unit; re-running a finished one buys
-nothing.
+coverage — rather than restarting. Under the harness, resume from the run id
+instead and let it replay completed rounds from cache. Rounds are the expensive
+unit; re-running a finished one buys nothing.
 
 ## Quick Reference
 
