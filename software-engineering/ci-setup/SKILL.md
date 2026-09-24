@@ -1,6 +1,13 @@
 ---
 name: ci-setup
-description: Use when bootstrapping CI for a new monorepo with Rust, Python, and Vue or React components — or when a project's advisory gates (local linters, architecture tests, import contracts) need to start failing the build instead of just printing warnings. Also use when any of these symptoms appear: architecture violations slip past review, lint warnings accumulate without consequence, a component type (Rust/Python/web) has no dedicated CI job, or pull requests merge without a single blocking quality check.
+description: >-
+  Use when bootstrapping CI for a new monorepo with Rust, Python, and Vue or
+  React components — or when a project's advisory gates (local linters,
+  architecture tests, import contracts) need to start failing the build instead
+  of just printing warnings. Also use when any of these symptoms appear:
+  architecture violations slip past review, lint warnings accumulate without
+  consequence, a component type (Rust/Python/web) has no dedicated CI job, or
+  pull requests merge without a single blocking quality check.
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
