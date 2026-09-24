@@ -1,10 +1,10 @@
 ---
 name: code-change-workflow
-description: "Execution discipline for tasks whose deliverable is an edit to an existing codebase — implementing a feature, fixing a bug or failing test, refactoring, or debugging with intent to fix. Covers inspecting code and Git state first, proceeding directly on narrow reversible work, asking before user-owned decisions, protecting uncommitted work, and verifying before reporting done. Use when about to write or modify code. Do NOT use when no files will change: assessing a plan or spec, weighing architectures, or answering questions about code is technical-design-discussions."
-license: UNLICENSED
+description: "Execution discipline for tasks whose deliverable is an edit to an existing codebase — implementing a feature, fixing a bug or failing test, refactoring, or debugging with intent to fix. Use when about to write or modify code. Do NOT use when no files will change: assessing a plan or spec, weighing architectures, or answering questions about code is technical-design-discussions."
+license: MIT
 metadata:
-  author: Cristian
-  version: "0.1.1"
+  author: cristian.ciortea@syneto.eu
+  version: "0.1.2"
 ---
 
 # Code Change Workflow Skill
@@ -23,7 +23,7 @@ That layer also decides **who answers the escalations below**. A dispatched work
 
 Read the relevant code, tests, configuration, and current Git state before changing files. Let the existing system shape the solution.
 
-Prefer targeted commands:
+Prefer targeted searches — the Grep and Glob tools first, `rg` from the shell when a tool does not fit:
 
 ```bash
 git status --short
@@ -58,7 +58,7 @@ Do not block on every missing detail. Make conservative assumptions when they ar
 
 ### Protect Existing Work
 
-Assume uncommitted changes may belong to the user. Do not revert, overwrite, stage, or reformat unrelated files. If unrelated changes are present, work around them. If they block the requested task, explain the conflict and ask how to proceed.
+Assume uncommitted changes may belong to the user. A brief that names dirty files as your starting tree makes those files yours to build on; everything unnamed is still the user's. Do not revert, overwrite, stage, or reformat unrelated files. If unrelated changes are present, work around them. If they block the requested task, explain the conflict and ask how to proceed.
 
 ### Verify Before Reporting Done
 
@@ -77,7 +77,7 @@ Run the smallest relevant verification command after changing files: a focused t
 - Prefer existing patterns over new abstractions.
 - Keep changes proportional to the request.
 - Ask focused questions only when the answer materially affects implementation.
-- Give short progress updates during longer work.
+- Give short progress updates during longer work when you converse with the operator; a dispatched worker has no one to update and reports once, at the end.
 - Report changed files, assumptions, verification, and remaining risk.
 
 ### Process Flow
