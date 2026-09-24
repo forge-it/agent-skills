@@ -1,10 +1,10 @@
 ---
 name: ci-setup
-description: Use when bootstrapping CI for a new monorepo with Rust, Python, and Vue components — or when a project's advisory gates (local linters, architecture tests, import contracts) need to start failing the build instead of just printing warnings. Also use when any of these symptoms appear: architecture violations slip past review, lint warnings accumulate without consequence, a component type (Rust/Python/Vue) has no dedicated CI job, or pull requests merge without a single blocking quality check.
+description: Use when bootstrapping CI for a new monorepo with Rust, Python, and Vue or React components — or when a project's advisory gates (local linters, architecture tests, import contracts) need to start failing the build instead of just printing warnings. Also use when any of these symptoms appear: architecture violations slip past review, lint warnings accumulate without consequence, a component type (Rust/Python/web) has no dedicated CI job, or pull requests merge without a single blocking quality check.
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.8"
+  version: "0.0.9"
 ---
 
 # CI Setup
@@ -13,15 +13,30 @@ This is a **one-time setup skill**. It produces a GitHub Actions workflow that
 makes every architectural and quality invariant blocking from the first commit
 on a new monorepo.
 
-The central idea: the per-language setup skills — `rust-architecture-test-setup`,
+The per-language setup skills — `rust-architecture-test-setup`,
 `python-import-linter-setup`, `frontend-vue-eslint-setup` — install local gates.
-Those gates are **advisory until CI runs them**. A developer can ignore a failing
-`cargo test --test structure` locally. CI cannot be ignored. This skill wires
-all local gates into a workflow where each one either passes or blocks the merge.
+Those gates are **advisory until CI runs them**: a developer can ignore a failing
+`cargo test --test structure` locally; CI cannot be ignored. `agent-hooks-setup`
+is the other half of the same idea — the per-commit echo of these gates on the
+agent's machine — and it is bypassable by design, so it does not replace this.
 
-Separation of concerns applies to the workflow itself: each component type gets
-its own job. A Rust formatting failure does not cancel a Vue lint job that would
-have passed independently. Reviewers see exactly which component broke.
+Two rules shape the workflow, and everything below follows from them:
+
+- **Every job invokes a `just` recipe, never a raw command.** A gate can then only
+  be added, changed, or weakened in the recipe, where the developer running it
+  locally sees the same change. A workflow that re-spells the commands is a second
+  source of truth, and the two diverge silently. If the project has no task runner,
+  install one first (`justfile-setup`) and use the recipe names it actually
+  defines: a step naming a recipe that does not exist fails at the first run,
+  which is the cheap failure.
+- **One job per component, not per gate.** A Rust formatting failure never cancels
+  a web lint job that would have passed, and reviewers see which component broke.
+  A finer per-gate split would have to name each gate here, which is exactly the
+  second source of truth the first rule removes. The cost is coarser attribution
+  within a component, and a fail-fast recipe reports only its first failure; the
+  recipe running cheapest-first shortens time-to-first-failure, and if the second
+  round-trip bites, make the recipe record every failure and exit non-zero at the
+  end.
 
 ## When to use
 
@@ -35,34 +50,30 @@ have passed independently. Reviewers see exactly which component broke.
 
 Run this once. After the workflow exists and passes, you do not re-run the skill.
 
-## What CI enforces (per component)
+## What CI enforces
 
-| Component | Job | Gates enforced |
-|-----------|-----|----------------|
-| Rust | `rust-check` | `just core-check` → `fmt --all --check`, then `clippy --all-targets --all-features -D warnings`, then `cargo test --workspace --test structure` (hexagonal layering). Cheapest-first, and workspace-wide so no crate is left unchecked |
-| Vue | `web-check` | `just web-check` → ESLint feature-architecture boundaries, format check, `vue-tsc` |
-| Python | `python-check` | `just service-check` → `ruff format --check`, `ruff check`, `basedpyright`, `lint-imports`, and `pytest src/tests/architecture` (conventions gate: gate coverage and the interpreter floor) |
+| Component | Job | Recipe | Gates, cheapest first |
+|-----------|-----|--------|-----------------------|
+| Rust | `rust-check` | `just core-check` | `fmt --all --check`, `clippy --all-targets --all-features -D warnings`, `cargo test --workspace --test structure` (hexagonal layering; workspace-wide so no crate is left unchecked) |
+| Web — Vue or React | `web-check` | `just web-check` | ESLint feature-architecture boundaries, format check, `vue-tsc` or `tsc` |
+| Python | `python-check` | `just service-check` | `ruff format --check`, `ruff check`, `basedpyright`, `lint-imports`, `pytest src/tests/architecture` (conventions gate: gate coverage and the interpreter floor) |
+| All | `integration` | `just test-all` | Unit and integration suites against the local Docker stack, after the three static jobs pass |
 
-**Every job invokes a `just` recipe, never a raw command.** That is the whole
-anti-drift mechanism: a gate can only be added, changed, or weakened in the
-recipe, where the developer running it locally sees the same change. A CI file
-that re-spells the commands is a second source of truth, and the two diverge
-silently — which is the failure this skill exists to prevent. One job per
-*component*, not per gate: a Rust formatting failure still cannot cancel the Vue
-job, while a finer per-gate split would put the gate list back in this file.
-
-The structure gate is documented in `rust-architecture-test-setup`.
-The ESLint boundary rules are documented in `frontend-vue-eslint-setup`.
-The import-linter contracts are documented in `python-import-linter-setup`.
-
-These three skills install the local check; this skill makes it a build-breaker.
+The structure gate is documented in `rust-architecture-test-setup`, the
+import-linter contracts in `python-import-linter-setup`, and the ESLint boundary
+rules in `frontend-vue-eslint-setup`; a React project mirrors that ESLint setup
+with `typescript-eslint` and `tsc --noEmit` until a React setup skill exists.
+Those skills install the local check; this skill makes it a build-breaker.
 
 ## Workflow template
 
-The template below is a reference for a Rust + Python + Vue monorepo. Adapt job
-names and the recipe names to match your project, and delete the jobs for
-components your repository does not have — that applies equally to all three
-stacks. Crate selection and directory handling live in the recipes, not here.
+A reference for a Rust + Python + web monorepo. Adapt job and recipe names, and
+delete the jobs for components the repository does not have. Crate selection and
+directory handling live in the recipes, not here. Every toolchain is read from
+the repository's own pin — `rust-toolchain.toml`, `service/.python-version` — so
+the workflow never states a version the repository does not; Node has no pin
+file in this layout, so the workflow names the current Active LTS (24 today; 26
+becomes LTS on 2026-10-28).
 
 ```yaml
 name: CI
@@ -71,6 +82,15 @@ on:
   push:
     branches: [main]
   pull_request:
+
+# Least privilege for GITHUB_TOKEN; a job that needs more declares it itself.
+permissions:
+  contents: read
+
+# A new push to the same pull request cancels the run it supersedes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_TERM_COLOR: always
@@ -84,29 +104,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Extract Rust toolchain version
-        id: rust-toolchain
-        run: echo "channel=$(grep 'channel' rust-toolchain.toml | sed 's/.*\"\(.*\)\".*/\1/')" >> "$GITHUB_OUTPUT"
+        uses: actions/checkout@v7
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ steps.rust-toolchain.outputs.channel }}
-          components: rustfmt, clippy
-
-      - name: Cache Rust artifacts
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-check-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-check-
+        # Reads channel and components from rust-toolchain.toml when no
+        # `toolchain` input is given, and configures Swatinem/rust-cache: keyed
+        # by toolchain and lockfile, target/ pruned so the cache stays useful.
+        uses: actions-rust-lang/setup-rust-toolchain@v2
 
       - name: Install just
         uses: taiki-e/install-action@v2
@@ -114,22 +118,19 @@ jobs:
           tool: just
 
       - name: Quality gate
-        # Exactly what a developer runs locally. clippy -D warnings, fmt --check,
-        # and the hexagonal structure gate all live in the recipe, so CI cannot
-        # drift from the local command by editing this file.
         run: just core-check
 
-  # ── Vue ───────────────────────────────────────────────────────────────────
+  # ── Web ───────────────────────────────────────────────────────────────────
 
   web-check:
     name: web check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "24"
           cache: npm
@@ -144,7 +145,6 @@ jobs:
           tool: just
 
       - name: Quality gate
-        # ESLint feature-architecture boundaries, prettier check, vue-tsc.
         run: just web-check
 
   # ── Python ────────────────────────────────────────────────────────────────
@@ -154,16 +154,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v8
+        # setup-uv publishes no moving major tag past v7: pin the full version
+        # (or the commit SHA its README shows). No python-version input: the
+        # action reads service/.python-version.
+        uses: astral-sh/setup-uv@v10.2.0
         with:
           working-directory: service
           enable-cache: true
-        # No python-version input: the action reads the pin from
-        # service/.python-version, so the interpreter is a property of the
-        # repository rather than of this workflow file.
 
       - name: Install dependencies
         # --locked fails the job if uv.lock no longer matches the manifests.
@@ -178,113 +178,93 @@ jobs:
           tool: just
 
       - name: Quality gate
-        # ruff format --check, ruff check, basedpyright (no path — the
-        # manifest owns the scope), lint-imports, and the conventions gate.
         run: just service-check
+
+  # ── Integration ───────────────────────────────────────────────────────────
+
+  integration:
+    name: integration tests
+    runs-on: ubuntu-latest
+    # Cheapest first across jobs too: a formatting slip should not pay for a
+    # Docker stack. The price is later feedback on a change that passes static.
+    needs: [rust-check, web-check, python-check]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v2
+
+      - name: Install Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install web dependencies
+        run: npm ci --prefix web
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.2.0
+        with:
+          working-directory: service
+          enable-cache: true
+
+      - name: Install Python dependencies
+        run: cd service && uv sync --locked
+
+      - name: Install just
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
+
+      - name: Start the test stack
+        run: just dev-test-stack-up
+
+      - name: Tests
+        # Unit and integration suites for every component. Readiness waits and
+        # per-test isolation live in the test support, not in this file — see
+        # parallel_test_isolation_pattern.
+        run: just test-all
+
+      - name: Stop the test stack
+        if: always()
+        run: just dev-test-stack-down
 ```
 
-## Dependency caching
+## Caching
 
-Each job that compiles Rust uses `actions/cache@v4` with a key built from
-`Cargo.lock`. The cache paths are:
-
-```
-~/.cargo/registry/index/
-~/.cargo/registry/cache/
-~/.cargo/git/db/
-target/
-```
-
-`hashFiles('Cargo.lock')` ensures a lock-file change busts the cache. The
-`restore-keys` fallback (`${{ runner.os }}-<job>-`) reuses the previous cache
-on a miss rather than starting cold.
-
-There is one Rust job, so one cache key. That is a side benefit of the collapse:
-three separate Rust jobs each paid a cold compile on their own runner and needed
-per-job keys to avoid racing; one job compiles once and the structure gate reuses
-clippy's artifacts. If you do split the Rust job later, scope a key per job.
-
-Node caching is handled natively by `actions/setup-node@v4` via the `cache: npm`
-option and the `cache-dependency-path` pointing at `web/package-lock.json`.
-
-## Job structure rationale
-
-Each component type owns exactly the jobs it needs and no others. This is
-separation of concerns applied to the pipeline:
-
-- One job per **component**, so a Rust failure never cancels the Vue job and
-  reviewers see the exact failure domain.
-- Not one job per **gate**. A finer split would have to name each gate here, which
-  is precisely the second source of truth this skill exists to remove. The cost of
-  collapsing is coarser attribution *within* a component; the recipe mitigates it
-  by running cheapest-first, so a formatting slip still reports before the compile.
-- Each job carries a single cache key, since there is now one Rust job rather than
-  three racing to write the same key.
-- **The honest cost:** three parallel jobs reported all three Rust failures in one
-  run; one fail-fast recipe reports only the first, so a change with both a clippy
-  error and a layering violation needs two round-trips. Cheapest-first ordering
-  shortens time-to-first-failure but does not recover that. If it bites, make
-  `core-check` a shebang recipe that records each failure and exits non-zero at the
-  end — which restores all-failures-in-one-run without moving the gate list back
-  into this file.
+Each toolchain action owns its cache, keyed by the file that decides its
+contents: `setup-rust-toolchain` delegates to `Swatinem/rust-cache` (toolchain
+plus `Cargo.lock`, with `target/` pruned); `setup-node` keys on
+`web/package-lock.json`; `setup-uv` keys on `uv.lock`. There is nothing to
+hand-roll, and one job per component means one cache per component. If you ever
+split a component across jobs, give each job its own `cache-key`: two jobs
+saving under one key do not corrupt each other — the second save is simply
+rejected — but neither benefits from the other's work.
 
 ## Integration tests and the local Docker stack
 
-The jobs above are the **static-analysis and unit-test tier** — they run on every
-push with no external services required.
-
-Integration tests that require a live database, message broker, or object-store
-are a separate concern. They typically run in a dedicated job that spins up the
-full Docker Compose stack, waits for health checks, then runs the integration
-suite behind a feature flag (e.g. `cargo test -p <your-crate> --features ci`). The
-`--features ci` flag gates integration tests so `cargo test` without the flag runs
-unit tests only — the local and CI experiences stay symmetrical. See the
-`parallel_test_isolation_pattern` for the Docker stack and per-test isolation
-behind this job.
-
-If your project has integration tests:
-
-1. Keep them in a separate job that explicitly starts and stops the Docker stack.
-2. Gate them on a feature flag (e.g. `#[cfg(feature = "ci")]`) so they do not run
-   in the static-analysis jobs.
-3. Parallelise across fixtures (different source-database containers) using the
-   same Docker Compose file, each in its own job, if test time demands it.
+The three `*-check` jobs are the static-analysis tier: no external services, so
+they can never be flaky for infrastructure reasons. The `integration` job is the
+one place the Docker Compose stack runs in CI. It calls the same recipes a
+developer runs — `dev-test-stack-up`, `test-all`, `dev-test-stack-down` — and
+nothing else: readiness waits, per-test databases, and port allocation belong to
+the test support and the isolation pattern, which is what makes the suite safe to
+run in parallel on a CI runner. It runs on the same pull-request and push
+triggers as the static tier, so a change cannot merge on static checks alone.
 
 The release pipeline (triggered on `v*` tag pushes) builds and pushes Docker
-images to a registry after the tests pass. That is a separate workflow file with
-its own concerns — CI and release have no shared jobs.
+images after CI has passed. That is a separate workflow file with its own
+concerns — CI and release have no shared jobs.
 
-## Invoking just recipes (the anti-drift mechanism)
+## Adding a component
 
-CI invokes `just` recipes, not raw commands — this is not an optional pairing but
-the reason the workflow can be trusted. A gate can then only be added, changed, or
-weakened in the recipe, where the developer running it locally sees the same
-change. If a project has no task runner, install one (`justfile-setup`) before
-wiring CI; a workflow that re-spells the commands is a second source of truth and
-the two diverge silently.
-
-```yaml
-- name: Quality gate
-  run: just core-check
-```
-
-Use the recipe names `justfile-setup` actually defines — `core-check`,
-`web-check`, `service-check`, and `test-all`. A workflow step naming a recipe that
-does not exist fails at the first run, which is the cheap failure; the expensive
-one is a step that *works* while duplicating a command the recipe also has.
-
-The `justfile` is the canonical definition of what each check does; the workflow
-invokes it. When a check changes — a new flag, a new package, an added gate — the
-change lives in one place and the developer running it locally sees it.
-
-## Adding new component types
-
-When a new component type (a Python service, a second Vue application, a gRPC
-gateway) is added to the monorepo, add a new job for it — do not extend an
-existing job. Each component type is an independent unit of concern. A Python
-linting failure should not cancel a Rust structure check that would have passed.
-
-Template for a new component job:
+A new component type — a second service, another web application, a gRPC
+gateway — gets a job of its own, named for the component, that installs its
+toolchain and runs its `<component>-check` recipe, which you add in
+`justfile-setup` first:
 
 ```yaml
 <component>-check:
@@ -292,8 +272,8 @@ Template for a new component job:
   runs-on: ubuntu-latest
   steps:
     - name: Checkout code
-      uses: actions/checkout@v4
-    # ... toolchain setup and cache for that component
+      uses: actions/checkout@v7
+    # ... toolchain setup for that component
     - name: Install just
       uses: taiki-e/install-action@v2
       with:
@@ -302,35 +282,34 @@ Template for a new component job:
       run: just <component>-check
 ```
 
-One job per component, named for the component — not per gate. The job never
-spells out the checks; it invokes the component's `<component>-check` recipe, which
-you add in `justfile-setup` first.
+Add its test recipe to `test-all`; the `integration` job picks it up without a
+workflow change.
 
-## Common mistakes and anti-patterns
+## Common mistakes
 
 | Mistake | Why it is a problem | Fix |
 |---------|---------------------|-----|
-| One monolithic `test` job for all components | A single Vue lint failure cancels all Rust jobs; reviewers cannot tell which component broke | One job per component, invoking that component's check recipe |
-| Sharing one cargo cache key across several Rust jobs | Parallel jobs race to write the same key; one job's cached artifacts corrupt another's | One Rust job, one key — or scope the key per job if you do split |
-| Running integration tests in the same job as static analysis | Static-analysis jobs must not require external services; they become flaky when the Docker stack is slow | Separate jobs; gate integration tests behind a feature flag |
-| Treating lint warnings as non-blocking | Warnings accumulate; once there are hundreds, no one fixes them | Set `lint` rules to `error` at the ESLint level and `-D warnings` in Clippy |
-| Hardcoding the Rust toolchain version | The CI toolchain diverges from `rust-toolchain.toml`; different results locally vs. CI | Read the channel from `rust-toolchain.toml` at runtime (see template) |
-| Installing architecture gates locally but not in CI | The gates are advisory — developers learn to ignore them | Every gate that runs locally must also run in CI with a non-zero exit on failure |
-| Re-spelling gate commands in the workflow instead of invoking a recipe | The workflow becomes a second source of truth; a gate added locally is silently absent in CI, or weakened in CI without touching the recipe | Every job runs `just <component>-check`; the gate list lives in the recipe |
-| Ordering a component's gates slowest-first | A formatting slip waits behind a full compile before reporting | Order the recipe cheapest-first (`fmt --check`, then clippy, then the structure gate) |
-| Wiring a `local-<component>-deploy-check` recipe into a CI job, `test-all`, or `<component>-check` | Its precondition — a running local-prod deploy — is normally absent, so the job fails for a reason unrelated to the change, and the recipe gets weakened until it passes | A deployment check is not a gate, so the "every gate that runs locally must also run in CI" row does not apply to it: a gate's precondition is the source tree, which CI always has; this one's precondition is a running deploy, which CI does not. Deployment checks are operator-invoked only (`patterns/testing/deployment_check_pattern.md`). CI calls `test-all` and the `<component>-check` recipes and nothing from the deploy family |
+| Running integration tests inside a static job | The static tier must not need external services; it turns flaky when the stack is slow | Keep them in the `integration` job |
+| Treating lint warnings as non-blocking | Warnings accumulate; once there are hundreds, nobody fixes them | ESLint rules at `error`, Clippy with `-D warnings` |
+| Stating a toolchain version in the workflow | CI diverges from the repository's pin; different results locally and in CI | Read it from `rust-toolchain.toml` and `.python-version`; name only what the repository has no pin for |
+| Pinning a third-party action to a major tag that does not exist | The run fails before the first step | Check the action's published refs; some, like `setup-uv`, publish only full versions and SHAs |
+| Wiring a `local-<component>-deploy-check` recipe into a CI job, `test-all`, or `<component>-check` | Its precondition — a running local-prod deploy — is normally absent, so the job fails for a reason unrelated to the change, and the recipe gets weakened until it passes | A deployment check is not a gate: a gate's precondition is the source tree, which CI always has; this one's precondition is a running deploy, which CI does not. Deployment checks are operator-invoked only (`patterns/testing/deployment_check_pattern.md`). CI calls `test-all` and the `<component>-check` recipes and nothing from the deploy family |
 
-## Quick reference — CI jobs
+## Quick reference
 
 | Job | Trigger | Blocking | Local equivalent |
-|-----|---------|----------|-----------------|
+|-----|---------|----------|------------------|
 | `rust-check` | push / PR | yes | `just core-check` |
-| `web-check` | push / PR | yes (error-level rules) | `just web-check` |
+| `web-check` | push / PR | yes | `just web-check` |
 | `python-check` | push / PR | yes | `just service-check` |
-| integration tests | tag push (release) | yes (gates image build) | `just test-all` with the Docker stack up |
+| `integration` | push / PR, after the three above | yes | `just dev-test-stack-up && just test-all` |
 
 ## Cross-references
 
+- `justfile-setup` — owns every recipe these jobs invoke. A gate is only reachable
+  from CI once it is in a recipe.
+- `agent-hooks-setup` — the per-commit echo of these gates on the agent's
+  machine; bypassable, so CI stays the authority.
 - `rust-architecture-test-setup` — installs the `tests/structure/` gate that
   `core-check` runs.
 - `python-import-linter-setup` — installs the `lint-imports` contracts that
@@ -339,7 +318,7 @@ you add in `justfile-setup` first.
   and `basedpyright` gates that `service-check` runs.
 - `frontend-vue-eslint-setup` — installs the ESLint boundary rules that
   `web-check` runs.
-- `justfile-setup` — owns every recipe these jobs invoke. A gate is only reachable
-  from CI once it is in a recipe.
-- `rust-testing` and `python-testing` — cover how to structure tests so the
-  feature-flag split between unit and integration tests works correctly.
+- `patterns/testing/parallel_test_isolation_pattern.md` — what makes `test-all`
+  safe to run in parallel on a CI runner.
+- `rust-testing` and `python-testing` — the test layout and support structure
+  the `integration` job relies on.
