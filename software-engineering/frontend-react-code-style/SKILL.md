@@ -1,11 +1,11 @@
 ---
 name: frontend-react-code-style
-description: Patterns and conventions for writing clean, maintainable React 19 applications. Use when writing or reviewing React components, custom hooks, stores, or project structure — enforces consistent data flow, component design, and type safety across the codebase.
+description: Use when writing or reviewing React components, custom hooks, effects, contexts, Zustand stores, TanStack Query or TanStack Router code, or TypeScript types in a React 19 SPA — the house patterns for data flow, state ownership, and type safety.
 vibe: Keeps React codebases predictable, traceable, and free of spaghetti.
-license: UNLICENSED
+license: MIT
 metadata:
-  author: Cristian
-  version: "0.0.2"
+  author: cristian.ciortea@syneto.eu
+  version: "0.0.3"
 ---
 
 # React Code Style — Patterns & Conventions
@@ -142,46 +142,22 @@ export function BackupListPresenter({
   onRetry,
 }: BackupListPresenterProps) {
   if (isLoading) {
-    return <p>Loading…</p>
+    return <Spinner />
   }
-
   if (error) {
-    return (
-      <div>
-        <p>{error}</p>
-        <button onClick={onRetry}>Retry</button>
-      </div>
-    )
+    return <ErrorBanner message={error} onRetry={onRetry} />
   }
 
   return (
-    <div>
-      <input
-        value={searchQuery}
-        onChange={(event) => onSearchQueryChange(event.target.value)}
-        placeholder="Search…"
+    <>
+      <BackupSearchBar
+        searchQuery={searchQuery}
+        onSearchQueryChange={onSearchQueryChange}
+        showArchived={showArchived}
+        onShowArchivedChange={onShowArchivedChange}
       />
-      <label>
-        <input
-          type="checkbox"
-          checked={showArchived}
-          onChange={(event) => onShowArchivedChange(event.target.checked)}
-        />
-        Show archived
-      </label>
-      <table>
-        <tbody>
-          {backups.map(backup => (
-            <tr key={backup.id}>
-              <td>{backup.name}</td>
-              <td>
-                <button onClick={() => onDelete(backup.id)}>Delete</button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+      <BackupTable backups={backups} onDelete={onDelete} />
+    </>
   )
 }
 ```
@@ -279,7 +255,7 @@ export const AuthContext = createContext<AuthValue | null>(null)
 
 Every consumer re-renders when the context value's identity changes. Without the React Compiler, wrap the `value` object in `useMemo`; with the compiler (our default) that is handled for you. For reducer-backed contexts, split state and dispatch into two contexts so dispatch-only consumers never re-render on state changes.
 
-**When to use:** Low-frequency, dependency-injection-shaped values needed 3+ levels deep — theme, auth/current user, locale, feature flags. For direct parent-child, use props. For high-frequency or cross-feature mutable state, use a Zustand store (Pattern 7) — context has no selector granularity.
+**When to use:** Low-frequency, dependency-injection-shaped values needed 3+ levels deep — theme, auth/current user, locale, feature flags. Context has no selector granularity, so high-frequency or cross-feature mutable state goes elsewhere; Pattern 7's decision rule places it.
 
 ---
 
@@ -318,41 +294,23 @@ export function useBackupSearch(backups: Backup[]) {
 ```
 
 ```tsx
-// ✅ CORRECT — cleanup mirrors setup, stale responses ignored
-// (illustrates cleanup discipline; for real server data prefer TanStack Query's
-// refetchInterval — see Pattern 14)
-import { useEffect, useState } from 'react'
-import { fetchServerHealth, type ServerHealth } from '../api/serverHealthApi'
+// ✅ CORRECT — cleanup mirrors setup; the effect subscribes to an external system
+// and reads the latest callback through an effect event (Pattern 13)
+import { useEffect, useEffectEvent } from 'react'
 
-const POLLING_INTERVAL_MS = 30_000
-
-export function useServerHealth(url: string) {
-  const [health, setHealth] = useState<ServerHealth | null>(null)
+export function useEscapeKey(onEscape: () => void) {
+  const handleEscape = useEffectEvent(onEscape)
 
   useEffect(() => {
-    let ignore = false
-
-    async function poll() {
-      try {
-        const nextHealth = await fetchServerHealth(url)
-        if (!ignore) {
-          setHealth(nextHealth)
-        }
-      } catch {
-        // keep the last known health; the next tick retries
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        handleEscape()
       }
     }
 
-    void poll()
-    const timerId = window.setInterval(() => void poll(), POLLING_INTERVAL_MS)
-
-    return () => {
-      ignore = true
-      clearInterval(timerId)
-    }
-  }, [url])
-
-  return { health }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [])
 }
 ```
 
@@ -384,7 +342,7 @@ useEffect(() => {
 
 **Why:** In React, every call of a custom hook gets its own independent state — always. Coming from Vue, the module-level-singleton composable habit produces silent bugs here: a module-level variable can be mutated, but no component ever re-renders to show it.
 
-**Rule:** Never store shared mutable state in a module-level variable that components read during render. To deliberately share state, pick by scope: lift it to the closest common parent and pass it down (the default), put it in a typed context for low-frequency values (Pattern 3), or put it in a Zustand store for cross-feature client state (Pattern 7). A store is also the right home for the Vue-style "shared composable state" middle ground — notifications, a "currently editing" flag, a multi-step wizard's position.
+**Rule:** Never store shared mutable state in a module-level variable that components read during render. To deliberately share state, place it by Pattern 7's decision rule; the Vue-style "shared composable state" middle ground — notifications, a "currently editing" flag, a multi-step wizard's position — lands in a store.
 
 ```tsx
 // ❌ WRONG — module-level variable; mutation notifies nobody, UI goes stale
@@ -455,44 +413,19 @@ Wrapping a genuinely external mutable source (a browser API, a non-React library
 **Rule:** Never use single-letter variable names or abbreviations. Every variable, parameter, loop variable, and callback parameter must be a descriptive, intent-revealing name. The collection variable and the loop/callback variable must be consistent — the collection is the plural form, the loop variable is the singular.
 
 ```tsx
-// ✅ CORRECT — descriptive, searchable, consistent
-{backups.map(backup => (
-  <tr key={backup.id}>
-    <td>{backup.name}</td>
-    <td>{backup.status}</td>
-  </tr>
-))}
-
-// ❌ WRONG — single-letter callback parameter
-{backups.map(b => (
-  <tr key={b.id}>
-    <td>{b.name}</td>
-  </tr>
-))}
-```
-
-```tsx
-// ✅ CORRECT — callback and event parameters are descriptive
+// ✅ CORRECT — descriptive, searchable, consistent; booleans read as a question
+{backups.map(backup => <tr key={backup.id}><td>{backup.name}</td></tr>)}
 backups.filter(backup => backup.status !== BackupStatus.Archived)
-notifications.filter(notification => notification.id !== id)
 <input onChange={(event) => setSearchQuery(event.target.value)} />
-
-// ❌ WRONG — single-letter or abbreviated parameters
-backups.filter(b => b.status !== BackupStatus.Archived)
-notifications.filter(n => n.id !== id)
-<input onChange={(e) => setSearchQuery(e.target.value)} />
-```
-
-```tsx
-// ✅ CORRECT — descriptive state names, boolean reads as a question
-const [searchQuery, setSearchQuery] = useState('')
 const [selectedBackupId, setSelectedBackupId] = useState<string | null>(null)
 const [isLoading, setIsLoading] = useState(false)
 
-// ❌ WRONG — abbreviated or vague names
-const [sq, setSq] = useState('')
+// ❌ WRONG — single-letter, abbreviated, or vague names
+{backups.map(b => <tr key={b.id}><td>{b.name}</td></tr>)}
+backups.filter(b => b.status !== BackupStatus.Archived)
+<input onChange={(e) => setSearchQuery(e.target.value)} />
 const [selId, setSelId] = useState<string | null>(null)
-const [loading, setLoading] = useState(false)  // "loading" is ambiguous — loading what?
+const [loading, setLoading] = useState(false)  // loading what?
 ```
 
 **Rationale:** This rule applies everywhere: JSX `.map()` renders, `.filter()`, `.find()`, `.reduce()`, `.forEach()`, event handlers, reducers, and any other context where a variable is introduced. No exceptions.
@@ -559,15 +492,6 @@ export const useAppStore = create<AppState>()(set => ({
 
 // ❌ WRONG — whole-store subscription; re-renders on every state change
 const store = useBackupUiStore()
-
-// ❌ WRONG — server data copied into a client store (see Pattern 14)
-export const useBackupStore = create<BackupState>()(set => ({
-  backups: [],
-  fetchBackups: async () => {
-    const response = await fetch('/api/backups')
-    set({ backups: await response.json() })
-  },
-}))
 ```
 
 **Decision rule:** If one component owns it, keep it local with `useState`. If a parent can pass it down, use props. If it's low-frequency and dependency-injection-shaped, use context (Pattern 3). Use a Zustand store only when the state is truly cross-feature, high-frequency shared, or must survive navigation. Note that once server state lives in the query cache, global client state is small — a handful of focused stores, not an architecture.
@@ -643,38 +567,40 @@ export const useBackupUiStore = create<BackupUiState>()(
 **Rule:** Any literal value (string, number, etc.) that appears in more than one place across the codebase **must** be extracted into a named constant. Define the constant once in the module that owns the concept, then import it everywhere else. Never duplicate the raw literal.
 
 ```tsx
-// ✅ CORRECT — single source of truth in the feature that owns the concept
-// src/features/backups/constants.ts
-export const BACKUP_FILTERS_STORAGE_KEY = 'syneto.backups.filters'
-export const MAX_BACKUP_RETENTION_DAYS = 90
+// ✅ CORRECT — single source of truth in the module that owns the concept
+// src/features/backups/api/backupApi.ts
+export const BACKUPS_API_PATH = '/api/backups'
 
-// src/features/backups/hooks/useBackupFilters.ts
-import { BACKUP_FILTERS_STORAGE_KEY } from '../constants'
+export async function fetchBackups(): Promise<Backup[]> {
+  const response = await fetch(BACKUPS_API_PATH)
+  return backupListSchema.parse(await response.json())
+}
 
-const savedFilters = localStorage.getItem(BACKUP_FILTERS_STORAGE_KEY)
+// src/features/backups/api/backupApi.test.ts
+import { BACKUPS_API_PATH } from './backupApi'
+
+server.use(http.get(BACKUPS_API_PATH, () => HttpResponse.json(backupFixtures)))
 ```
 
 ```tsx
 // ❌ WRONG — same string hardcoded in multiple places
-// hooks/useBackupFilters.ts
-localStorage.getItem('syneto.backups.filters')
+// api/backupApi.ts
+fetch('/api/backups')
 
-// hooks/useBackupSearch.ts
-localStorage.setItem('syneto.backups.filters', serialized)  // duplicate!
+// api/backupApi.test.ts
+http.get('/api/backups', () => HttpResponse.json(backupFixtures))  // duplicate!
 
-// components/BackupToolbar.tsx
-localStorage.removeItem('syneto.backup.filters')  // duplicate — and a silent typo!
+// features/dashboard/api/dashboardApi.ts
+fetch('/api/backup')                                                // duplicate — and a silent typo!
 ```
 
 ```tsx
-// ❌ WRONG — same number used in multiple places without a name
-setTimeout(poll, 30000)        // what does 30000 mean?
-setTimeout(healthCheck, 30000) // is it intentionally the same?
+// ❌ WRONG — same number in two modules without a name
+staleTime: 30000,   // backupQueries.ts — what does 30000 mean?
+staleTime: 30000,   // serverQueries.ts — is it intentionally the same?
 
-// ✅ CORRECT — named constant, intent is clear
-const POLLING_INTERVAL_MS = 30_000
-setTimeout(poll, POLLING_INTERVAL_MS)
-setTimeout(healthCheck, POLLING_INTERVAL_MS)
+// ✅ CORRECT — named once, imported where the value is shared on purpose
+export const LIST_STALE_TIME_MS = 30_000
 ```
 
 **Scope:** this pattern covers *standalone* literals. When the literal is one alternative in a closed set — a status, kind, or mode — a family of constants is the wrong fix; the set becomes an enum object (Pattern 15).
@@ -791,16 +717,7 @@ export function BackupList() {
 3. `Partial<T>` for a partial mock
 4. A typed mock factory that returns `T`
 5. `as unknown as T` for a deliberate, greppable cast
-6. `// @ts-expect-error` on the single line that feeds intentionally-invalid input
-
-Testing is where `any` is most tempting; these cover the real cases without it:
-
-| You reach for `any` because… | Use instead |
-| --- | --- |
-| Building a partial mock object | `Partial<User>`, or a typed factory `(overrides?: Partial<User>): User` |
-| Forcing an incompatible shape | `as unknown as User` — explicit and searchable |
-| Passing **invalid** input to test error handling | `// @ts-expect-error` on that one line (self-documenting; fails if the error disappears) |
-| An untyped third-party test helper | `unknown` + narrow, or declare a minimal local type |
+6. `// @ts-expect-error` on the single line that feeds intentionally-invalid input — self-documenting, and it fails the build if the error ever disappears
 
 ```tsx
 // ✅ CORRECT — typed mock factory, no `any`
@@ -844,14 +761,14 @@ function handleChange(event: React.ChangeEvent<HTMLInputElement>) { /* ... */ }
 - **User actions belong in handlers.** Logic caused by a click runs in the click handler, not in an effect that watches for the click's side effects.
 - **Reset subtree state with `key`,** not with an effect that watches a prop and calls setters.
 - **No effect chains** — one effect adjusting state that triggers another effect is a rewrite signal; compute everything in the event that started it.
-- **Dependency honesty is non-negotiable.** Never silence `react-hooks/exhaustive-deps`; fix the dependency instead — move the function inside the effect, use the updater form of a setter, or wrap a callback prop in `useEffectEvent` so the effect reads the latest version without depending on it. `useEffectEvent` is only for logic that is genuinely an event fired from the effect — never a general way to erase dependencies.
+- **Dependency honesty is non-negotiable.** Never silence `react-hooks/exhaustive-deps`, nor the compiler-powered rules that ship in `eslint-plugin-react-hooks` v7's `recommended` preset (`set-state-in-effect`, `set-state-in-render`, `refs`, `immutability`, `purity`, `preserve-manual-memoization`) — a disable comment on any of them hides a real defect. Fix the dependency instead — move the function inside the effect, use the updater form of a setter, or wrap a callback prop in `useEffectEvent` so the effect reads the latest version without depending on it. `useEffectEvent` is only for logic that is genuinely an event fired from the effect — never a general way to erase dependencies.
 - **One effect per synchronization concern** — two independent subscriptions are two effects, not one.
 
 ```tsx
 // ✅ CORRECT — derived during render, no state, no effect
 const fullName = firstName + ' ' + lastName
 
-// ❌ WRONG — redundant state synced by an effect (extra render, can go stale)
+// ❌ WRONG — redundant state synced by an effect (extra render, can go stale; `react-hooks/set-state-in-effect` flags it)
 const [fullName, setFullName] = useState('')
 useEffect(() => {
   setFullName(firstName + ' ' + lastName)
@@ -905,7 +822,7 @@ useEffect(() => {
 
 **Why:** Server data copied into `useState` or a Zustand store becomes a second source of truth that immediately starts drifting from the backend. Hand-rolled `useEffect` fetching re-invents (badly) what a query cache already solves: races, caching, deduplication, retries, invalidation.
 
-**Rule:** All server data goes through TanStack Query. Each feature domain defines a query-key factory and `queryOptions` factories next to its API functions — components, loaders, and imperative code all consume the same factory. Set a non-zero `staleTime` deliberately (the default `0` refetches on every mount). Mutations invalidate through the same key factory. Polling is `refetchInterval` on the query options, not a hand-rolled interval. Never copy query results into component state or a store — use `select` to derive, and keep only IDs in client state (Pattern 7). A hand-rolled `useEffect` fetch is acceptable only where the library is genuinely unavailable, and then it must handle stale responses with an `ignore` flag or `AbortController` in cleanup (Pattern 4's polling example).
+**Rule:** All server data goes through TanStack Query. Each feature domain defines a query-key factory and `queryOptions` factories next to its API functions — components, loaders, and imperative code all consume the same factory. Set a non-zero `staleTime` deliberately (the default `0` refetches on every mount). Mutations invalidate through the same key factory. Polling is `refetchInterval` on the query options, not a hand-rolled interval. Never copy query results into component state or a store — use `select` to derive, and keep only IDs in client state (Pattern 7). A hand-rolled `useEffect` fetch is acceptable only where the library is genuinely unavailable, and then it must handle stale responses with an `ignore` flag or `AbortController` in cleanup.
 
 ```tsx
 // ✅ CORRECT — one key factory + queryOptions factory per domain
