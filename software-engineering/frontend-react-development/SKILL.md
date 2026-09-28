@@ -1,20 +1,18 @@
 ---
 name: frontend-react-development
-description: Guidelines for building React 19 frontend applications with hooks, Vite, and feature-based architecture. Use when creating or modifying React components, hooks, stores, or project structure — prioritizing visual design, strict separation of concerns, and accessibility.
+description: Use when deciding where code lives in a React 19 SPA (a feature, a shared domain module, or the shared foundation), scaffolding a new React project's Vite, compiler, and lint setup, or building UI that must look polished, be accessible, and be responsive. Code-level patterns for components, hooks, stores, and types are frontend-react-code-style.
 vibe: Builds responsive, accessible web apps with pixel-perfect precision.
-license: UNLICENSED
+license: MIT
 metadata:
-  author: Cristian
-  version: "0.0.1"
+  author: cristian.ciortea@syneto.eu
+  version: "0.0.2"
 ---
 
-# Frontend Developer Agent Personality
-
-You are **Frontend Developer**, an expert frontend developer who specializes in modern web technologies, UI frameworks, and performance optimization. You create responsive, accessible, and performant web applications with pixel-perfect design implementation and exceptional user experiences.
+# React Frontend Development
 
 This is the React sibling of `frontend-vue-development`; it follows the same rules and structure with React vocabulary and the React stack from `frontend-react-code-style` (React 19.2+, React Compiler, TanStack Router, TanStack Query, Zustand).
 
-## 🚨 Critical Rules You Must Follow
+## 🚨 Critical Rules
 
 ### Design-First, Then Functionality, Then Performance
 - **First priority — Visual appeal**: The UI must be attractive and pleasant to look at. Invest in polished layouts, typography, spacing, color, and micro-interactions before optimizing anything
@@ -41,11 +39,12 @@ This is the React sibling of `frontend-vue-development`; it follows the same rul
 - Ensure keyboard navigation and screen reader compatibility
 - Lint it from day one: `eslint-plugin-jsx-a11y` catches missing labels, bad roles, and unkeyboardable handlers at build time
 
-## 📋 Your Technical Deliverables
+## 📋 Reference Component
 
 ### Modern React Component Example
 ```tsx
-// Modern React 19 component with performance optimization
+// Modern React 19 component — generic, virtualized, keyboard- and screen-reader-accessible.
+// The utility classes are Tailwind CSS; nothing in the pattern depends on it.
 import { useRef, type ReactNode } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 
@@ -192,9 +191,9 @@ src/
 - Route files in `routes/` stay thin: mount a page component exported from a feature — or define only a trivial local wrapper that reads params/search and mounts it — and wire the loader and `validateSearch`, nothing else; real page components live in their feature, not in `routes/`
 - API calls live in `api/` folders, never inline in components or stores
 - One store file per concern, matching the feature or domain-module boundary
-- Enforce the dependency direction with the linter (`import/no-restricted-paths` zones, or `eslint-plugin-boundaries` at scale) so violations fail the build instead of surviving review
+- Enforce the dependency direction with the linter so violations fail the build instead of surviving review: an inline flat-config plugin as `frontend-vue-eslint-setup` builds it (the layer rules are framework-agnostic — port them), with `eslint-plugin-boundaries` only at a scale where the inline rules stop being enough
 
-## 🔄 Your Workflow Process
+## 🔄 Workflow
 
 ### Step 1: Project Setup and Architecture
 - Scaffold with Vite (`npm create vite@latest my-app -- --template react-ts`) — leverage HMR for instant feedback during development
@@ -216,47 +215,25 @@ export default defineConfig({
 })
 ```
 
+`@vitejs/plugin-react` also ships a native `compiler: true` option backed by `oxc-transform-react`, a Rust port of the compiler; it is marked experimental, so stay on the Babel wiring above until that label is gone.
+
 - Set up the lint gate as flat config: typescript-eslint `strictTypeChecked`, `eslint-plugin-react-hooks` (v7 `recommended` — includes the compiler-powered Rules of React), and `eslint-plugin-jsx-a11y` (`flatConfigs.recommended`)
 - Set up Vitest for unit tests and Playwright for e2e, integrated into CI; add `@tanstack/react-query-devtools` and `@tanstack/react-router-devtools` as dev dependencies
 - Establish component architecture and design system foundation
 
 ### Step 2: Component Development
-- Design components with single responsibility — each component does one thing well
-- Separate data-fetching logic (custom hooks over TanStack Query) from presentation (components)
-- Implement responsive design with mobile-first approach
-- Build accessibility into components from the start
-- Create comprehensive unit tests for all components
+- Design components with single responsibility — each component does one thing well, with data fetching and presentation separated as the SoC rule above says
+- Implement responsive design with a mobile-first approach
+- Build accessibility into components from the start; respect `prefers-reduced-motion`, `prefers-contrast`, and `prefers-color-scheme`
+- Reach for React 19's concurrent primitives where they fit: Suspense through TanStack Query's `useSuspenseQuery`, `useTransition` / `useDeferredValue` for non-urgent updates, and Actions (`useActionState`, `useOptimistic`) for form submission and optimistic UI
 
 ### Step 3: Performance Optimization
-- Route-level code splitting comes free from `autoCodeSplitting`; add `React.lazy` only for heavy below-the-fold widgets (charts, editors)
-- Let the React Compiler handle memoization — do not hand-roll `useMemo`/`useCallback`/`React.memo` for identity
+- Code splitting and memoization are already decided: routes split through `autoCodeSplitting` and the React Compiler memoizes (`frontend-react-code-style` Patterns 10 and 4). Add `React.lazy` only for heavy below-the-fold widgets (charts, editors)
 - Virtualize long lists (`@tanstack/react-virtual`) instead of rendering thousands of rows
 - Optimize images and assets for web delivery
-- Monitor Core Web Vitals and optimize accordingly
-- Set up performance budgets and monitoring
+- Monitor Core Web Vitals; set performance budgets and keep them monitored
 
 ### Step 4: Testing and Quality Assurance
-- Write comprehensive unit and integration tests
-- Assert accessibility in tests: `axe-core` directly under Vitest for components (not `jest-axe`, which ships no types, and not `vitest-axe`, which is unmaintained), and `@axe-core/playwright` in e2e flows — see `frontend-react-testing` for the typed matcher and the jsdom project it runs in
+- Tooling, the pyramid, network mocking, and the accessibility assertions (`axe-core` under Vitest, `@axe-core/playwright` in e2e) are defined in `frontend-react-testing` — follow it rather than restating it here
 - Test cross-browser compatibility and responsive behavior
-- Implement end-to-end testing for critical user flows
-
-## 🎯 Your Success Metrics
-
-You're successful when:
-- Page load times are under 3 seconds on 3G networks
-- Lighthouse scores consistently exceed 90 for Performance and Accessibility
-- Shared components are extracted when patterns repeat across the application
-- Application errors are properly caught and handled with user-facing feedback
-
-## 🚀 Advanced Capabilities
-
-### Modern React Technologies
-- Advanced React 19 patterns with Suspense (via TanStack Query's `useSuspenseQuery`), transitions (`useTransition`, `useDeferredValue`), and Actions (`useActionState`, `useOptimistic`)
-- Next.js for SSR/SSG and full-stack React applications — only when a project explicitly calls for SSR, outside this stack's default Vite SPA
-- Custom hook library authoring and error boundary design
-- Progressive Web App features with offline functionality
-
-### Accessibility
-- Respect user preferences (prefers-reduced-motion, prefers-contrast, prefers-color-scheme)
-- Automated accessibility testing integration in CI/CD
+- Cover the critical user flows end to end
