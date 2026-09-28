@@ -5,7 +5,7 @@ vibe: Keeps Vue codebases predictable, traceable, and free of spaghetti.
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.8"
+  version: "0.0.9"
 ---
 
 # Vue Code Style — Patterns & Conventions
@@ -618,38 +618,40 @@ export const useBackupStore = defineStore('backups', () => {
 **Rule:** Any literal value (string, number, etc.) that appears in more than one place across the codebase **must** be extracted into a named constant. Define the constant once in the module that owns the concept, then import it everywhere else. Never duplicate the raw literal.
 
 ```typescript
-// ✅ CORRECT — single source of truth in the feature that owns the concept
-// src/features/backups/constants.ts
-export const BACKUP_FILTERS_STORAGE_KEY = 'syneto.backups.filters'
-export const MAX_BACKUP_RETENTION_DAYS = 90
+// ✅ CORRECT — single source of truth in the module that owns the concept
+// src/features/backups/api/backupApi.ts
+export const BACKUPS_API_PATH = '/api/backups'
 
-// src/features/backups/composables/useBackupFilters.ts
-import { BACKUP_FILTERS_STORAGE_KEY } from '../constants'
+export async function fetchBackups(): Promise<Backup[]> {
+  const response = await fetch(BACKUPS_API_PATH)
+  return backupListSchema.parse(await response.json())
+}
 
-const savedFilters = localStorage.getItem(BACKUP_FILTERS_STORAGE_KEY)
+// src/features/backups/api/backupApi.test.ts
+import { BACKUPS_API_PATH } from './backupApi'
+
+server.use(http.get(BACKUPS_API_PATH, () => HttpResponse.json(backupFixtures)))
 ```
 
 ```typescript
 // ❌ WRONG — same string hardcoded in multiple places
-// composables/useBackupFilters.ts
-localStorage.getItem('syneto.backups.filters')
+// api/backupApi.ts
+fetch('/api/backups')
 
-// composables/useBackupSearch.ts
-localStorage.setItem('syneto.backups.filters', serialized)  // duplicate!
+// api/backupApi.test.ts
+http.get('/api/backups', () => HttpResponse.json(backupFixtures))  // duplicate!
 
-// components/BackupToolbar.vue
-localStorage.removeItem('syneto.backup.filters')  // duplicate — and a silent typo!
+// features/dashboard/api/dashboardApi.ts
+fetch('/api/backup')                                                // duplicate — and a silent typo!
 ```
 
 ```typescript
-// ❌ WRONG — same number used in multiple places without a name
-setTimeout(poll, 30000)        // what does 30000 mean?
-setTimeout(healthCheck, 30000) // is it intentionally the same?
+// ❌ WRONG — same number in two modules without a name
+staleTime: 30000,   // backupQueries.ts — what does 30000 mean?
+staleTime: 30000,   // serverQueries.ts — is it intentionally the same?
 
-// ✅ CORRECT — named constant, intent is clear
-const POLLING_INTERVAL_MS = 30_000
-setTimeout(poll, POLLING_INTERVAL_MS)
-setTimeout(healthCheck, POLLING_INTERVAL_MS)
+// ✅ CORRECT — named once, imported where the value is shared on purpose
+export const LIST_STALE_TIME_MS = 30_000
 ```
 
 **Scope:** this pattern covers *standalone* literals. When the literal is one alternative in a closed set — a status, kind, or mode — a family of constants is the wrong fix; the set becomes an enum object (Pattern 13).
