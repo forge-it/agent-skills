@@ -1,11 +1,11 @@
 ---
 name: frontend-react-testing
-description: Opinionated testing standard for React 19. Use when writing, reviewing, or setting up tests for React components, custom hooks, Zustand stores, TanStack Query data, routes, or end-to-end flows — choosing test tooling, mocking an API, deciding what to assert, or organizing test files. Covers Vitest, React Testing Library, MSW network mocking, axe accessibility checks, and Playwright, plus the behavior-first unit/component/E2E pyramid for green-field projects.
+description: Use when writing, reviewing, or setting up tests for a React 19 SPA — components, custom hooks, Zustand stores, TanStack Query data, TanStack Router routes, accessibility checks, or end-to-end journeys — and when deciding what to assert, how to fake the network, or where a test file lives.
 vibe: Tests that survive refactors — behavior in, implementation out.
-license: UNLICENSED
+license: MIT
 metadata:
-  author: Cristian
-  version: "0.0.1"
+  author: cristian.ciortea@syneto.eu
+  version: "0.0.2"
 ---
 
 # React Testing — Opinionated Standard
@@ -24,7 +24,7 @@ One tool per job. Do not introduce alternatives without a deliberate decision.
 |-----|------|--------------|
 | Test runner | **Vitest** | Shares the Vite transform pipeline — no separate Babel/transform config, and the React Compiler applies to tests exactly as it does to the app. Jest is legacy for new React work. |
 | Component rendering + queries | **@testing-library/react** | Pushes you toward user-facing queries (role/label/text) and away from implementation details. `renderHook` ships here too. |
-| DOM environment | **happy-dom** for the bulk, **jsdom** for accessibility tests | happy-dom is roughly twice as fast and natively implements the APIs a React suite actually reaches for. axe does not work reliably in it, so accessibility tests run in a second Vitest project on jsdom. Two projects, one line of config each — see the trade below. |
+| DOM environment | **happy-dom** for the bulk, **jsdom** for accessibility tests | Roughly twice as fast, and it implements the browser APIs a React suite reaches for; axe does not run reliably on it, so accessibility tests are a second Vitest project on jsdom. The trade is spelled out once, below. |
 | User interaction | **@testing-library/user-event** | Produces the real event sequence (pointer, focus, key) instead of one synthetic event. |
 | Network mocking | **MSW** (Mock Service Worker) | Mocks at the network boundary, so the same handlers serve unit, component, and E2E tests. |
 | Assertion matchers | **@testing-library/jest-dom** | `toBeInTheDocument`, `toBeDisabled`, `toHaveAccessibleName` — reads like behavior. |
@@ -32,7 +32,7 @@ One tool per job. Do not introduce alternatives without a deliberate decision.
 | Client state in tests | **zustand** + a global store-reset harness | Module-level stores leak across tests unless reset mechanically. |
 | Accessibility | **axe-core** directly, with a small typed matcher | First-party from Deque, ships its own types, no `@types/*` and no Jest dependencies. |
 | End-to-end | **Playwright** | Current best-in-class browser automation; fast, reliable, parallel. |
-| Coverage | **@vitest/coverage-v8** | Native, no instrumentation step, and accurate since Vitest 3.2's AST remapping. |
+| Coverage | **@vitest/coverage-v8** | Native, no instrumentation step, AST-accurate. |
 
 > **Do not use `jest-axe` or `vitest-axe`.** `vitest-axe`'s only stable release is 0.1.0 from October 2022 and it is effectively unmaintained. `jest-axe` is maintained but ships **no TypeScript types**; the only types available are `@types/jest-axe`, which pins `axe-core@3.x` against a 4.x runtime and drags `@types/jest` into a Vitest project, where the two `expect` globals collide. Both are recommended by most 2023–2025 material. Convention 16 replaces them with ~20 lines you own.
 
@@ -44,7 +44,9 @@ One tool per job. Do not introduce alternatives without a deliberate decision.
 
 > **Vitest Browser Mode is not the default here.** It is stable as of Vitest 4 and it is not slower — it measurably beats a simulated environment on larger suites, because its startup cost is fixed rather than per-file. Keep it out of the default tier anyway: it needs Playwright binaries in CI, it has a documented cluster of determinism and resource failures at real suite sizes, and it drew **four CVSS 9.4–9.8 remote-code-execution advisories during 2026**, one of them patched in 4.1.10 itself. Adopt it, if at all, as a second `projects` entry in its own CI job for the narrow set of components that genuinely need real layout — focus traps, virtualized lists, drag-and-drop, floating-element placement — and note that `vitest-browser-react` is a different API from RTL, not a faster one.
 
-**Version floors** (verified 2026-08-03 — re-check before pinning): Vitest 4.1+, React 19.2+, `happy-dom` 20.11+, `jsdom` 30+, `@testing-library/react` 16.3+, `@testing-library/jest-dom` 7+, `@testing-library/user-event` 14.6+, `msw` 2.15+, `@tanstack/react-query` 5.101+, `zustand` 5+, `axe-core` 4.12+, `@playwright/test` 1.62+. The net Node floor is **22.22.2+** — jsdom 30 sets that specific patch floor, and `@testing-library/jest-dom@7` independently requires Node ≥ 22.
+**Version floors** (verified 2026-09-29 — re-check before pinning): Vitest 5+, React 19.2+, `happy-dom` 20.14+, `jsdom` 30.1+, `@testing-library/react` 16.3+, `@testing-library/jest-dom` 7+, `@testing-library/user-event` 14.6+, `msw` 3+ (ESM-only; `server.listen`'s `onUnhandledRequest` became `onUnhandledFrame`), `@tanstack/react-query` 5.104+, `zustand` 5+, `axe-core` 4.13+, `@playwright/test` 1.63+, TypeScript 5.9+ (MSW 3's floor). The net Node floor is **22.22.2+** — jsdom 30 sets that specific patch floor; Vitest 5, MSW 3, and `@testing-library/jest-dom@7` each independently require Node 22.
+
+Two Vitest 5 defaults the conventions lean on: an asynchronous assertion that is not awaited now fails the test, and mocks are cleared before every test.
 
 ## When to use
 
@@ -56,420 +58,15 @@ One tool per job. Do not introduce alternatives without a deliberate decision.
 
 ## Setup (green-field, commit 1)
 
-### Step 1 — Install
-
-```bash
-npm install -D vitest @vitest/coverage-v8 happy-dom jsdom \
-  @testing-library/react @testing-library/dom @testing-library/jest-dom \
-  @testing-library/user-event @types/react-dom msw axe-core
-npm install -D @playwright/test && npx playwright install
-```
-
-`@testing-library/dom` is a **required peer dependency** of `@testing-library/react` 16+ and `jest-dom` 7+ — it is no longer bundled, so install it explicitly. `@types/react-dom` is also required for TypeScript.
-
-### Step 2 — Configure Vitest in `vite.config.ts`
-
-Use the **single** `vite.config.ts`, not a separate `vitest.config.ts`. A separate file makes Vitest ignore `vite.config.ts` entirely, which silently drops the React Compiler from the test build — and then the suite no longer tests what ships. See Convention 15.
-
-```ts
-/// <reference types="vitest/config" />
-import { defineConfig } from 'vite'
-import { tanstackRouter } from '@tanstack/router-plugin/vite'
-import react, { reactCompilerPreset } from '@vitejs/plugin-react'
-import babel from '@rolldown/plugin-babel'
-
-export default defineConfig({
-  plugins: [
-    tanstackRouter({ target: 'react', autoCodeSplitting: true }),
-    react(),
-    babel({ presets: [reactCompilerPreset()] }),
-  ],
-  test: {
-    // Explicit imports of describe/it/expect — see the cleanup note in Step 3.
-    globals: false,
-    css: false,
-    // `exclude` is inherited by every project below and CONCATENATED into its
-    // own, so these four apply everywhere and must not be repeated.
-    exclude: ['**/node_modules/**', '**/dist/**', 'e2e/**', '**/*.spec.ts'],
-    // Deliberately NO root `include`. Inherited arrays concatenate, so a root
-    // include would be merged into each project's include and widen it — the
-    // a11y project would end up claiming every *.test.tsx file as well. Each
-    // project owns its include instead.
-
-    // Two projects, because one environment cannot serve both jobs: happy-dom is
-    // ~2x faster and implements the APIs components use, but axe does not work in
-    // it. `projects` replaced `workspace`, which Vitest 4 removed.
-    projects: [
-      {
-        extends: true,
-        test: {
-          name: 'unit',
-          environment: 'happy-dom',
-          include: ['src/**/*.test.{ts,tsx}'],
-          // Concatenated onto the root exclude, not replacing it.
-          exclude: ['src/**/*.a11y.test.{ts,tsx}'],
-          setupFiles: ['./src/test/setup.ts', './src/test/setup-msw.ts'],
-        },
-      },
-      {
-        extends: true,
-        test: {
-          name: 'a11y',
-          // jsdom on purpose: axe breaks on happy-dom's Node.prototype.isConnected.
-          environment: 'jsdom',
-          // jsdom claims the `browser` export condition, so `msw/node` would
-          // otherwise resolve MSW's *browser* build and silently fail to
-          // intercept. This forces Node resolution — but see the smoke test in
-          // Step 4: on Vite 6+ there are open reports of this option being
-          // ignored, so never assume it took effect.
-          environmentOptions: { jsdom: { customExportConditions: [''] } },
-          include: ['src/**/*.a11y.test.{ts,tsx}'],
-          setupFiles: [
-            './src/test/setup.ts',
-            './src/test/setup-msw.ts',
-            // The five APIs jsdom lacks and happy-dom ships. Loaded only here,
-            // so the unit project keeps happy-dom's real implementations
-            // instead of no-op stubs.
-            './src/test/setup-jsdom-stubs.ts',
-            './src/test/accessibility.ts',
-          ],
-        },
-      },
-    ],
-
-    coverage: {
-      provider: 'v8',
-      reporter: ['text', 'html', 'lcov'],
-      reportOnFailure: true,
-      // Vitest 4 removed `coverage.all`. Without an explicit include, files no
-      // test imported vanish from the report instead of showing as 0%.
-      include: ['src/**/*.{ts,tsx}'],
-      exclude: [
-        'src/routeTree.gen.ts',
-        'src/main.tsx',
-        'src/test/**',
-        'src/**/*.test.{ts,tsx}',
-        'src/**/types/**',
-        'src/**/*.d.ts',
-        'src/**/index.ts',
-      ],
-    },
-  },
-})
-```
-
-**The `include`/`exclude` arithmetic above is exact, and getting it wrong fails silently.** With `extends: true`, Vitest merges the root config into each project through Vite's `mergeConfig`, which **concatenates** arrays rather than replacing them. So a root-level `include` does not get narrowed by a project's own `include` — the two are unioned, and the `a11y` project would claim every `*.test.tsx` file in addition to its own. The symptom is not an error: your whole component suite quietly runs a second time on jsdom, with stubs shadowing real APIs and the axe matcher loaded, roughly doubling suite time while defeating the split. Keep `include` out of the root, give each project its own, and let the root `exclude` be inherited rather than repeated. Verify with `vitest list --filesOnly`: each file must appear under exactly one project name.
-
-**Do not use `@vitejs/plugin-react`'s `babel` option to wire the compiler** — plugin-react 6.0.0 removed it. `react({ babel: { plugins: [['babel-plugin-react-compiler', {}]] } })` is the form in nearly every tutorial and it no longer works; the current form is the `reactCompilerPreset` + `@rolldown/plugin-babel` pairing above.
-
-### Step 3 — Global setup file (`src/test/setup.ts`)
-
-```ts
-import '@testing-library/jest-dom/vitest'
-
-import { cleanup, configure } from '@testing-library/react'
-import { afterEach, vi } from 'vitest'
-
-configure({
-  // Render every test tree inside <StrictMode>. RTL default: false. See Convention 15.
-  reactStrictMode: true,
-  asyncUtilTimeout: 2_000,
-  // Throws when a weaker query was used where a stronger one would work —
-  // mechanical enforcement of Convention 2's priority order.
-  throwSuggestions: true,
-})
-
-// REQUIRED: with `globals: false`, RTL cannot register its own afterEach, so
-// auto-cleanup does not run. Skipping this produces the classic symptom where
-// the first test passes and the second finds two matching elements.
-afterEach(() => {
-  cleanup()
-})
-
-// Route every `create` and `createStore` import from 'zustand' through the
-// reset harness (Step 5). Automocking intercepts both entry points.
-vi.mock('zustand')
-```
-
-**No browser-API stubs live here.** happy-dom implements `matchMedia`, `ResizeObserver`, `IntersectionObserver`, `showModal()`, and `scrollIntoView` natively, and stubbing over a real implementation would make the unit project test a no-op instead of the behavior. jsdom lacks all five, so the stubs load **only** in the accessibility project:
-
-```ts
-// src/test/setup-jsdom-stubs.ts — loaded by the `a11y` project only.
-import { beforeEach, vi } from 'vitest'
-
-class ResizeObserverStub implements ResizeObserver {
-  observe(): void {}
-  unobserve(): void {}
-  disconnect(): void {}
-}
-
-class IntersectionObserverStub implements IntersectionObserver {
-  readonly root: Element | null = null
-  readonly rootMargin: string = '0px'
-  readonly thresholds: readonly number[] = [0]
-  observe(): void {}
-  unobserve(): void {}
-  disconnect(): void {}
-  takeRecords(): IntersectionObserverEntry[] {
-    return []
-  }
-}
-
-const createMatchMediaStub = (matches: boolean) => (query: string): MediaQueryList => ({
-  matches,
-  media: query,
-  onchange: null,
-  addEventListener: () => {},
-  removeEventListener: () => {},
-  addListener: () => {},
-  removeListener: () => {},
-  dispatchEvent: () => false,
-})
-
-beforeEach(() => {
-  vi.stubGlobal('ResizeObserver', ResizeObserverStub)
-  vi.stubGlobal('IntersectionObserver', IntersectionObserverStub)
-  vi.stubGlobal('matchMedia', createMatchMediaStub(false))
-  // jsdom has no layout engine.
-  Element.prototype.scrollIntoView = () => {}
-  // jsdom does not implement the dialog element's methods; without these a
-  // component that opens a <dialog> throws on construction rather than failing
-  // an assertion, which is a confusing way to discover the gap.
-  HTMLDialogElement.prototype.showModal = function showModal() {
-    this.open = true
-  }
-  HTMLDialogElement.prototype.close = function close() {
-    this.open = false
-  }
-})
-```
-
-All five APIs named above are stubbed here — leave none out. A missing stub does not produce a clear failure; it throws during render, so the accessibility test reports a crash instead of the violation it was written to catch.
-
-If a component under test needs one of those five to do something real, that is a signal the test belongs in the unit project on happy-dom, where the API is genuinely implemented.
-
-**`reactStrictMode` and `throwSuggestions` are house decisions, not industry defaults.** RTL ships both **off**, and neither RTL nor react.dev recommends enabling them in tests — the StrictMode docs never mention tests at all, and `throwSuggestions` is marked experimental. They are on here because both are one-line, once, at commit 1: StrictMode is the only mechanism that mechanically catches missing effect cleanup, and `throwSuggestions` turns Convention 2's query priority from a review comment into a red test. On an existing codebase both will be noisy; that is an argument for turning them on before there is anything to be noisy about, not for leaving them off.
-
-Three traps this file avoids:
-
-- **`import '@testing-library/jest-dom'` without `/vitest` is the Jest form** and silently fails to register the matchers under Vitest.
-- **Never set `IS_REACT_ACT_ENVIRONMENT` yourself.** RTL sets it. Hand-setting it is a 2022-era snippet.
-- **Never enable fake timers globally here.** They break `user-event`'s internal delays and `waitFor` polling. Enable them per test, in the smallest scope, and always restore (Convention 17).
-
-Keep this file to test-infrastructure imports only. Vitest will not mock a module that a setup file already imported, so if `setup.ts` transitively imports app code that imports `zustand`, the Step 5 harness stops working.
-
-### Step 4 — MSW server (`src/test/msw/` + `src/test/setup-msw.ts`)
-
-```ts
-// src/test/msw/handlers/backups.handlers.ts
-import { http, HttpResponse, type HttpResponseResolver } from 'msw'
-import type { Backup } from '@/features/backups/types/backup'
-import { buildBackup } from '@/test/factories/backup.factory'
-
-interface BackupIdParams {
-  readonly backupId: string
-}
-
-interface BackupListResponse {
-  readonly items: readonly Backup[]
-  readonly total: number
-}
-
-export const backupHandlers = [
-  // The third generic is the response body. Omit it and MSW does not type-check
-  // HttpResponse.json() at all — always supply it.
-  http.get<never, never, BackupListResponse>('/api/backups', () => {
-    const items = [buildBackup({ status: 'active' })]
-    return HttpResponse.json({ items, total: items.length })
-  }),
-
-  // Declaring your own params interface gives `string`, not
-  // `string | readonly string[] | undefined` as MSW's own PathParams would.
-  http.get<BackupIdParams, never, Backup>('/api/backups/:backupId', ({ params }) =>
-    HttpResponse.json(buildBackup({ id: params.backupId })),
-  ),
-]
-
-export const serverErrorResolver: HttpResponseResolver<never, never, null> = () =>
-  new HttpResponse(null, { status: 500 })
-```
-
-```ts
-// src/test/msw/server.ts
-import { setupServer } from 'msw/node'
-import { handlers } from './handlers'
-
-export const server = setupServer(...handlers)
-```
-
-```ts
-// src/test/setup-msw.ts
-import { afterAll, afterEach, aroundEach, beforeAll } from 'vitest'
-import { server } from './msw/server'
-
-beforeAll(() => {
-  // An unmocked request is a test failure, not a silent real network call.
-  server.listen({ onUnhandledRequest: 'error' })
-})
-
-// Scopes every server.use() to the test that made it, even under test.concurrent.
-// `aroundEach` is a Vitest 4 addition; no older material mentions it.
-aroundEach((runTest) => server.boundary(runTest)())
-
-afterEach(() => {
-  server.resetHandlers()
-})
-
-afterAll(() => {
-  server.close()
-})
-```
-
-MSW 2 intercepts by patching `globalThis.fetch`, so there is no polyfill to install — `whatwg-fetch`, `cross-fetch`, and `undici` instructions are v1-era and now wrong. Ignore the `@deprecated` tag on the `SetupServerApi` *class*: `setupServer()` itself is staying, and `defineNetwork` is still behind `msw/experimental`.
-
-**Write this smoke test at commit 1, in both projects, and never delete it.** MSW resolving its browser build instead of `msw/node` is the single most common MSW-under-Vitest failure, and it fails *silently* — tests start hitting the real network or failing for unrelated-looking reasons. Two things make it worth a permanent test rather than a config comment: there are open reports of Vite 6+ ignoring `customExportConditions` entirely, and that option is **jsdom-specific**, so it does nothing for the happy-dom project. Whether happy-dom misresolves the same way is not something to assume in either direction — this test is how you find out, in both environments.
-
-```ts
-// src/test/msw/assertInterception.ts — one assertion, two callers
-import { http, HttpResponse } from 'msw'
-import { expect } from 'vitest'
-import { server } from './server'
-
-export async function assertMswInterceptsFetch(): Promise<void> {
-  server.use(http.get('/api/interception-probe', () => HttpResponse.json({ intercepted: true })))
-
-  const response = await fetch('/api/interception-probe')
-
-  expect(await response.json()).toEqual({ intercepted: true })
-}
-```
-
-```ts
-// src/test/msw/interception.test.ts        → runs on happy-dom (`unit`)
-import { it } from 'vitest'
-import { assertMswInterceptsFetch } from './assertInterception'
-
-it('intercepts fetch through msw/node under happy-dom', assertMswInterceptsFetch)
-```
-
-```ts
-// src/test/msw/interception.a11y.test.ts   → runs on jsdom (`a11y`)
-import { it } from 'vitest'
-import { assertMswInterceptsFetch } from './assertInterception'
-
-it('intercepts fetch through msw/node under jsdom', assertMswInterceptsFetch)
-```
-
-If the jsdom one fails, `customExportConditions` was ignored. If the happy-dom one fails, force Node resolution for the whole test build with `resolve: { conditions: ['node'] }` — that is the fix that covers both projects. A per-file `// @vitest-environment jsdom` docblock is not a substitute: it changes only that file's environment, leaving every other file in the `unit` project misresolving.
-
-### Step 5 — Zustand reset harness (`src/__mocks__/zustand.ts`)
-
-Every module-level store persists across tests in the same file. This harness registers a reset for each store as it is created and runs them all after each test, so no store can be forgotten. It is the official Zustand pattern, typed for `strictTypeChecked`.
-
-```ts
-// src/__mocks__/zustand.ts — must sit under Vitest's `root`.
-import { act } from '@testing-library/react'
-import { afterEach, vi } from 'vitest'
-import type * as ZustandExports from 'zustand'
-
-export * from 'zustand'
-
-const { create: actualCreate, createStore: actualCreateStore } =
-  await vi.importActual<typeof ZustandExports>('zustand')
-
-const storeResetFunctions = new Set<() => void>()
-
-const registerReset = <Store extends { getInitialState: () => unknown; setState: (state: never, replace: true) => void }>(
-  store: Store,
-): Store => {
-  const initialState = store.getInitialState() as never
-  // `true` replaces rather than merges, so keys added during a test do not survive.
-  storeResetFunctions.add(() => store.setState(initialState, true))
-  return store
-}
-
-// Both `create` and `createStore` have a curried form (`create<T>()(creator)`), so
-// each wrapper must handle "called with a creator" and "called with nothing".
-export const create = (<StoreState>(
-  stateCreator?: ZustandExports.StateCreator<StoreState>,
-) => {
-  const wrapped = (creator: ZustandExports.StateCreator<StoreState>) =>
-    registerReset(actualCreate(creator))
-  return typeof stateCreator === 'function' ? wrapped(stateCreator) : wrapped
-}) as typeof ZustandExports.create
-
-export const createStore = (<StoreState>(
-  stateCreator?: ZustandExports.StateCreator<StoreState>,
-) => {
-  const wrapped = (creator: ZustandExports.StateCreator<StoreState>) =>
-    registerReset(actualCreateStore(creator))
-  return typeof stateCreator === 'function' ? wrapped(stateCreator) : wrapped
-}) as typeof ZustandExports.createStore
-
-afterEach(() => {
-  act(() => {
-    for (const resetStore of storeResetFunctions) {
-      resetStore()
-    }
-  })
-})
-```
-
-Two gaps to respect. The harness only wraps the `zustand` entry point, so **every store must be created via `create` or `createStore` imported from `'zustand'`** — a store built from `zustand/vanilla`, or from any other specifier, is never registered and will leak. (Wrapping both entry points is why Convention 6 can recommend per-instance `createStore` stores without opening a leak.) And `persist`-backed stores also need `localStorage.clear()` in the same `afterEach`.
-
-### Step 6 — Provider harnesses (`src/test/providers.tsx`)
-
-```tsx
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, type RenderOptions, type RenderResult } from '@testing-library/react'
-import type { JSX, ReactElement, ReactNode } from 'react'
-
-export function createTestQueryClient(): QueryClient {
-  return new QueryClient({
-    defaultOptions: {
-      // The default is 3 retries with backoff, which makes every error-path test time out.
-      queries: { retry: false, staleTime: 0 },
-      mutations: { retry: false },
-    },
-  })
-}
-
-interface RenderWithProvidersOptions extends Omit<RenderOptions, 'wrapper'> {
-  readonly queryClient?: QueryClient
-}
-
-export interface RenderWithProvidersResult extends RenderResult {
-  readonly queryClient: QueryClient
-}
-
-export function renderWithProviders(
-  element: ReactElement,
-  { queryClient = createTestQueryClient(), ...renderOptions }: RenderWithProvidersOptions = {},
-): RenderWithProvidersResult {
-  function Providers({ children }: { readonly children: ReactNode }): JSX.Element {
-    return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-  }
-
-  return { ...render(element, { wrapper: Providers, ...renderOptions }), queryClient }
-}
-```
-
-**Do not** follow RTL's documented `export * from '@testing-library/react'` re-export trick. A barrel that shadows `render` hides which `render` a test is using. Export `renderWithProviders` under its own name and let tests import `screen`, `within`, and `act` from `@testing-library/react` directly.
-
-Two `defaultOptions` cargo-cults to avoid: **`gcTime: Infinity`** is a Jest open-handle workaround and buys nothing under Vitest with a fresh client, and **`logger`** was removed in Query v5 — there is nothing to silence, because Query stopped logging query errors to the console in v4.
-
-### Step 7 — Scripts (`package.json`)
-
-```json
-{
-  "scripts": {
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
-    "test:e2e": "playwright test"
-  }
-}
-```
+The one-time toolchain setup lives in [`setup.md`](setup.md) next to this file: install, the two-project `vite.config.ts`, the global setup file and the jsdom stubs, the MSW server with its interception smoke test, the Zustand reset harness, the provider harness, and the scripts. Read it when bootstrapping a project or when a convention below cites one of its steps. The conventions assume the files it creates:
+
+| File | What the conventions rely on |
+|------|------------------------------|
+| `vite.config.ts` (setup.md Step 2) | `unit` project on happy-dom for `*.test.tsx`, `a11y` project on jsdom for `*.a11y.test.tsx`; the React Compiler runs in the test build |
+| `src/test/setup.ts` (setup.md Step 3) | jest-dom matchers, `reactStrictMode: true`, `throwSuggestions: true`, explicit `afterEach(cleanup)`, `vi.mock('zustand')` |
+| `src/test/setup-msw.ts` + `src/test/msw/` (setup.md Step 4) | `server` listening with `onUnhandledFrame: 'error'`, a `server.boundary` per test, typed handlers, `serverErrorResolver` |
+| `__mocks__/zustand.ts` at the project root (setup.md Step 5) | every store created through `'zustand'` resets after each test |
+| `src/test/providers.tsx` (setup.md Step 6) | `renderWithProviders`, `createTestQueryClient` |
 
 ## The testing pyramid
 
@@ -509,7 +106,7 @@ Find elements the way a user (or a screen reader) finds them. Use this priority 
 3. `getByText` — visible, non-interactive copy
 4. `getByTestId` — **escape hatch only**, for elements with no accessible role or stable text
 
-**Never** select by CSS class, tag name, or `container.querySelector`. Class names exist for styling; coupling a test to them means a purely visual change turns a green test red for no behavioral reason. `throwSuggestions: true` (Step 3) makes this mechanical rather than a review comment.
+**Never** select by CSS class, tag name, or `container.querySelector`. Class names exist for styling; coupling a test to them means a purely visual change turns a green test red for no behavioral reason. `throwSuggestions: true` (setup.md Step 3) makes this mechanical rather than a review comment.
 
 ```tsx
 // ❌ Coupled to markup and styling — an anti-pattern
@@ -603,14 +200,14 @@ Prefer injecting a hook's collaborators as parameters, as above, so the test nee
 
 ```ts
 it('clears the status filter without touching the sort order', () => {
-  useBackupFilterStore.getState().applyStatusFilter('failed')
-  useBackupFilterStore.getState().changeSortOrder('name-ascending')
+  useBackupFilterStore.getState().applyStatusFilter(BackupStatus.Failed)
+  useBackupFilterStore.getState().changeSortOrder(SortOrder.NameAscending)
 
   useBackupFilterStore.getState().clearStatusFilter()
 
   const { statusFilter, sortOrder } = useBackupFilterStore.getState()
   expect(statusFilter).toBeNull()
-  expect(sortOrder).toBe('name-ascending')
+  expect(sortOrder).toBe(SortOrder.NameAscending)
 })
 ```
 
@@ -624,7 +221,7 @@ Fake HTTP at the network layer — never the app's own API module, and never the
 
 ```tsx
 it('shows a retry affordance when the backup list fails', async () => {
-  server.use(http.get('/api/backups', serverErrorResolver))
+  server.use(http.get(BACKUPS_API_PATH, serverErrorResolver))
 
   renderWithProviders(<BackupListPage />)
 
@@ -669,7 +266,7 @@ Rules: `getByRole` first, never a CSS class. Use **web-first auto-retrying asser
 - **Co-locate** tests next to their source. No `__tests__/` directory: the feature folders already carry meaning (`components`, `hooks`, `api`, `stores`), and a folder level that means nothing just moves a test two path segments away from its subject. A missing test is then visible at a glance.
 - **`*.test.ts` / `*.test.tsx` = Vitest. `*.spec.ts` = Playwright, in `e2e/` at the component root.** The extension names the runner, which matters because the two `expect`s have different matchers and different retry semantics. Never mix conventions within one runner.
 - **Two infixes carry meaning.** `*.route.test.tsx` marks the expensive router-mounting tests so they stay greppable and cappable (Convention 14). `*.a11y.test.tsx` routes a file to the jsdom project (Convention 16) — that one is not cosmetic, it selects the environment.
-- **Enforce the split on both sides**: Vitest `include`/`exclude` (Step 2), Playwright `testDir: './e2e'` + `testMatch: '**/*.spec.ts'`, plus ESLint `no-restricted-imports` forbidding `@playwright/test` under `src/` and `vitest` under `e2e/`. Playwright's `test()` running under Vitest produces an inscrutable error, so belt and braces are worth it.
+- **Enforce the split on both sides**: Vitest `include`/`exclude` (setup.md Step 2), Playwright `testDir: './e2e'` + `testMatch: '**/*.spec.ts'`, plus ESLint `no-restricted-imports` forbidding `@playwright/test` under `src/` and `vitest` under `e2e/`. Playwright's `test()` running under Vitest produces an inscrutable error, so belt and braces are worth it.
 
 ```
 src/features/backups/
@@ -716,12 +313,12 @@ Tests are read far more than they are written, and they document the behavior th
 ```tsx
 // ❌
 const u = userEvent.setup()
-backups.filter(b => b.status === 'failed')
+backups.filter(b => b.status === BackupStatus.Failed)
 <input onChange={(e) => setSearchQuery(e.target.value)} />
 
 // ✅
 const user = userEvent.setup()
-const failedBackups = backups.filter(backup => backup.status === 'failed')
+const failedBackups = backups.filter(backup => backup.status === BackupStatus.Failed)
 <input onChange={(event) => setSearchQuery(event.target.value)} />
 ```
 
@@ -735,7 +332,7 @@ A second assertion after a failure never runs, so a multi-behavior test actively
 
 ## Convention 13: Server state — fresh `QueryClient` per test, assert through the cache
 
-A `QueryClient` is a cache. Share one across tests and test B reads test A's data without ever hitting MSW, "loading state" assertions fail because the data is already cached, and a `gcTime` timer from one test fires during another. `createTestQueryClient()` (Step 6) is cheaper than remembering those constraints.
+A `QueryClient` is a cache. Share one across tests and test B reads test A's data without ever hitting MSW, "loading state" assertions fail because the data is already cached, and a `gcTime` timer from one test fires during another. `createTestQueryClient()` (setup.md Step 6) is cheaper than remembering those constraints.
 
 Assert the **observable consequence** of a mutation, not that `invalidateQueries` was called — the former catches a wrong query key, which is the actual bug class.
 
@@ -744,10 +341,10 @@ it('shows the new backup in the list after the mutation settles', async () => {
   const user = userEvent.setup()
   let createdBackupExists = false
   server.use(
-    http.get('/api/backups', () =>
+    http.get(BACKUPS_API_PATH, () =>
       HttpResponse.json({ items: createdBackupExists ? [buildBackup()] : [], total: createdBackupExists ? 1 : 0 }),
     ),
-    http.post('/api/backups', () => {
+    http.post(BACKUPS_API_PATH, () => {
       createdBackupExists = true
       return HttpResponse.json(buildBackup(), { status: 201 })
     }),
@@ -778,7 +375,7 @@ For route files, build the test router from the **generated** `routeTree.gen` wi
 ```tsx
 it('applies the status filter from the URL', async () => {
   await renderWithRouter({ initialLocation: '/backups?status=failed' })
-  expect(await screen.findByRole('combobox', { name: 'Status' })).toHaveValue('failed')
+  expect(await screen.findByRole('combobox', { name: 'Status' })).toHaveValue(BackupStatus.Failed)
 })
 ```
 
@@ -790,7 +387,7 @@ This stack has **two independent reasons** to ban these assertions.
 
 **The React Compiler** decides memoization granularity, and React's own guidance tells teams to pin it to an exact version because output can shift between releases. So `expect(firstCallback).toBe(secondCallback)` asserts compiler output granularity, not your app — a compiler patch bump turns the suite red with no product defect. `React.memo`, `useMemo`, and `useCallback` are now escape hatches the compiler makes redundant, so "memo prevented this render" asserts scaffolding that should not be there.
 
-**StrictMode** (on by default here, Step 3) adds an extra render-body invocation and runs effects setup → cleanup → setup, so every effect-call-count assertion is off by one by design.
+**StrictMode** (on by default here, setup.md Step 3) adds an extra render-body invocation and runs effects setup → cleanup → setup, so every effect-call-count assertion is off by one by design.
 
 ```tsx
 // ❌ Off by one under StrictMode, unstable under the compiler, and never a good assertion
@@ -802,7 +399,7 @@ expect(await screen.findByRole('row', { name: /nightly-backup/i })).toBeInTheDoc
 
 **When a test fails only under StrictMode, read what differs before touching the config.** If observable state or DOM differs — a duplicated list item, a leaked listener — StrictMode found a real defect: an impure render or a missing cleanup. Fix the component. If only a call count differs on an otherwise-idempotent effect, the **test** is wrong; rewrite it to assert the outcome. Never "fix" it by disabling StrictMode.
 
-**Keep the compiler on in the test build (Step 2) — but know that this one is a genuine judgment call.** The compiler *does* run under Vitest whenever the single `vite.config.ts` is used, and there is no documented switch to disable it in test mode. The case for leaving it on: a suite running uncompiled code is not testing what ships, and the compiler is precisely the layer most likely to surprise you, since React's own guidance is that code relying on memoization *for correctness* can break under it. The case against, which is a defensible house standard elsewhere: compiling costs test speed and measurably corrupts branch coverage, and `eslint-plugin-react-hooks` v7 now carries the compiler's own rules, so Rules-of-React violations are caught at lint time regardless. This skill chooses **on**, and pays for it by setting the branch threshold below lines (Convention 10). If your project would rather have fast, honest coverage and lean on the lint gate, that is a legitimate inversion — make it deliberately, in one place, and write down which way you went.
+**Keep the compiler on in the test build (setup.md Step 2) — but know that this one is a genuine judgment call.** The compiler *does* run under Vitest whenever the single `vite.config.ts` is used, and there is no documented switch to disable it in test mode. The case for leaving it on: a suite running uncompiled code is not testing what ships, and the compiler is precisely the layer most likely to surprise you, since React's own guidance is that code relying on memoization *for correctness* can break under it. The case against, which is a defensible house standard elsewhere: compiling costs test speed and measurably corrupts branch coverage, and `eslint-plugin-react-hooks` v7 now carries the compiler's own rules, so Rules-of-React violations are caught at lint time regardless. This skill chooses **on**, and pays for it by setting the branch threshold below lines (Convention 10). If your project would rather have fast, honest coverage and lean on the lint gate, that is a legitimate inversion — make it deliberately, in one place, and write down which way you went.
 
 For genuine "the network was hit exactly once" requirements, assert at the network boundary where request deduplication is part of the behavior under test — not at the effect-call-count level. Ban render-counting tooling (`react-performance-testing`, `<Profiler onRender>`) from the unit tier; if you need to know a component's cost, measure it with a benchmark or a Playwright trace.
 
@@ -810,7 +407,7 @@ For genuine "the network was hit exactly once" requirements, assert at the netwo
 
 Use **`axe-core` directly** with a small typed matcher, in files named `*.a11y.test.tsx`.
 
-**These tests are their own Vitest project, running on jsdom (Step 2).** axe is documented to break on happy-dom's `Node.prototype.isConnected`, so it cannot run in the default `unit` project. The naming convention is what routes a file to the right environment, which means the suffix is load-bearing rather than decorative: name an accessibility test `Component.test.tsx` and it runs on happy-dom, where axe is unreliable and may report a false pass. That is the one failure mode of this split, and it is why the assertion lives behind a dedicated matcher name you can grep for.
+**These tests are their own Vitest project on jsdom (setup.md Step 2), because axe does not run reliably on happy-dom — the trade is in The stack.** The `*.a11y.test.tsx` suffix is what routes a file there, so it is load-bearing: name an accessibility test `Component.test.tsx` and axe may false-pass on happy-dom. That is the one failure mode of the split, and why the assertion lives behind a dedicated matcher name you can grep for.
 
 ```ts
 // src/test/accessibility.ts
@@ -881,14 +478,14 @@ Scan page-level routes in E2E with `@axe-core/playwright`, attaching results to 
 
 Asynchrony is the top source of flaky React tests, and almost all of it comes from four mistakes.
 
-- **`userEvent.setup()` before render, once per test, and `await` every `user.*` call.** Missing awaits are the single biggest cause of "element not found" flakes. Direct calls (`userEvent.click(element)`) exist only to ease v13 migration — ban them; one form only.
+- **`userEvent.setup()` before render, once per test, and `await` every `user.*` call.** Missing awaits are the single biggest cause of "element not found" flakes. Vitest 5 fails a test whose asynchronous *assertion* (`resolves`, `rejects`, an async custom matcher) is not awaited; a missing `await` on a `user.*` call is still on you. Direct calls (`userEvent.click(element)`) exist only to ease v13 migration — ban them; one form only.
 - **`await screen.findBy*` for appearance**, `waitForElementToBeRemoved` for disappearance, and `waitFor` only when what you are awaiting is not a DOM query (a spy count, `router.state`, cache contents). `findBy*` is `getBy* + waitFor` with the retry, timeout, and — critically — the *failure message* already wired up. Never put multiple assertions or side effects inside `waitFor`: the callback runs a non-deterministic number of times, and a failure in the second assertion waits out the whole timeout instead of failing fast.
 - **Never wrap `render`, `fireEvent`, or `user.*` in `act()`.** All three already do it, and the extra wrapper swallows the warning that was trying to tell you something. `act` is for driving state outside those helpers — a hook action (Convention 5) or a timer advance.
 - **Never use an arbitrary `setTimeout` wait.** It is too short on a loaded CI runner and wasted seconds everywhere else.
 
 Prefer `fireEvent` only for events `user-event` cannot produce (synthetic `scroll`, `transitionEnd`). `fireEvent.change` fires one event where a real user produces keydown/keypress/input/keyup, so tests can pass on interactions that are impossible in a browser.
 
-**Fake timers are a last resort.** They fight `user-event`'s internal delays and `waitFor`'s polling. Most "I need fake timers" cases are really "I need to assert a debounced outcome," which `await screen.findBy*` handles without touching the clock. When you genuinely need them, scope them to the one test, use `advanceTimersByTimeAsync` so React's scheduler and promise chains flush, restore in a `finally`, and if the test also drives the UI, pass `advanceTimers` to `userEvent.setup()`.
+**Fake timers are a last resort.** They fight `user-event`'s internal delays and `waitFor`'s polling. Most "I need fake timers" cases are really "I need to assert a debounced outcome," which `await screen.findBy*` handles without touching the clock. When you genuinely need them, scope them to the one test, use `advanceTimersByTimeAsync` so React's scheduler and promise chains flush, restore in a `finally`, and if the test also drives the UI, pass `advanceTimers` to `userEvent.setup()`. MSW 3 no longer patches `setTimeout` to dodge fake timers, so a handler that uses `delay()` resolves only when you advance the clock.
 
 ## Quick reference
 
@@ -906,36 +503,6 @@ Prefer `fireEvent` only for events `user-event` cannot produce (synthetic `scrol
 | Server state | fresh `createTestQueryClient()` per test; assert rendered output |
 | Route params / search | `renderWithRouter({ initialLocation })` in a `*.route.test.tsx` file |
 | Type a mock | `vi.fn<typeof realFunction>()` or `vi.fn<Props['onDelete']>()` |
-| Build test data | `buildBackup({ status: 'failed' })` factory |
+| Build test data | `buildBackup({ status: BackupStatus.Failed })` factory |
 | Accessibility | `await expect(container).toHaveNoAccessibilityViolations()` in a `*.a11y.test.tsx` file |
 | Critical user journey | Playwright spec in `e2e/*.spec.ts` |
-
-## Common mistakes
-
-| Mistake | Fix |
-|---------|-----|
-| Asserting on state internals or effect call counts | Assert rendered output and callback props (Conventions 1, 15) |
-| `container.querySelector('.some-class')` | Query by role/label/text; `data-testid` only as a last resort (Convention 2) |
-| `vi.mock()` on a child component or your own API module | Render real children; mock the network with MSW (Conventions 3, 7) |
-| `import { renderHook } from '@testing-library/react-hooks'` | It is dead and errors on React 19 — import from `@testing-library/react` (Convention 5) |
-| `jest-axe` or `vitest-axe` | Unmaintained or untypeable — `axe-core` plus the typed matcher (Convention 16) |
-| An axe assertion in a plain `*.test.tsx` | It runs on happy-dom, where axe is unreliable and may false-pass. Rename to `*.a11y.test.tsx` (Convention 16) |
-| Stubbing `matchMedia`/`ResizeObserver` globally | happy-dom implements them; a global stub makes the unit project test a no-op. Stubs load only in the jsdom project (Steps 2–3) |
-| A root-level `include` alongside `projects` | Inherited arrays concatenate, so it widens every project's include and runs your suite twice. Give each project its own (Step 2) |
-| Missing `await` on a `user.*` call | `await` every one; that is the #1 flake source (Convention 17) |
-| `act()` around `render` / `fireEvent` / `user.*` | Redundant, and it hides the warning you needed (Convention 17) |
-| Arbitrary `setTimeout` waits | `await screen.findBy*` / `waitForElementToBeRemoved` (Convention 17) |
-| Multiple assertions inside `waitFor` | One assertion, or use `findBy*` (Convention 17) |
-| `import '@testing-library/jest-dom'` under Vitest | Import `'@testing-library/jest-dom/vitest'` or matchers never register (Step 3) |
-| Relying on RTL auto-cleanup with `globals: false` | Register `afterEach(cleanup)` yourself (Step 3) |
-| `react({ babel: { plugins: [...] } })` for the compiler | Removed in plugin-react 6 — use `reactCompilerPreset` (Step 2) |
-| A separate `vitest.config.ts` | It makes `vite.config.ts` ignored and silently drops the compiler (Step 2) |
-| Sharing one `QueryClient` across tests | Fresh client per test; `retry: false`, no `gcTime: Infinity` (Convention 13) |
-| `gcTime: Infinity` or `logger` in test query options | Jest-only workaround; `logger` was removed in v5 (Step 6) |
-| Asserting `isLoading` from v4 habit | `isLoading` changed meaning in v5 — prefer `isPending`, or assert output (Convention 13) |
-| `renderWithRouter` for a feature component | Pass route data as props; only route files touch the router (Convention 14) |
-| Snapshotting whole component trees | Assert specific behavior; snapshots rot and get re-blessed unread |
-| A store created via `zustand/vanilla` | Create via `'zustand'` or the reset harness never sees it (Step 5) |
-| E2E for what a component test covers | Drop to a component test; reserve E2E for journeys (Convention 8) |
-| One giant `it('works')` | One behavior per test (Convention 12) |
-| Chasing a coverage percentage | Coverage is a signal; ratchet the floor (Convention 10) |
