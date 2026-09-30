@@ -97,8 +97,9 @@ For every task:
 
 ## Decision Heuristics
 
-- **Where does the failing test go?** Mirror the project's existing test layout
-  near the buggy behavior.
+- **Where does the failing test go?** Under the top-level `tests/` beside
+  `src/`, never inside `src/`; mirror the project's existing test layout near
+  the buggy behavior.
 - **What level of test?** Use the lowest-level deterministic test that fails
   for the right reason. Mock only at architectural boundaries such as
   repositories, HTTP clients, queues, or other external adapters.
