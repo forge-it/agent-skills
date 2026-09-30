@@ -1,16 +1,20 @@
 ---
 name: frontend-vue-code-style
-description: Patterns and conventions for writing clean, maintainable Vue 3 applications. Use when writing or reviewing Vue components, composables, stores, or project structure — enforces consistent data flow, component design, and type safety across the codebase.
+description: Use when writing or reviewing Vue components, composables, provide/inject pairs, Pinia stores, routes, watchers, or TypeScript types in a Vue 3 SPA — the house patterns for data flow, state ownership, and type safety.
 vibe: Keeps Vue codebases predictable, traceable, and free of spaghetti.
-license: UNLICENSED
+license: MIT
 metadata:
-  author: Cristian
-  version: "0.0.9"
+  author: cristian.ciortea@syneto.eu
+  version: "0.0.10"
 ---
 
 # Vue Code Style — Patterns & Conventions
 
 A living collection of patterns that every component, composable, and store in this codebase must follow. When in doubt, check here first.
+
+This is the Vue sibling of `frontend-react-code-style`; Patterns 1–12 cover the same concerns under the same numbers, Pattern 13 is React's Pattern 15 (closed sets are enum objects), and Pattern 14 is the Vue analog of React's Pattern 13 (derive, don't watch) — numbers are stable identifiers and are never renumbered.
+
+**Stack assumptions:** Vue 3.5+ with `<script setup>` and TypeScript in strict mode checked by `vue-tsc`, Pinia 4 setup stores (ESM-only; `@vue/devtools-api` is installed alongside it) with `pinia-plugin-persistedstate` 4, Vue Router 5 with typed file-based routes, Vite SPA (no SSR framework), server data fetched by store actions through the feature's `api/` module. Vue 3.6 (Vapor) is still a release candidate and is not assumed. Where a different stack choice changes a rule, the pattern names the fallback.
 
 ---
 
@@ -166,14 +170,15 @@ onMounted(fetchBackups)
 
 ---
 
-## Pattern 3: Typed provide/inject with InjectionKey
+## Pattern 3: Typed provide/inject — Provider Function + Throwing Composable
 
-**Why:** Without it, you either prop-drill through layers of components that don't care about the data, or use string-based injection that silently breaks on typos with no type safety.
+**Why:** Without it, you either prop-drill through layers of components that don't care about the data, or use string-based injection that silently breaks on typos with no type safety. A typed key alone is not enough: `inject()` returns `undefined` when nobody provided the value and carries on, so a missing provider is the same silent failure.
 
-**Rule:** Define injection keys in a shared `keys.ts` file using `InjectionKey<T>`. Always provide reactive values (`Ref`, not raw primitives) so consumers stay reactive. Never use bare string keys.
+**Rule:** Model each injection as a module that owns a private `InjectionKey<T>` and exports exactly two functions: `provideX()` for the ancestor and `useX()` for consumers, where `useX()` throws when the value is missing — consumers never see `undefined` and never type-assert. Provide reactive values (`Ref`, not raw primitives) so consumers stay reactive. Never use bare string keys, never export the raw key, and never pass `inject()` a default: the default is only reachable when someone forgot the provider, and that must crash loudly.
+
 ```typescript
-// ✅ src/keys.ts — typed, Symbol-based, single source of truth
-import type { InjectionKey, Ref } from 'vue'
+// ✅ src/features/auth/userRole.ts — the key stays private; two functions are the whole API
+import { inject, provide, ref, type InjectionKey, type Ref } from 'vue'
 
 export const UserRole = {
   Admin: 'admin',
@@ -183,27 +188,38 @@ export const UserRole = {
 
 export type UserRole = (typeof UserRole)[keyof typeof UserRole]
 
-export const userRoleKey: InjectionKey<Ref<UserRole>> = Symbol('userRole')
+const userRoleKey: InjectionKey<Ref<UserRole>> = Symbol('userRole')
+
+export function provideUserRole(initialRole: UserRole): Ref<UserRole> {
+  const userRole = ref<UserRole>(initialRole)
+  provide(userRoleKey, userRole)
+  return userRole
+}
+
+export function useUserRole(): Ref<UserRole> {
+  const userRole = inject(userRoleKey)
+  if (!userRole) {
+    throw new Error('useUserRole must be called in a component below provideUserRole')
+  }
+  return userRole
+}
 ```
 ```vue
 <!-- ✅ Provider — high in the tree -->
 <!-- App.vue -->
 <script setup lang="ts">
-import { provide, ref } from 'vue'
-import { userRoleKey, UserRole } from '@/keys'
+import { provideUserRole, UserRole } from '@/features/auth/userRole'
 
-const userRole = ref<UserRole>(UserRole.Admin)
-provide(userRoleKey, userRole)
+provideUserRole(UserRole.Viewer)
 </script>
 ```
 ```vue
-<!-- ✅ Consumer — anywhere deeper, no prop drilling -->
+<!-- ✅ Consumer — anywhere deeper, no prop drilling, no undefined check -->
 <!-- ServerRow.vue -->
 <script setup lang="ts">
-import { inject } from 'vue'
-import { userRoleKey, UserRole } from '@/keys'
+import { useUserRole, UserRole } from '@/features/auth/userRole'
 
-const userRole = inject(userRoleKey)
+const userRole = useUserRole()
 </script>
 
 <template>
@@ -214,9 +230,13 @@ const userRole = inject(userRoleKey)
 // ❌ WRONG — string key, no types, typo = silent undefined
 provide('userole', userRole)         // typo, nobody catches it
 const role = inject('userRole')      // type is unknown
+
+// ❌ WRONG — exported key plus a fallback default; a missing provider becomes a silent bug
+export const userRoleKey: InjectionKey<Ref<UserRole>> = Symbol('userRole')
+const userRole = inject(userRoleKey, ref(UserRole.Viewer))
 ```
 
-**When to use:** Data needed 3+ levels deep where intermediate components don't use it. For direct parent-child, use props. For global state with read/write from anywhere, use Pinia stores.
+**When to use:** Low-frequency, dependency-injection-shaped values needed 3+ levels deep — theme, current user, locale, feature flags. Anything else is placed by Pattern 7's decision rule.
 
 ---
 
@@ -227,22 +247,22 @@ const role = inject('userRole')      // type is unknown
 **Rule:** Every composable follows these five constraints:
 
 1. **Single responsibility** — one composable, one concern.
-2. **Ref in, ref out** — accept `Ref<T>` as input so it stays reactive, return an object of refs so consumers can destructure.
-3. **Cleanup on unmount** — if it creates timers, listeners, or connections, it cleans them up in `onUnmounted`.
+2. **Reactive in, refs out** — accept `MaybeRefOrGetter<T>` and read it through `toValue()`, so a caller can pass a ref, a getter over props (`() => props.backups`), or a plain value; return an object of refs so consumers can destructure.
+3. **Cleanup mirrors setup** — if it creates timers, listeners, or connections, it undoes them in `onUnmounted` (`onScopeDispose` when it may run outside a component).
 4. **Object return shape** — always return a plain object with named properties, never an array.
 5. **Synchronous invocation** — call composables at the top level of `<script setup>`, never inside callbacks, conditions, or async functions.
 
 ```typescript
-// ✅ CORRECT — focused, ref in / ref out, cleanup, object return
-import { ref, computed, onMounted, onUnmounted, type Ref } from 'vue'
+// ✅ CORRECT — focused, reactive in / refs out, object return
+import { computed, ref, toValue, type MaybeRefOrGetter } from 'vue'
 import { BackupStatus } from '@/features/backups/constants'
 
-export function useBackupSearch(backups: Ref<Backup[]>) {
+export function useBackupSearch(backups: MaybeRefOrGetter<Backup[]>) {
   const searchQuery = ref('')
   const showArchived = ref(false)
 
   const filteredBackups = computed(() =>
-    backups.value.filter(backup => {
+    toValue(backups).filter(backup => {
       const matchesSearch = backup.name
         .toLowerCase()
         .includes(searchQuery.value.toLowerCase())
@@ -260,26 +280,18 @@ export function useBackupSearch(backups: Ref<Backup[]>) {
 ```
 
 ```typescript
-// ✅ CORRECT — cleanup on unmount
-export function usePolling(url: string, intervalMs = 30_000) {
-  const data = ref<unknown>(null)
-  let timerId: number | undefined
+// ✅ CORRECT — cleanup mirrors setup; the composable subscribes to an external system
+import { onMounted, onUnmounted } from 'vue'
 
-  async function poll() {
-    const response = await fetch(url)
-    data.value = await response.json()
+export function useEscapeKey(onEscape: () => void): void {
+  function handleKeyDown(event: KeyboardEvent): void {
+    if (event.key === 'Escape') {
+      onEscape()
+    }
   }
 
-  onMounted(() => {
-    poll()
-    timerId = window.setInterval(poll, intervalMs)
-  })
-
-  onUnmounted(() => {
-    clearInterval(timerId)
-  })
-
-  return { data, refresh: poll }
+  onMounted(() => document.addEventListener('keydown', handleKeyDown))
+  onUnmounted(() => document.removeEventListener('keydown', handleKeyDown))
 }
 ```
 
@@ -324,7 +336,7 @@ const notifications = ref<Notification[]>([])  // outside the function
 
 export function useNotifications() {
   function notify(message: string): void {
-    notifications.value.push({ id: String(Date.now()), message })
+    notifications.value.push({ id: crypto.randomUUID(), message })
   }
 
   function dismiss(id: string): void {
@@ -348,7 +360,7 @@ export function useItems() {
 }
 ```
 
-**When to use shared:** Cross-component state that isn't global enough for a Pinia store — notifications, toasts, a sidebar collapse toggle, a "currently editing" flag. **When to use per-component:** Any logic where each component instance needs its own independent copy — form state, local search queries, component-scoped timers.
+**Which one:** Pattern 7's decision rule places it — function-level for anything each instance owns (form state, a local search query, a component-scoped timer), module-level for a few components in one feature sharing a notification list or a "currently editing" flag, Pinia beyond that.
 
 ---
 
@@ -360,44 +372,22 @@ export function useItems() {
 
 ```vue
 <!-- ✅ CORRECT — descriptive, searchable, consistent -->
-<template>
-  <tr v-for="backup in backups" :key="backup.id">
-    <td>{{ backup.name }}</td>
-    <td>{{ backup.status }}</td>
-  </tr>
-</template>
-```
-```vue
+<tr v-for="backup in backups" :key="backup.id"><td>{{ backup.name }}</td></tr>
+
 <!-- ❌ WRONG — single-letter loop variable -->
-<template>
-  <tr v-for="b in backups" :key="b.id">
-    <td>{{ b.name }}</td>
-  </tr>
-</template>
+<tr v-for="b in backups" :key="b.id"><td>{{ b.name }}</td></tr>
 ```
 
 ```typescript
-// ✅ CORRECT — callback parameters are descriptive
+// ✅ CORRECT — callback parameters and state names are descriptive; booleans read as a question
 backups.value.filter(backup => backup.status !== BackupStatus.Archived)
-notifications.value.filter(notification => notification.id !== id)
-users.map(user => user.email)
-
-// ❌ WRONG — single-letter or abbreviated callback parameters
-backups.value.filter(b => b.status !== BackupStatus.Archived)
-notifications.value.filter(n => n.id !== id)
-users.map(u => u.email)
-```
-
-```typescript
-// ✅ CORRECT — descriptive variable names
-const searchQuery = ref('')
 const selectedBackupId = ref<string | null>(null)
 const isLoading = ref(false)
 
-// ❌ WRONG — abbreviated or vague names
-const sq = ref('')
+// ❌ WRONG — single-letter, abbreviated, or vague names
+backups.value.filter(b => b.status !== BackupStatus.Archived)
 const selId = ref<string | null>(null)
-const loading = ref(false)  // "loading" is ambiguous — loading what?
+const loading = ref(false)  // loading what?
 ```
 
 **Rationale:** This rule applies everywhere: `v-for` loops, `.map()`, `.filter()`, `.find()`, `.reduce()`, `.forEach()`, computed properties, and any other context where a variable is introduced. No exceptions.
@@ -658,53 +648,64 @@ export const LIST_STALE_TIME_MS = 30_000
 
 ---
 
-## Pattern 10: Route Organization — Named Routes, Lazy Loading, Typed Meta, Reactive Params
+## Pattern 10: Route Organization — Typed File-Based Routes, Typed Meta, Reactive Params
 
-**Why:** Hardcoded paths like `router.push('/backups/bk-001')` break silently when you rename routes. Eagerly imported route components bloat the initial bundle. Untyped `route.meta` gives you `unknown` everywhere. Destructured `route.params` loses reactivity and causes stale data.
+**Why:** Hand-built paths like `router.push('/backups/' + id)` break silently when a route changes. Eagerly imported route components bloat the initial bundle. Untyped `route.meta` and `route.params` give you `unknown` (or a lying `string`) everywhere. Destructured `route.params` loses reactivity and goes stale on navigation.
 
-**Rule:** Always navigate by route name, never by path string. Lazy-load every route component with dynamic `import()`. Type `RouteMeta` globally so guards and components get type safety. Read route params through `computed()` to stay reactive — never destructure `route.params` directly.
+**Rule:** Routes are generated, not hand-listed. With Vue Router 5 (our default) the Vite plugin from `vue-router/vite` scans `src/pages/`, emits `typed-router.d.ts` (add it to the tsconfig `include`), and lazy-loads every page by default, so code splitting is not a per-route chore. Navigate by typed route name — `router.push({ name: '/backups/[id]', params: { id } })` and `<RouterLink :to>` fail `vue-tsc` when a page is renamed or a param is missing. Read params through `useRoute('/backups/[id]')`, which types them and stays reactive; never destructure `route.params`. Put per-page meta in `definePage()` and type `RouteMeta` once, globally. Page files under `src/pages/` stay thin: they mount the feature's page component and nothing else.
 
 ```typescript
-// ✅ CORRECT — named routes, lazy-loaded, typed meta
-// src/app/router.ts
-import { createRouter, createWebHistory } from 'vue-router'
+// ✅ CORRECT — vite.config.ts: the router plugin runs before the Vue plugin
+import { defineConfig } from 'vite'
+import vue from '@vitejs/plugin-vue'
+import VueRouter from 'vue-router/vite'
 
-const router = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL),
-  routes: [
-    {
-      path: '/',
-      component: () => import('@/app/AppLayout.vue'),
-      meta: { requiresAuth: true },
-      children: [
-        {
-          path: 'backups',
-          name: 'backups',
-          component: () => import('@/features/backups/BackupListPage.vue'),
-          meta: { title: 'Backups' },
-        },
-        {
-          path: 'backups/:id',
-          name: 'backup-detail',
-          component: () => import('@/features/backups/BackupDetailPage.vue'),
-          meta: { title: 'Backup Details' },
-        },
-      ],
-    },
-    {
-      path: '/:pathMatch(.*)*',
-      name: 'not-found',
-      component: () => import('@/app/NotFoundPage.vue'),
-    },
+export default defineConfig({
+  plugins: [
+    VueRouter({ routesFolder: 'src/pages', dts: 'src/typed-router.d.ts' }),
+    vue(),
   ],
 })
+```
+
+```typescript
+// ✅ CORRECT — src/app/router.ts: generated routes, nothing hand-listed
+import { createRouter, createWebHistory } from 'vue-router'
+import { routes, handleHotUpdate } from 'vue-router/auto-routes'
+
+export const router = createRouter({
+  history: createWebHistory(import.meta.env.BASE_URL),
+  routes,
+})
+
+if (import.meta.hot) {
+  handleHotUpdate(router)
+}
+```
+
+```vue
+<!-- ✅ CORRECT — src/pages/backups/[id].vue: thin page file; meta via definePage; typed, reactive params -->
+<script setup lang="ts">
+import { useRoute } from 'vue-router'
+import BackupDetailPage from '@/features/backups/BackupDetailPage.vue'
+
+definePage({ meta: { requiresAuth: true, title: 'Backup Details' } })
+
+const route = useRoute('/backups/[id]')  // route.params.id is `string`, no cast
+</script>
+
+<template>
+  <BackupDetailPage :backup-id="route.params.id" />
+</template>
 ```
 
 ```typescript
 // ✅ CORRECT — type RouteMeta globally
 // src/app/router.d.ts
 import 'vue-router'
-import type { UserRole } from '@/keys'
+import type { UserRole } from '@/features/auth/userRole'
+
+export {}
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -716,44 +717,26 @@ declare module 'vue-router' {
 ```
 
 ```typescript
-// ✅ CORRECT — navigate by name, read params reactively
-import { computed } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+// ✅ CORRECT — typed navigation; a renamed page or a missing param fails vue-tsc
+router.push({ name: '/backups/[id]', params: { id: backup.id } })
+```
 
-const router = useRouter()
-const route = useRoute()
+```typescript
+// ❌ WRONG — hand-built path string; vue-tsc rejects it under typed routes, and it breaks silently without them
+router.push('/backups/' + backup.id)
+router.push(`/backups/${backup.id}`)
 
-// Navigate by name — rename the path later without breaking this
-router.push({ name: 'backup-detail', params: { id: 'bk-001' } })
+// ❌ WRONG — destructured params: a plain snapshot that goes stale on navigation
+const { id } = route.params
 
-// Reactive param — updates when URL changes
+// ❌ WRONG — the cast that typed routes make unnecessary
 const backupId = computed(() => route.params.id as string)
+
+// ❌ WRONG — a hand-maintained route next to the generated list; two sources of truth
+routes: [...routes, { path: '/settings', component: () => import('@/features/settings/SettingsPage.vue') }]
 ```
 
-```typescript
-// ❌ WRONG — hardcoded path, breaks silently if path changes
-router.push('/backups/bk-001')
-router.push(`/backups/${id}`)
-```
-
-```typescript
-// ❌ WRONG — eagerly imported, included in main bundle even if never visited
-import SettingsPage from '@/features/settings/SettingsPage.vue'
-
-{
-  path: 'settings',
-  component: SettingsPage,  // loaded on startup, wastes bandwidth
-}
-```
-
-```typescript
-// ❌ WRONG — destructured params, loses reactivity
-const { id } = route.params  // plain string snapshot, goes stale on navigation
-
-// ❌ WRONG — untyped meta, guard has no type safety
-if (to.meta.requiresAuth) {  // 'unknown', no autocomplete, no compile-time check
-}
-```
+**Fallback:** a project on Vue Router 4, or one that keeps a hand-written `routes` array, holds the same invariants by convention: every route has a `name`, navigation goes by name only, every `component` is a dynamic `import()`, params are read through `computed(() => route.params.id)`, and `RouteMeta` is typed as above.
 
 ---
 
@@ -793,16 +776,7 @@ function toggleExpanded(backupId: string): void { /* ... */ }
 3. `Partial<T>` for a partial mock
 4. A typed mock factory that returns `T`
 5. `as unknown as T` for a deliberate, greppable cast
-6. `// @ts-expect-error` on the single line that feeds intentionally-invalid input
-
-Testing is where `any` is most tempting; these cover the real cases without it:
-
-| You reach for `any` because… | Use instead |
-| --- | --- |
-| Building a partial mock object | `Partial<User>`, or a typed factory `(overrides?: Partial<User>): User` |
-| Forcing an incompatible shape | `as unknown as User` — explicit and searchable |
-| Passing **invalid** input to test error handling | `// @ts-expect-error` on that one line (self-documenting; fails if the error disappears) |
-| An untyped third-party test helper | `unknown` + narrow, or declare a minimal local type |
+6. `// @ts-expect-error` on the single line that feeds intentionally-invalid input — self-documenting, and it fails the build if the error ever disappears
 
 ```typescript
 // ✅ CORRECT — typed mock factory, no `any`
@@ -827,7 +801,7 @@ expect(screen.getByText('Ada')).toBeTruthy()       // green, but exercised nothi
 const response = await fetchUser() as any
 ```
 
-**Enforcement:** this is enforced by `@typescript-eslint/no-explicit-any` (`error`) in both app and test files — see [[frontend-vue-eslint-setup]]. The escape hatches above (`as unknown as T`, `@ts-expect-error`) are deliberately *not* `any`, so they pass the rule while staying explicit and local.
+**Enforcement:** this is enforced by `@typescript-eslint/no-explicit-any` (`error`) in both app and test files — see `frontend-vue-eslint-setup`. The escape hatches above (`as unknown as T`, `@ts-expect-error`) are deliberately *not* `any`, so they pass the rule while staying explicit and local.
 
 ---
 
@@ -892,3 +866,55 @@ export enum BackupStatus { Active = 'active', Failed = 'failed' }
 - The set isn't closed — values come from the server, a config file, or user input (tenant names, tag keys, feature-flag names).
 - A single standalone literal with no siblings — a storage key, a poll interval, an API path. That's Pattern 9.
 - A presentational prop variant written inline at every call site (`size: 'sm' | 'md' | 'lg'`, used as `<AppButton size="sm">`). A bare literal union is right there: the prop type is the single source of truth and the attribute documents itself. Those repeated attribute values are exempt from Pattern 9 too — do not extract `'sm'` into a constant. Promote to an enum object the moment the value gets stored, compared in more than one module, or iterated.
+
+---
+
+## Pattern 14: Derive with `computed`; `watch` Is for Side Effects
+
+**Why:** Most `watch` misuse falls into two buckets: state that could have been derived, and logic that belongs in the handler that caused it. Both produce extra work, watcher chains that fire in an order nobody planned, and state that is briefly wrong between the source changing and the watcher catching up.
+
+**Rule:** A watcher exists to synchronize with something **outside** Vue's reactivity — the URL, storage, a network connection, a timer, a non-Vue widget. If no external system is involved, you don't need a watcher:
+
+- **Derive with `computed`.** Anything computable from existing state is a `computed`, not a `ref` plus a `watch` that keeps it in sync.
+- **User actions belong in handlers.** Logic caused by a click runs in the click handler, not in a watcher that spots the click's consequences.
+- **No watcher chains** — one watcher setting state that triggers another watcher is a rewrite signal; compute everything from the event that started it.
+- **Reset child state with `:key`,** not with a watcher on a prop that calls setters.
+- **Timing is a decision.** Write out `immediate`, `deep`, and `flush` when they matter; prefer `watch` on a named source over `watchEffect` so the dependencies are visible.
+- **Clean up inside the run** with `onWatcherCleanup()` when a run starts something asynchronous or subscribes to something; the next run and unmount both cancel it.
+
+```typescript
+// ✅ CORRECT — derived, always consistent, no extra state
+const fullName = computed(() => `${firstName.value} ${lastName.value}`)
+
+// ❌ WRONG — redundant state kept in sync by a watcher (briefly stale, extra work)
+const fullName = ref('')
+watch([firstName, lastName], () => {
+  fullName.value = `${firstName.value} ${lastName.value}`
+})
+```
+
+```typescript
+// ✅ CORRECT — the action's consequences live in the handler that caused it
+function handleDelete(backupId: string): void {
+  removeBackup(backupId)
+  notify('Backup deleted')
+}
+
+// ❌ WRONG — a watcher spies on state to react to a user action
+watch(deletedBackupId, id => {
+  if (id) {
+    notify('Backup deleted')
+  }
+})
+```
+
+```typescript
+// ✅ CORRECT — genuine external sync; the cleanup is scoped to the run
+import { onWatcherCleanup, watch } from 'vue'
+
+watch(backupId, id => {
+  const controller = new AbortController()
+  void loadBackup(id, controller.signal)  // a store action (Pattern 7), not an inline fetch
+  onWatcherCleanup(() => controller.abort())
+}, { immediate: true })
+```

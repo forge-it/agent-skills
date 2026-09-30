@@ -12,7 +12,7 @@ metadata:
 
 A living collection of patterns that every component, hook, and store in this codebase must follow. When in doubt, check here first.
 
-This is the React sibling of `frontend-vue-code-style`; Patterns 1–12 cover the same concerns under the same numbers, Patterns 13–14 are React-specific, and Pattern 15 mirrors Vue's Pattern 13 (closed sets are enum objects) — numbers diverge past 12 because they are stable identifiers and are never renumbered.
+This is the React sibling of `frontend-vue-code-style`; Patterns 1–12 cover the same concerns under the same numbers, Pattern 13 has its Vue analog in Vue's Pattern 14 (derive, don't watch), Pattern 14 is React-only, and Pattern 15 mirrors Vue's Pattern 13 (closed sets are enum objects) — numbers diverge past 12 because they are stable identifiers and are never renumbered.
 
 **Stack assumptions:** React 19.2+ with function components only, TypeScript in strict mode with typescript-eslint `strictTypeChecked` and `eslint-plugin-react-hooks` v7+, Vite SPA (no SSR framework), TanStack Query for server state, Zustand for global client state, TanStack Router for routing, React Compiler enabled. Where a different stack choice changes a rule, the pattern names the fallback.
 
