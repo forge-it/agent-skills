@@ -1,10 +1,10 @@
 ---
 name: syneto-release-promote
-description: Use when shipping a Syneto Central release after its release notes entry has been reviewed and accepted — merging the central-2.x dev branch into the prod branch across every contributing repository and pushing. Also use for asks phrased as "promote the release", "merge dev into prod", "ship the hotfix", or "push the release branches". Syneto-specific: assumes the Central repository family under /home/cristi/Projects.
+description: Use when shipping a Syneto Central release after its release notes entry has been reviewed and accepted — merging the central-2.x dev branch into the prod branch across every contributing repository and pushing. Also use for asks phrased as "promote the release", "merge dev into prod", "ship the hotfix", "push the release branches", or "watch the release pipelines". Syneto-specific: assumes the Central repository family under /home/cristi/Projects.
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.5"
+  version: "0.0.6"
 ---
 
 # Syneto Release Promote Skill
@@ -216,6 +216,96 @@ operator-review gap is ordinary developer behaviour, not an exotic state.
 Treating it as divergence aborts every already-merged repository in the fleet and
 sends the operator down a recovery path that does nothing.
 
+### 10. A Push Is Not Shipped Until Its Pipeline Is Green (CRITICAL)
+
+Pushing the prod branch starts one GitLab pipeline per repository; it is the
+pipeline, not the push, that builds and publishes the image that gets deployed. A
+`DONE` line from `promote.sh` means the merge reached origin — nothing more. After
+every `--push`, watch each promoted repository's pipeline to completion (see
+**Watching the Pipelines**) and report the release as shipped only when all of them
+are green.
+
+**One watcher per pipeline, never one loop over all of them.** A single loop that
+reports when every pipeline has finished sits silent on a failure that happened
+fifteen minutes earlier — the 2026-09-30 release lost that time on a central-ui
+test failure the operator spotted before the loop did. Each pipeline gets its own
+watcher, each watcher emits every job as it reaches a terminal state, and a blocking
+failure is acted on the moment it arrives, not after the others finish.
+
+## Watching the Pipelines
+
+Uses `glab` against the self-hosted instance. Remotes are SSH, which the web API
+does not accept, so `glab` needs its own token.
+
+**One-time setup** (operator runs it — interactive; choose token login, SSH as the git
+protocol, and do not let glab take over git credentials):
+
+```bash
+glab auth login                       # hostname gitlab.syneto.eu; token with api scope
+glab config set -g host gitlab.syneto.eu   # -g: without it glab writes repo-local config and fails outside a repo
+glab auth status                      # the gitlab.com 401 in this output is a stale default entry, not a bad token
+```
+
+Without the global host, `glab api` silently targets gitlab.com and every call
+returns 401; `--hostname gitlab.syneto.eu` works per call as a fallback.
+
+**Resolve each pipeline from the pushed merge commit**, not from "latest pipeline on
+the branch" — a later push to the same branch would otherwise be watched instead:
+
+```bash
+sha=$(git -C <root>/<repo> rev-parse origin/<prod>)
+glab api "projects/central%2F<repo>/pipelines?sha=$sha" | jq -r '.[] | "\(.id) \(.status) \(.web_url)"'
+```
+
+**Arm one watcher per pipeline id.** In Claude Code that is one `Monitor` per
+pipeline (30s poll, 30-minute timeout, re-armed on expiry); elsewhere, one
+background process per pipeline. Each emits every job reaching a terminal state,
+marks non-`allow_failure` failures, and exits when the pipeline does:
+
+```bash
+R=<repo>; P=<pipeline-id>; prev=""
+while true; do
+  j=$(glab api "projects/central%2F$R/pipelines/$P/jobs?per_page=100" 2>/dev/null) || { sleep 30; continue; }
+  cur=$(jq -r '.[] | select(.status|test("success|failed|canceled|skipped|manual"))
+    | "\(.status) \(.stage)/\(.name) job=\(.id)\(if .status=="failed" and (.allow_failure|not)
+        then " <<BLOCKING FAILURE>>" elif .status=="failed" then " (allowed to fail)" else "" end)"' <<<"$j" | sort)
+  comm -13 <(echo "$prev") <(echo "$cur") | sed "s/^/$R: /"; prev=$cur
+  s=$(glab api "projects/central%2F$R/pipelines/$P" 2>/dev/null | jq -r .status) || s=unknown
+  case $s in success|failed|canceled|skipped) echo "$R: PIPELINE $P FINISHED status=$s"; break;; esac
+  sleep 30
+done
+```
+
+A job failing with `allow_failure: true` (central-backend's `sonarqube-check`)
+leaves the pipeline green — report it, do not chase it. A downstream job showing
+`skipped` after a blocking failure (`publish-image`) means **no image was built**:
+that repository has not shipped.
+
+**Triage a blocking failure immediately:**
+
+```bash
+glab api "projects/central%2F<repo>/pipelines/<id>/test_report" \
+  | jq -r '.test_suites[].test_cases[] | select(.status=="failed" or .status=="error") | "\(.classname)\n\(.system_output)"'
+glab api "projects/central%2F<repo>/jobs/<job-id>/trace" | tail -80     # non-test failures
+```
+
+The tail of a test job's trace is usually React/console warnings, not the failure —
+read the JUnit report first. Then decide flake versus real before touching anything:
+
+1. `git diff --stat origin/<dev-tip-promoted> <merge-sha>` — empty means the promoted
+   tree is byte-identical to the dev tip.
+2. Did that same job pass on the dev tip's own pipeline
+   (`pipelines?sha=<dev-tip>`)?
+3. Did the release touch the failing test or the code under it
+   (`git log <prod>..<dev> -- <paths>`)?
+
+Identical tree, passing on dev, untouched by the release → a flake: retry the job
+(`glab api -X POST "projects/central%2F<repo>/jobs/<job-id>/retry"`), note the new
+job id, and let the same watcher follow it — retried jobs replace the original in the
+jobs listing. Anything else is a real defect: dispatch an investigator, never retry a
+genuine failure into green. A promotion is `--no-ff`, so a defect that must come
+out is reverted with `git revert -m 1 <merge>`, never force-pushed away.
+
 ## Failure Recovery
 
 **Exit 2 — partially promoted.** Re-run. Repositories that merged but did not push
@@ -258,3 +348,6 @@ auditable merge commit and `git revert -m 1 <merge>` works. Revert as a new comm
 | Reading `promoted` as covering every selected repository | `NO-OP` repositories shipped nothing; check the counts |
 | Trusting a range of 0 after a push without re-fetching dev | Always zero; hides the race entirely |
 | Force-pushing prod to fix a bad merge | Breaks every checkout that already pulled it |
+| Reporting the release shipped after `--push` without watching pipelines | A red test job skips `publish-image`; nothing deploys, and the report says it did |
+| One watch loop over every pipeline, reporting only at the end | A failure sits unseen until the slowest pipeline finishes |
+| Retrying a failed job without checking tree identity against the dev tip | Retries a real defect into green |
