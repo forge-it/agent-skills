@@ -546,7 +546,7 @@ above; every gate here applies at every delivery tier.
 "src/backend_service/infrastructure/config/bootstrap.py" = ["TID251"]
 # Test support may READ the environment for harness addresses (the isolation
 # pattern's admin URL); it may never mutate it — that rule is the tier-3 one.
-"src/tests/**" = ["TID251"]
+"tests/**" = ["TID251"]
 ```
 
 Verified with `ruff 0.16.2` (`uv run ruff check`): all three forms fire —

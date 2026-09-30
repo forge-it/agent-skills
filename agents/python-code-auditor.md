@@ -673,7 +673,7 @@ are covered by their enclosing unit unless separately listed for a finding.
 |---|---|---|---|
 | `src/myapp/application/services/licensing/products.py` | <file responsibility> | module(1): `file(myapp.application.services.licensing.products)@1`; function(1): `_resolve_activation_window@14`; class(2): `ProductCreationService@22` [`__init__@23`, `create_product@31`], `ProductRenewalService@58` [`__init__@59`, `renew_product@66`, `_send_renewal_email@81`, `_write_audit_row@94`]; binding(0) | `SRP-001`, `SRP-003` |
 | `src/myapp/infrastructure/orm/tables.py` | <file responsibility> | module(1): `file(myapp.infrastructure.orm.tables)@1`; function(0); class(0); binding(2): `products_table@9`, `activation_keys_table@27` | assessed — no finding |
-| `src/tests/unit/application/services/licensing/test_products.py` | <file responsibility> | module(1): `file(tests.unit.application.services.licensing.test_products)@1 [test]`; function(0); class(1): `TestProductCreationService@10 [test]` [`test_creates_product_and_commits@11`, `test_rejects_duplicate_serial_number@21`]; binding(0) | assessed — no finding |
+| `tests/unit/application/services/licensing/test_products.py` | <file responsibility> | module(1): `file(tests.unit.application.services.licensing.test_products)@1 [test]`; function(0); class(1): `TestProductCreationService@10 [test]` [`test_creates_product_and_commits@11`, `test_rejects_duplicate_serial_number@21`]; binding(0) | assessed — no finding |
 | `src/myapp/domain/__init__.py` | package marker | module(1): `file(myapp.domain)@1`; function(0); class(0); binding(0) | assessed — no finding |
 
 ### Excluded Python Files/Patterns Beneath Audit Roots

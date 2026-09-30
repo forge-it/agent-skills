@@ -277,10 +277,10 @@ deployment_checks/              # sibling root — NOT under tests/
 └── test_deploy_smoke.py
 ```
 
-Where `python-ddd`'s layout applies, the suite lives at `src/tests/` and
-`testpaths = ["src/tests"]`; the sibling root then sits beside `src/`, still
+This is the layout every Python member has: the suite lives at `tests/` beside
+`src/` with `testpaths = ["tests"]`, and the sibling root sits beside both,
 outside the tree the root `conftest.py` governs. The rule is positional —
-outside whichever `tests/` the project has — not a fixed path.
+outside the project's `tests/` — not a fixed path.
 
 **Why not `tests/deployment/`?** Because a `conftest.py` under `tests/` cannot
 opt out of the root `conftest.py`. Verified: with a session-scoped

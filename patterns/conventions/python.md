@@ -280,8 +280,14 @@ packages/ironbox-conventions/
     layout.py          # policy about module shape: the day-1 test-layout rules
     workspace.py       # policy declared in manifests and the lockfile: gate
                        # coverage, and the interpreter floor every member declares
-  tests/               # fixture source trees proving each rule fires / stays quiet
+  tests/
+    architecture/
+      test_conventions.py   # the package's own gate — dogfoods every rule, hosts the coverage rule
+    unit/                   # rule tests; violating trees are built in tmp_path, never committed
+    fixtures/               # compliant source trees that must produce zero violations
 ```
+
+Tests live in a top-level `tests/` beside `src/` — never inside it — in every member, the conventions package included; `[tool.pytest.ini_options] testpaths = ["tests"]` in each member makes a plain `pytest` collect the gate with everything else.
 
 Additional *style*-topic modules (`shape.py`, `vocabulary.py`, …) appear **later,
 one rule at a time** — never on day 1. `workspace.py` is the exception: its single
@@ -293,7 +299,7 @@ gates. Two layers, and the split is the whole design: `_machinery.py` holds
 The per-package gate is a one-liner, identical in every member:
 
 ```python
-# services/api/src/tests/architecture/test_conventions.py
+# services/api/tests/architecture/test_conventions.py
 from ironbox_conventions import (
     module_filenames_follow_canonical_pattern,
     modules_contain_only_tests,
@@ -324,7 +330,7 @@ where the workspace-scoped coverage rule lives, and it dogfoods every other rule
 against itself:
 
 ```python
-# packages/ironbox-conventions/src/tests/architecture/test_conventions.py
+# packages/ironbox-conventions/tests/architecture/test_conventions.py
 # ... the same four tests as above, plus:
 
 
@@ -335,9 +341,10 @@ def test_members_carry_convention_gates():
 Four properties of this shape are load-bearing:
 
 - **No separate test target.** Plain `pytest` in that package collects
-  `src/tests/architecture/` automatically, so the gate rides along on every local
-  run — the fastest possible feedback for zero configuration. (It is also why
-  the runner must `cd` into the member; see the `--package` trap.)
+  `tests/architecture/` because `testpaths = ["tests"]`, so the gate rides along
+  on every local run — the fastest possible feedback for zero extra
+  configuration. (It is also why the runner must `cd` into the member; see the
+  `--package` trap.)
 - **No public name in the conventions package may begin with `test`.** pytest's
   `python_functions` default is the prefix `"test"`, and pytest collects names
   *imported into* a test module, not just those defined there. A constructor
@@ -934,9 +941,7 @@ from ._machinery import (
     locked_member_directories,
 )
 
-CONVENTION_GATE_RELATIVE_PATH = (
-    Path("src") / "tests" / "architecture" / "test_conventions.py"
-)
+CONVENTION_GATE_RELATIVE_PATH = Path("tests") / "architecture" / "test_conventions.py"
 MINIMUM_PYTHON_VERSION = (3, 14)
 
 
@@ -1063,7 +1068,7 @@ in `tmp_path` — **never commit deliberately-violating `.py` files**, which
 would trip the package's own gate, ruff, and any type checker:
 
 ```python
-# tests/test_layout.py
+# tests/unit/test_layout.py
 from pathlib import Path
 
 import pytest
@@ -1095,7 +1100,7 @@ exactly what `modules_contain_only_tests()` flags, and this package runs its own
 rules.
 
 ```python
-# tests/test_workspace.py
+# tests/unit/test_workspace.py
 from pathlib import Path
 
 import pytest
@@ -1122,9 +1127,7 @@ def test_flags_member_without_gate(tmp_path: Path) -> None:
     ):
         (tmp_path / member_relative_path).mkdir(parents=True)
     for gated_relative_path in (".", "packages/alpha"):
-        gate_directory = (
-            tmp_path / gated_relative_path / "src" / "tests" / "architecture"
-        )
+        gate_directory = tmp_path / gated_relative_path / "tests" / "architecture"
         gate_directory.mkdir(parents=True)
         (gate_directory / "test_conventions.py").write_text("")
     with pytest.raises(AssertionError, match="packages/gamma"):
@@ -1280,7 +1283,7 @@ Pin it at `0.1.0`, never touch it, and let the lockfile be the contract.
    `[dependency-groups] dev = [..., "<project>-conventions"]` plus
    `[tool.uv.sources] <project>-conventions = { workspace = true }`.
 6. **Add the identical gate file** to every member under
-   `src/tests/architecture/test_conventions.py` — including the conventions
+   `tests/architecture/test_conventions.py` — including the conventions
    package itself, so it dogfoods. The conventions package's copy gets one extra
    test calling the step-3 **coverage rule**, which is where that rule lives: a
    member added a year later with no gate then fails the conventions package's

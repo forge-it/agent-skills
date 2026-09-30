@@ -843,24 +843,32 @@ Always autogenerate migrations against a real database aligned to the prior revi
 
 #### Rule 8 — Tests Mirror Source Tree (MEDIUM)
 
+Tests live in a top-level `tests/` directory beside `src/`, never inside it — every category, the architecture gate, and fixtures alike. `src/` holds shipped code only, and `[tool.pytest.ini_options] testpaths = ["tests"]` makes a plain `pytest` collect everything, gate included.
+
 ```
-src/tests/
-├── unit/
-│   ├── domain/
-│   ├── application/
-│   ├── presentation/
-│   └── infrastructure/
-├── integration/
-│   └── infrastructure/
-│       └── licensing/
-│           ├── test_products_repository.py
-│           └── test_unit_of_work_atomicity.py
-└── e2e/
-    └── presentation/licensing/
-        └── test_products.py
+<member>/
+├── pyproject.toml           # testpaths = ["tests"]
+├── src/<package>/           # shipped code only
+└── tests/
+    ├── unit/
+    │   ├── domain/
+    │   ├── application/
+    │   ├── presentation/
+    │   └── infrastructure/
+    ├── integration/
+    │   └── infrastructure/
+    │       └── licensing/
+    │           ├── test_products_repository.py
+    │           └── test_unit_of_work_atomicity.py
+    ├── e2e/
+    │   └── presentation/licensing/
+    │       └── test_products.py
+    ├── architecture/
+    │   └── test_conventions.py  # the per-member conventions gate (patterns/conventions/python.md)
+    └── fixtures/                # data and fixture trees
 ```
 
-Unit tests for a module at `src/myapp/application/services/licensing/products.py` live at `src/tests/unit/application/services/licensing/test_products.py`. Integration tests exercise the real database through the UoW and live under `src/tests/integration/infrastructure/`. End-to-end tests hit the running API.
+Unit tests for a module at `src/myapp/application/services/licensing/products.py` live at `tests/unit/application/services/licensing/test_products.py`. Integration tests exercise the real database through the UoW and live under `tests/integration/infrastructure/`. End-to-end tests hit the running API.
 
 ## Anti-Patterns To Avoid
 

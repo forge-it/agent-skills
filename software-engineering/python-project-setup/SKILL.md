@@ -200,8 +200,11 @@ ban-relative-imports = "all"
 
 [tool.basedpyright]
 typeCheckingMode = "strict"
-include = ["src"]
+include = ["src", "tests"]
 failOnWarnings = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
 ```
 
 **Getting the exact pins.** The versions above are the ones verified for this
@@ -215,11 +218,13 @@ grep -A1 '^name = "ruff"' uv.lock          # → version = "0.16.2"
 grep -A1 '^name = "basedpyright"' uv.lock  # → version = "1.40.1"
 ```
 
-**Layout.** `pyproject.toml`, `.python-version`, the committed `uv.lock`, and
-`src/backend_service/__init__.py`. Where tests live is *not* this skill's
-decision: `python-ddd` owns it and places unit tests **inside** the package root
-at `src/tests/unit/...`. Follow that skill; this one only needs `src/` to exist
-behind a build backend.
+**Layout.** `pyproject.toml`, `.python-version`, the committed `uv.lock`,
+`src/backend_service/__init__.py`, and an empty top-level `tests/` directory
+(a `.gitkeep` until the first test lands). Tests always live in `tests/` beside
+`src/`, never inside it — `python-ddd` Rule 8 owns the tree underneath — and
+`testpaths = ["tests"]` plus `include = ["src", "tests"]` in the manifest above
+point both pytest and basedpyright at it from commit 1. `src/` holds shipped
+code only, behind a build backend.
 
 ### Why `src/` and not a flat layout
 
@@ -360,8 +365,9 @@ typed `None` (verified — `def announce(message: str): print(message)` is clean
 
 **The manifest decides the scope; the invocation carries no path.** Run
 `uv run basedpyright` — bare. An explicit path **overrides** `include`: with
-`include = ["src"]` and an error planted in `tests/`, `uv run basedpyright`
-exits 0 while `uv run basedpyright .` exits 1 (verified). The bare form is what
+`include = ["src"]` alone and an error planted in `tests/`, `uv run basedpyright`
+exits 0 while `uv run basedpyright .` exits 1 (verified) — which is why the
+manifest names both directories. The bare form is what
 `justfile-setup`'s component check recipe and `ci-setup`'s Python job invoke, so
 what a developer verifies is exactly what the task runner and CI check. Imports
 resolve because basedpyright finds the environment itself: with no `pythonPath`
@@ -375,17 +381,11 @@ a stale `.venv` inside the component directory wins over the environment
 a leftover member `.venv` silently supplies both the search paths and the
 `pythonVersion`. Delete it rather than paper over it with `--pythonpath`.
 
-What `include` holds depends on the layout `python-ddd` gives you:
-
-- **Tests inside the package root** (`src/tests/unit/...`, the `python-ddd`
-  convention) — `include = ["src"]` already covers them and `strict` type-checks
-  tests from commit 1. Nothing to add later; expect strict findings in test
-  modules and fix them rather than loosening the setting.
-- **Tests in a top-level `tests/`** — `include = ["src", "tests"]`, with
-  `"tests"` added in the same change that creates the directory, not before.
-
-That ordering matters because of one trap: every entry in `include` must exist.
-A missing directory makes basedpyright print
+`include = ["src", "tests"]` type-checks tests under `strict` from commit 1;
+expect strict findings in test modules and fix them rather than loosening the
+setting. The layout step creates `tests/` in the same commit because of one
+trap: every entry in `include` must exist. A missing directory makes
+basedpyright print
 
 ```
 File or directory "/…/service/tests" does not exist.
@@ -422,8 +422,8 @@ Three settings, each doing one job:
   `strict` is clean. `strict` is the rule set this library standardizes on. A
   project that wants the `recommended` or `all` set opts in deliberately, in its
   own commit, with the resulting fixes — never by leaving the key out.
-- **`include = ["src"]`** scopes the check; the previous section explains why
-  the invocation carries no path.
+- **`include = ["src", "tests"]`** scopes the check; the previous section
+  explains why the invocation carries no path.
 - **`failOnWarnings = true`** makes a warning fail the build. Without it a
   diagnostic at `warning` level is advisory — verified, `0 errors, 1 warning`
   exits 0 — so any rule someone downgrades to `"warning"` would drop out of the
@@ -608,9 +608,9 @@ build.
   the rationale for a single command surface. Its Python recipes invoke what
   this skill configures (`uv run ruff check .`, `uv run basedpyright`,
   `uv run pytest`).
-- **`python-ddd` (skill)** — phase 2. Owns what goes *inside* `src/`, including
-  where tests live (`src/tests/`), which decides what `[tool.basedpyright] include`
-  holds.
+- **`python-ddd` (skill)** — phase 2. Owns what goes *inside* `src/` and the
+  tree under the top-level `tests/` (Rule 8); the location itself — `tests/`
+  beside `src/`, never inside it — is fixed here.
 - **`python-import-linter-setup` (skill)** — phase 3. Owns the architecture gate
   and its `[tool.importlinter]` contracts, including adding `import-linter` to
   the dev group.

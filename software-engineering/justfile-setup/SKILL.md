@@ -245,7 +245,7 @@ service-check:
   cd service && uv run ruff check .
   cd service && uv run basedpyright
   cd service && uv run lint-imports
-  cd service && uv run pytest src/tests/architecture
+  cd service && uv run pytest tests/architecture
 
 # [rust] cargo clippy + fmt-check — run before every commit
 # Ordered cheapest-first: a formatting slip reports in seconds instead of after a

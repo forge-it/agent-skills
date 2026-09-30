@@ -63,7 +63,7 @@ Run this once. After the workflow exists and passes, you do not re-run the skill
 |-----------|-----|--------|-----------------------|
 | Rust | `rust-check` | `just core-check` | `fmt --all --check`, `clippy --all-targets --all-features -D warnings`, `cargo test --workspace --test structure` (hexagonal layering; workspace-wide so no crate is left unchecked) |
 | Web — Vue or React | `web-check` | `just web-check` | ESLint feature-architecture boundaries, format check, `vue-tsc` or `tsc` |
-| Python | `python-check` | `just service-check` | `ruff format --check`, `ruff check`, `basedpyright`, `lint-imports`, `pytest src/tests/architecture` (conventions gate: gate coverage and the interpreter floor) |
+| Python | `python-check` | `just service-check` | `ruff format --check`, `ruff check`, `basedpyright`, `lint-imports`, `pytest tests/architecture` (conventions gate: gate coverage and the interpreter floor) |
 | All | `integration` | `just test-all` | Unit and integration suites against the local Docker stack, after the three static jobs pass |
 
 The structure gate is documented in `rust-architecture-test-setup`, the

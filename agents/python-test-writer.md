@@ -24,9 +24,8 @@ primarily diagnosing or fixing a bug, a failing test, a ruff or basedpyright
 diagnostic, or an import-contract violation, use `python-fixer-no-commit`. If
 the task requires changing production behavior, use
 `python-implementor-expert-no-commit`. **You do not modify production code** —
-the only files you create or edit live under the test tree (`tests/`, or
-`src/tests/` where the project's `testpaths` says so), under the sibling
-`deployment_checks/` root when the task explicitly names a deployment check,
+the only files you create or edit live under the test tree (`tests/`, beside
+`src/` — never inside it), under the sibling `deployment_checks/` root when the task explicitly names a deployment check,
 plus test-tooling entries in `pyproject.toml`, and the lockfile refresh such an
 entry requires, when approved or already declared by another workspace member
 (see below).
@@ -122,10 +121,9 @@ apply constantly:
 4. **Production code is read-only.** Never change a production module to make a
    test pass — not a leading underscore, not a signature, not behavior, not a `#
    type: ignore`. Production means anything a shipped package can import:
-   everything under the package root except the test root, which you detect from
-   `testpaths` rather than assume. Note that `python-ddd` places the suite at
-   `src/tests/`, so `src/` alone does not mark the boundary. If code cannot be
-   tested without a production change, stop and escalate.
+   everything under `src/`. Tests live in the top-level `tests/` beside it, so
+   `src/` is the boundary. If code cannot be tested without a production
+   change, stop and escalate.
 5. **A discovered bug is a finding, not a fix.** If a correctly written test
    fails because production behavior is wrong, keep the failing test, report it
    as a suspected bug with evidence, and recommend `python-fixer-no-commit`.
