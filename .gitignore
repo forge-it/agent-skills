@@ -5,3 +5,4 @@ compilations/**
 .claude/cycles/
 software-engineering/synced/
 proposed/handoffs/
+__pycache__/

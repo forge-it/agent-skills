@@ -49,6 +49,7 @@ Organisation-specific skills. These assume Syneto's repositories, trackers, and 
 | [syneto-release-notes](software-engineering/syneto-release-notes/SKILL.md) | Zero-argument Central release notes: discover contributing repos, enrich tickets, publish to Confluence |
 | [syneto-release-notes-scoped](software-engineering/syneto-release-notes-scoped/SKILL.md) | Central release notes restricted to operator-named repositories; fleet-wide discovery still guards the pair and surfaces what the scope omits |
 | [syneto-release-promote](software-engineering/syneto-release-promote/SKILL.md) | Ship an accepted release: preflight the fleet, merge dev into prod, push |
+| [syneto-mr-review](software-engineering/syneto-mr-review/SKILL.md) | Review a gitlab.syneto.eu merge request with a Sonnet fleet; the operator picks the findings, and only those become review notes and the file sent to the author over Google Chat |
 
 ### Greenfield Project Setup
 
