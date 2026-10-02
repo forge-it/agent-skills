@@ -90,7 +90,7 @@ working directory when this skill fires is the operator's project, not the skill
 directory, so a bare `./acquire.sh` will not be found.
 
 ```bash
-/home/cristi/Projects/agent-skills/software-engineering/syneto-release-notes/acquire.sh
+/home/cristi/Projects/agent-skills/syneto-skills/syneto-release-notes/acquire.sh
 # optional explicit pair:  ... acquire.sh central-2.9 central-2.10
 # offline dry run:         SYNETO_SKIP_FETCH=1 ... acquire.sh
 # alternate checkout root: SYNETO_PROJECTS_ROOT=/path ... acquire.sh

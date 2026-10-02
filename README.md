@@ -43,14 +43,16 @@ Each skill includes:
 
 Organisation-specific skills. These assume Syneto's repositories, trackers, and Confluence spaces, and are not portable to other projects.
 
+They live in `syneto-skills/`, which is the directory `~/.claude/skills` points to on a Syneto machine. Beside them, `syneto-skills/` holds relative symlinks to the shared `software-engineering/` skills that Syneto work uses (Python, React, git, fleet orchestration, logging), so that one directory is the whole skill set.
+
 | Skill | Description |
 |-------|-------------|
-| [syneto-rest-api-design](software-engineering/syneto-rest-api-design/SKILL.md) | Syneto's REST API conventions (RFD0003) for Syneto OS services |
-| [syneto-release-notes](software-engineering/syneto-release-notes/SKILL.md) | Zero-argument Central release notes: discover contributing repos, enrich tickets, publish to Confluence |
-| [syneto-release-notes-scoped](software-engineering/syneto-release-notes-scoped/SKILL.md) | Central release notes restricted to operator-named repositories; fleet-wide discovery still guards the pair and surfaces what the scope omits |
-| [syneto-release-promote](software-engineering/syneto-release-promote/SKILL.md) | Ship an accepted release: preflight the fleet, merge dev into prod, push |
-| [syneto-ticket-delivery](software-engineering/syneto-ticket-delivery/SKILL.md) | Take a SYN ticket from hand-over to merged: fleet context, three options, a reviewed plan, fleet implementation and review, with his four gates and the ticket status moves |
-| [syneto-mr-review](software-engineering/syneto-mr-review/SKILL.md) | Review a gitlab.syneto.eu merge request with a Sonnet fleet; the operator picks the findings, and only those become review notes and the file sent to the author over Google Chat |
+| [syneto-rest-api-design](syneto-skills/syneto-rest-api-design/SKILL.md) | Syneto's REST API conventions (RFD0003) for Syneto OS services |
+| [syneto-release-notes](syneto-skills/syneto-release-notes/SKILL.md) | Zero-argument Central release notes: discover contributing repos, enrich tickets, publish to Confluence |
+| [syneto-release-notes-scoped](syneto-skills/syneto-release-notes-scoped/SKILL.md) | Central release notes restricted to operator-named repositories; fleet-wide discovery still guards the pair and surfaces what the scope omits |
+| [syneto-release-promote](syneto-skills/syneto-release-promote/SKILL.md) | Ship an accepted release: preflight the fleet, merge dev into prod, push |
+| [syneto-ticket-delivery](syneto-skills/syneto-ticket-delivery/SKILL.md) | Take a SYN ticket from hand-over to merged: fleet context, three options, a reviewed plan, fleet implementation and review, with his four gates and the ticket status moves |
+| [syneto-mr-review](syneto-skills/syneto-mr-review/SKILL.md) | Review a gitlab.syneto.eu merge request with a Sonnet fleet; the operator picks the findings, and only those become review notes and the file sent to the author over Google Chat |
 
 ### Greenfield Project Setup
 

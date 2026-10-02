@@ -36,7 +36,7 @@ three gates below are the only stops.
 | 7 | Build the developer file, send it over Google Chat | `review-mr-<iid>.md`, `review-mr-<iid>.sent.md` | **his yes to the exact message** |
 
 The scripts live in `scripts/` beside this file. Run them as `python3 -B` by absolute path,
-`python3 -B /home/cristi/Projects/agent-skills/software-engineering/syneto-mr-review/scripts/<name>.py`
+`python3 -B /home/cristi/Projects/agent-skills/syneto-skills/syneto-mr-review/scripts/<name>.py`
 (`-B` keeps Python from writing `__pycache__` into the skills repository); each has `--help`. A later session resumes from the run directory: `meta.json` and the ledgers
 carry the review, and `posted.json` says what is live.
 

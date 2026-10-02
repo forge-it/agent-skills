@@ -4,5 +4,6 @@ compilations/**
 .claude/worktrees/
 .claude/cycles/
 software-engineering/synced/
+syneto-skills/synced/
 proposed/handoffs/
 __pycache__/

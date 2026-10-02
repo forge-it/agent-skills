@@ -23,7 +23,7 @@ working directory when this skill fires is the operator's project, not the skill
 directory.
 
 ```bash
-/home/cristi/Projects/agent-skills/software-engineering/syneto-release-notes-scoped/acquire.sh <repository> [<repository>...]
+/home/cristi/Projects/agent-skills/syneto-skills/syneto-release-notes-scoped/acquire.sh <repository> [<repository>...]
 # explicit pair:      SYNETO_NOTES_PAIR="central-2.9 central-2.10" ... acquire.sh <repository>...
 # offline dry run:    SYNETO_SKIP_FETCH=1 ... acquire.sh <repository>...
 # tolerate SOME empty selected ranges:  SYNETO_ALLOW_EMPTY_SELECTION=1
@@ -44,7 +44,7 @@ text rather than the parent's cause list.
 ## The Parent Skill Is the Base Contract
 
 Read
-`/home/cristi/Projects/agent-skills/software-engineering/syneto-release-notes/SKILL.md`
+`/home/cristi/Projects/agent-skills/syneto-skills/syneto-release-notes/SKILL.md`
 before doing anything else in Stages 2–4. **Every rule there applies unless
 amended below** — the page, the titles, the stage shape, the publish-and-verify
 mechanics, and the audience are all the parent's. The table lists all eight rules
@@ -169,7 +169,7 @@ the operator with the exact invocation, so a later session cannot accidentally
 promote the fleet:
 
 ```bash
-/home/cristi/Projects/agent-skills/software-engineering/syneto-release-promote/promote.sh --check <repository> [<repository>...]
+/home/cristi/Projects/agent-skills/syneto-skills/syneto-release-promote/promote.sh --check <repository> [<repository>...]
 # pin the pair the notes described:
 SYNETO_PROMOTE_PAIR="<prod> <dev>" ... promote.sh --check <repository>...
 ```
