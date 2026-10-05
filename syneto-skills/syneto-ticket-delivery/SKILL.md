@@ -10,7 +10,7 @@ description: >-
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.1.1"
+  version: "0.1.2"
 ---
 
 # Syneto Ticket Delivery
@@ -29,7 +29,7 @@ answers its intake gate, so do not ask it again:
 | Supervision | supervised |
 | Implementer | fleet |
 | Plan review | max 2 rounds; round 2 re-checks only what round 1 changed |
-| Code review | **change-cycle-pipeline** narrow loop, max 3 rounds |
+| Code review | **change-cycle-pipeline** narrow loop, max 3 rounds, one checker per round (stage 7) |
 | Operator gates | stages 3, 6, 8, 9, plus every push |
 | Gate cadence | at the end: every cycle is implemented in turn, then one review loop over their union (stage 7, one cap of 3), then one stage 8 report |
 | Worktree | his answer at stage 6: the main worktree, or a separate one merged back into it; `-no-commit` workers either way, and the main worktree ends dirty |
@@ -264,6 +264,32 @@ in parallel; inside one repository, one writer at a time.
 (left empty, it diffs against a guessed default branch). When a change adds or edits tests, dispatch that stack's
 structure-and-style guard (`python-`, `react-`, `vue-` or `rust-`) beside the lens in every
 round: the runtime lens cannot see test-structure violations.
+
+**One checker per round, not one per finding.** This replaces the pipeline's verify step;
+its other rules (merge duplicates first, drop what an earlier round refuted) still hold.
+Every checker reads the same diff, so one per finding pays for that reading once per
+finding. Dispatch a single general-purpose agent with the round's merged findings, every
+severity, up to eight; past eight, split them by file into checkers of up to eight each,
+all in one message. Each gets these lines, paths filled and `<out>` its own
+`<run>/code-review-rN-verdicts-K.md` (K numbers the round's checkers), then the findings
+pasted in full with their citations and plan locations:
+
+```
+You are a skeptic. Below are claimed problems with the implementation of plan
+<run>/plan.md in <repo>, diffed against <base>. Judge each one on its own: a verdict on
+one finding is no evidence about another. Try to REFUTE each against the actual code, the
+plan text and the neighbouring tests: does the cited code say what the finding claims,
+and does the problem actually follow? You may run the cited test or a scoped read-only
+command; never modify a file. CONFIRMED needs a concrete wrong behaviour, a material
+contractual omission, a test that cannot catch the defect it claims to cover, or an
+operational gap the plan asked for. Style preference and hardening the plan never asked
+for are REFUTED, and so is anything you cannot verify. Write to <out>, per finding: its
+title, the verdict, then at most three sentences of evidence with file:line citations.
+```
+
+A finding whose fix touches a schema, a migration, a public API or a wire format still
+gets the pipeline's three-checker panel, majority wins: three more checkers in the same
+message, each with these lines, its own `<out>` and that finding alone.
 
 A red gate is the pipeline's "send a fixer" step, with an investigator first: an issue
 investigator of the matching stack, briefed with the failing test id and the command that
