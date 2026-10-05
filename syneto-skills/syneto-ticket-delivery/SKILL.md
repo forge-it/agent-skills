@@ -10,7 +10,7 @@ description: >-
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.1.2"
+  version: "0.1.3"
 ---
 
 # Syneto Ticket Delivery
@@ -29,7 +29,7 @@ answers its intake gate, so do not ask it again:
 | Supervision | supervised |
 | Implementer | fleet |
 | Plan review | max 2 rounds; round 2 re-checks only what round 1 changed |
-| Code review | **change-cycle-pipeline** narrow loop, max 3 rounds, one checker per round (stage 7) |
+| Code review | **change-cycle-pipeline** narrow loop, max 3 rounds, checkers take up to three findings each (stage 7) |
 | Operator gates | stages 3, 6, 8, 9, plus every push |
 | Gate cadence | at the end: every cycle is implemented in turn, then one review loop over their union (stage 7, one cap of 3), then one stage 8 report |
 | Worktree | his answer at stage 6: the main worktree, or a separate one merged back into it; `-no-commit` workers either way, and the main worktree ends dirty |
@@ -265,12 +265,13 @@ in parallel; inside one repository, one writer at a time.
 structure-and-style guard (`python-`, `react-`, `vue-` or `rust-`) beside the lens in every
 round: the runtime lens cannot see test-structure violations.
 
-**One checker per round, not one per finding.** This replaces the pipeline's verify step;
-its other rules (merge duplicates first, drop what an earlier round refuted) still hold.
-Every checker reads the same diff, so one per finding pays for that reading once per
-finding. Dispatch a single general-purpose agent with the round's merged findings, every
-severity, up to eight; past eight, split them by file into checkers of up to eight each,
-all in one message. Each gets these lines, paths filled and `<out>` its own
+**Checkers take findings in threes, not one each.** This replaces the pipeline's verify
+step; its other rules (merge duplicates first, drop what an earlier round refuted) still
+hold. Every checker reads the same diff, so one per finding pays for that reading once per
+finding, while one checker for the whole round lets one verdict colour the next. Group the
+round's merged findings, every severity, into checkers of up to three, keeping findings on
+the same file or code path together, and dispatch them all in one message. Each gets these
+lines, paths filled and `<out>` its own
 `<run>/code-review-rN-verdicts-K.md` (K numbers the round's checkers), then the findings
 pasted in full with their citations and plan locations:
 
