@@ -10,7 +10,7 @@ description: >-
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.1.0"
+  version: "0.1.1"
 ---
 
 # Syneto Ticket Delivery
@@ -28,7 +28,7 @@ answers its intake gate, so do not ask it again:
 |---|---|
 | Supervision | supervised |
 | Implementer | fleet |
-| Plan review | max 3 rounds |
+| Plan review | max 2 rounds; round 2 re-checks only what round 1 changed |
 | Code review | **change-cycle-pipeline** narrow loop, max 3 rounds |
 | Operator gates | stages 3, 6, 8, 9, plus every push |
 | Gate cadence | at the end: every cycle is implemented in turn, then one review loop over their union (stage 7, one cap of 3), then one stage 8 report |
@@ -48,7 +48,7 @@ asks for it on this ticket, recorded in `ledger.md`.
 | 2 | Gather context, read-only | `context-NN-<topic>.md` | — |
 | 3 | Three options and a recommendation | `options.md` | **his choice** |
 | 4 | Plan the chosen option | `plan.md` | — |
-| 5 | Review the plan, max 3 rounds | `plan-review-rN-<lens>.md` | — |
+| 5 | Review the plan, max 2 rounds | `plan-review-rN-<lens>.md`, `plan.rN.md` | — |
 | 6 | Implement, in the worktree he picks | the dirty tree | **his worktree choice, before it starts** |
 | 7 | Review the code, max 3 rounds | `code-review-rN-<lens>.md` | — |
 | 8 | Report, tree left dirty | — | **his review** |
@@ -190,10 +190,15 @@ Read it against the locked scope before review, and copy any merge and deploy or
 
 ### 5. Plan review
 
-A round is one reviewer per stack the plan touches, plus one lens per area it touches, all
-dispatched in one message. Each is a general-purpose agent carrying a prompt from
+At most two rounds: round 1 reviews the whole plan, round 2 checks only what round 1's
+triage changed. A reviewer re-reads the whole plan at every step it takes, so a full round
+costs millions of tokens, and a second full round costs more than the first because the
+plan has grown (SYN-3101: about 5M, 7M and 10M for three full rounds).
+
+**Round 1** is one reviewer per stack the plan touches, plus one lens per area it touches,
+all dispatched in one message. Each is a general-purpose agent carrying a prompt from
 `/home/cristi/Projects/agent-skills/prompts/plan-review/` verbatim: fill its `<X> =` line
-with `<run>/plan.md` and its `<Y> =` line with `<run>/plan-review-rN-<lens>.md`, and add one
+with `<run>/plan.md` and its `<Y> =` line with `<run>/plan-review-r1-<lens>.md`, and add one
 line after them, `Locked scope: <run>/options.md`.
 
 - a reviewer per stack: `single-language/plan-review-<stack>.md` for python, rust, vue or
@@ -206,20 +211,38 @@ line after them, `Locked scope: <run>/options.md`.
 The `subagents/` pipeline runs only when he asks for it: it costs too much for a routine
 round.
 
-Then triage every finding. Take a reviewer's **diagnosis** without necessarily taking its
-**fix**: a correct problem whose prescribed fix leaves a task ending red gets a different
-fix. Revise `plan.md`, and append to it a **Review history** section: each earlier finding,
-its verdict, and what you changed or why you did not. That section is how the next round
-avoids raising anything twice.
+Then triage every finding. First copy the plan the round reviewed to `<run>/plan.rN.md`.
+Take a reviewer's **diagnosis** without necessarily taking its **fix**: a correct problem
+whose prescribed fix leaves a task ending red gets a different fix. Revise `plan.md`, and
+append to it a **Review history** section: each finding, its verdict, and what you changed
+or why you did not. That section is how round 2 avoids raising anything twice.
 
-Stop when a round returns no Blocking or Important finding, or after round 3. At the cap,
-what is still open goes to him as open, never as passed.
+A round 1 with no Blocking or Important finding ends the review. Otherwise run **round 2**:
+only the reviewers and lenses whose round 1 file holds a Blocking or Important finding, all
+in one message, each with the same prompt, `<Y> =` `<run>/plan-review-r2-<lens>.md`, the
+locked-scope line, and these lines after it, paths filled:
+
+```
+This is a re-check round; where these lines disagree with the prompt above, they win.
+Your round 1 findings are in <run>/plan-review-r1-<lens>.md. See what changed since with
+`diff -u <run>/plan.r1.md <run>/plan.md`, and read the plan's Review history section.
+For each of your round 1 findings, say whether the revision, or the Review history's
+reason for not changing it, settles it. Then review only the changed hunks, against the
+code, for defects the change introduced. Do not re-review what the diff leaves untouched;
+open the rest of the plan only for the context of a change.
+```
+
+Triage round 2 the same way, then stop. What round 2's triage changed is not reviewed
+again, so it goes to him at stage 6 as changed after the last review (`diff -u
+<run>/plan.r2.md <run>/plan.md` shows it); what is still open goes as open, never as
+passed. A third round runs only when he asks for it.
 
 ### 6. Implementation — gate
 
 Show him the cycle cut (which plan tasks form each cycle, the files each touches, its gate
-command), what the review changed, anything still open, and the open questions. Then ask
-with `AskUserQuestion` where the implementation runs:
+command), what the review changed (marking what changed after the last round), anything
+still open, and the open questions. Then ask with `AskUserQuestion` where the
+implementation runs:
 
 - **Main worktree**: **parallel-worktrees-general** Mode D. The workers edit the
   repository's own checkout, on the work branch, one writer at a time.
