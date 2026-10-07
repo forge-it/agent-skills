@@ -3,7 +3,10 @@
 Read this only when he picks the separate worktree at stage 6. It is
 **parallel-worktrees-general** Mode B with three deviations: the branch is `<KEY>-wt`, the
 ignore line goes to `.git/info/exclude`, and the merge back is an uncommitted patch applied
-with plain `git apply`.
+with plain `git apply`. A fourth applies only when he keeps the worktree without a merge-back
+(the main checkout holds another ticket): rest-api's Docker-backed tiers then run in the
+worktree, as `repository-traps.md` (rest-api, *Linked worktree*) describes; every other
+Docker-backed tier still waits for a merge-back.
 
 ## Create
 
@@ -23,7 +26,7 @@ A linked worktree starts with no dependencies.
 - **Node:** install them in the worktree with the repository's own command, under the
   repository's Node version (see its section in `repository-traps.md`): for central-api,
   `PATH=$HOME/.nvm/versions/node/v18.20.4/bin:$PATH yarn install --frozen-lockfile`; for
-  central-hub, `npm ci`.
+  central-hub, `npm ci --legacy-peer-deps`.
 - **Python:** the worktree uses the main checkout's `<repo>/.venv`. Every command calls
   `<repo>/.venv/bin/<tool>` directly, from the directory the gate runs in (the repository's
   section in `repository-traps.md` names it). Never `poetry run`, and never a `make` target
@@ -73,8 +76,9 @@ worktree holds its only copy: stop and tell him. This comparison is the validati
 asks for before it discards the worker copy.
 
 Then remove the linked worktree and its branch as **parallel-worktrees-general** *Cleanup*
-describes (the patch is applied, and its file stays in `<run>`). Only then run the gate once
-in the main worktree: while the linked worktree exists, central-api's Jest glob also
+describes (the patch is applied, and its file stays in `<run>`). Only then run the gate, and
+any Docker-backed tier the plan schedules (under SKILL.md's Docker rule), once in the main
+worktree: while the linked worktree exists, central-api's Jest glob also
 collects `.claude/worktrees/<KEY>/build`. A red result goes into the stage 8 report as open:
 nothing is fixed before he has seen the tree.
 

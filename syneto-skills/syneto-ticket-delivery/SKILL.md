@@ -10,7 +10,7 @@ description: >-
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.1.4"
+  version: "0.1.5"
 ---
 
 # Syneto Ticket Delivery
@@ -53,7 +53,7 @@ asks for it on this ticket, recorded in `ledger.md`.
 | 7 | Review the code, max 3 rounds | `code-review-rN-<lens>.md` | — |
 | 8 | Report, tree left dirty | — | **his review** |
 | 9 | Refactor or commit | commits | **his word** |
-| 10 | Push, hand over the MR, move to Review | `mr.md` | **his word on the push** |
+| 10 | Push, create the MR, move to Review | `mr.md` | **his word on the push** |
 | 11 | Merged: move to Done, clean up | Jira comment | — |
 
 Everything lives in a run directory, `~/.cache/ticket-delivery/<KEY>/`, never the session
@@ -75,6 +75,31 @@ Working rules, at every stage:
   re-brief it with SendMessage. Never stop it on your own call.
 - Every failure (a red test, a broken container, an unexpected error) goes to an issue
   investigator; you verify its answer before it reaches him, a ticket or an MR.
+- Docker-backed tests run one session at a time on this machine, under a lock, and end with
+  their stack down. The rest-api and central-backend stacks share container names and ports,
+  and their fixtures rewrite the databases: a second session would test against data the
+  first is changing, and one session's cleanup would remove the databases the other's tests
+  are still using.
+  - **Take the lock** before anything comes up: `mkdir ~/.cache/docker-tests.lock`, which
+    fails while another session holds it, then
+    `echo "<KEY> pid=$PPID <tree> $(date -Is)" > ~/.cache/docker-tests.lock/owner`. When
+    `mkdir` fails, read `owner`, tell him who holds it, and wait in a background Bash
+    (`until [ ! -d ~/.cache/docker-tests.lock ]; do sleep 30; done`). Never remove a lock you
+    did not take, even when its owner looks dead: ask him.
+  - **Check the stack is absent:** `docker ps -a` lists none of the stack's containers (the
+    repository's Docker lines in `references/repository-traps.md` name them). One that
+    exists belongs to nobody holding the lock, his own or one left behind: ask him before
+    the run, which would reuse it, write into it or replace it.
+  - **End the session in the same turn, pass, fail or killed:** `docker compose down` under
+    the project name it came up with, no server the run started still on its port,
+    `docker ps -a` listing none of the stack's containers, and only then
+    `rm -r ~/.cache/docker-tests.lock`.
+
+  His machine is short of memory and already swaps: a stack left up takes the memory he
+  works in. In a shell without the `docker` group, the test run itself and every `docker`
+  command go through `sg docker -c "<command>"`. A subagent runs Docker only under your
+  lock, briefed with this rule and the repository's Docker lines: take the lock before
+  dispatching it, and end the session after its report.
 
 ### 1. Read the tickets
 
@@ -280,8 +305,9 @@ You are a skeptic. Below are claimed problems with the implementation of plan
 <run>/plan.md in <repo>, diffed against <base>. Judge each one on its own: a verdict on
 one finding is no evidence about another. Try to REFUTE each against the actual code, the
 plan text and the neighbouring tests: does the cited code say what the finding claims,
-and does the problem actually follow? You may run the cited test or a scoped read-only
-command; never modify a file. CONFIRMED needs a concrete wrong behaviour, a material
+and does the problem actually follow? You may run the cited test, unless it is
+Docker-backed (rest-api integration or e2e, central-backend tests/locking/integration), or a
+scoped read-only command; never modify a file. CONFIRMED needs a concrete wrong behaviour, a material
 contractual omission, a test that cannot catch the defect it claims to cover, or an
 operational gap the plan asked for. Style preference and hardening the plan never asked
 for are REFUTED, and so is anything you cannot verify. Write to <out>, per finding: its
@@ -324,31 +350,41 @@ shows it) and carries the keys of the tickets the diff implements: the subtasks 
 are any, else the ticket itself. The body says why; no AI trailers.
 
 "Commit and push <repo>" is his approval for both stages 9 and 10 in that repository: show
-the exact push command as you run it, and do not ask again. In the deploy repo it still
+the exact push command as you run it, and do not ask again. Creating the MR is part of
+stage 10 and needs no further word. In the deploy repo it still
 holds the push while what the ledger's order makes it wait on is not done (an unmerged MR,
 an image not yet published): say so, and push once it is.
 
 ### 10. Push and the merge request
 
 Push only on his word, only what he named: `git -C <repo> push -u origin <branch>`. Then
-write `<run>/mr.md`, ready to paste:
+write the MR, per repository: the description alone in `<run>/mr-<repo>.md`, and in
+`<run>/mr.md` its title, the description, and, once created, its URL.
 
 - **title:** the commit subject
 - **description:** dev to dev, in plain words: what changed and why, how it was tested, the
   risk, and the ticket link. When the ledger records a merge or deploy order, state it and
   why, in the same words in every MR of the ticket.
-- **link:** the MR must target the base explicitly, because a project's default branch is
-  not always the dev branch. Hand him
-  `https://gitlab.syneto.eu/<group>/<repo>/-/merge_requests/new?merge_request%5Bsource_branch%5D=<branch>&merge_request%5Btarget_branch%5D=<base>`,
-  or, when he asked you to open it,
-  `glab mr create -R <group>/<repo> --source-branch <branch> --target-branch <base> --title "<title>" --description "<description>"`,
-  then read the target back with `glab mr view <branch> -R <group>/<repo>`.
+- **the merge request:** create it yourself, targeting the base explicitly, because a
+  project's default branch is not always the dev branch. First run every description line
+  through GitLab's markdown endpoint, which passes the same gateway WAF and stores nothing:
+  `while IFS= read -r line; do [ -z "$line" ] && continue; glab api -X POST markdown -f "text=$line" 2>&1 >/dev/null | grep -q 403 && echo "BLOCKED: $line"; done < <run>/mr-<repo>.md`
+  must print nothing. The WAF answers an HTML `403 Forbidden` on SQL-looking text such as
+  `word (`, `between X and Y` or `{a, b}`: reword the blocked line, never retry the same
+  body. Then
+  `glab mr create -R <group>/<repo> --source-branch <branch> --target-branch <base> --title "<title>" --description "$(cat <run>/mr-<repo>.md)" --yes`,
+  and read it back with `glab mr view <branch> -R <group>/<repo> -F json`: `target_branch`
+  must be `<base>` and `state` must be `opened`. Hand him its `web_url`. A 403 does not
+  create the MR; check with `glab mr list -R <group>/<repo> --source-branch <branch>`. When
+  an MR already exists for the branch (a follow-up push), do not create another: hand over
+  its `web_url`. Only when creation still fails, hand him the form link
+  `https://gitlab.syneto.eu/<group>/<repo>/-/merge_requests/new?merge_request%5Bsource_branch%5D=<branch>&merge_request%5Btarget_branch%5D=<base>`
+  and say why.
 
-`<group>/<repo>` comes from `git -C <repo> remote get-url origin`. Hand him the three, with
-any order first. A ticket moves to **Review** once every code repository it covers has had
-its MR link handed over; the MR itself may not exist yet, so record its URL in `ledger.md`
-and `mr.md` when you learn it. Until then the ticket stays In Progress, and the report names
-the repository still unpushed.
+`<group>/<repo>` comes from `git -C <repo> remote get-url origin`. Hand him the MR URLs,
+with any order first. A ticket moves to **Review** once every code repository it covers has
+an open MR; record each URL in `ledger.md` and `mr.md`. Until then the ticket stays In
+Progress, and the report names the repository still without one.
 
 Arm one Monitor per pipeline the push started, each reporting jobs as they finish, and send
 an investigator on the first blocking failure. The ids come from
@@ -436,7 +472,7 @@ never re-run it.
 | When | Move to |
 |---|---|
 | Stage 1, he hands you the tickets | In Progress |
-| Stage 10, every code repository the ticket covers has had its MR link handed over | Review |
+| Stage 10, every code repository the ticket covers has an open MR | Review |
 | Stage 11, every one of those MRs is merged and any deploy branch is pushed | Done |
 
 Never reuse a transition id: fetch `getTransitionsForJiraIssue` for each issue **at its
@@ -468,4 +504,5 @@ Every dispatch that touches a repository carries:
 - "git is read-only for you except the files you edit: no commit, stash, fetch, pull,
   checkout or reset; a fetch here can move HEAD. No `kubectl`."
 - that repository's section of `references/repository-traps.md` beside this file: its gate,
-  its traps, and its agent
+  its traps, and its agent; when the brief may run Docker, also that file's opening
+  **Docker-backed suites** paragraph and the Docker rule under *Working rules*
