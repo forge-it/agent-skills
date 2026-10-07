@@ -10,7 +10,7 @@ description: >-
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.1.3"
+  version: "0.1.4"
 ---
 
 # Syneto Ticket Delivery
@@ -54,7 +54,7 @@ asks for it on this ticket, recorded in `ledger.md`.
 | 8 | Report, tree left dirty | — | **his review** |
 | 9 | Refactor or commit | commits | **his word** |
 | 10 | Push, hand over the MR, move to Review | `mr.md` | **his word on the push** |
-| 11 | Merged: move to Done | Jira comment | — |
+| 11 | Merged: move to Done, clean up | Jira comment | — |
 
 Everything lives in a run directory, `~/.cache/ticket-delivery/<KEY>/`, never the session
 scratchpad. `<KEY>` is the parent story's key when every ticket is a subtask of one story,
@@ -66,7 +66,7 @@ line at every stage change, a ticket's status at every move, and inside stages 5
 every round (`5: round 2 dispatched, triage pending`, then `5: round 2 triaged,
 plan revised`). From stage 6 it is also **change-cycle-pipeline**'s ledger, kept here so
 nothing is added to a repository's `.gitignore`. Its last line is `complete` once every
-ticket is Done and no push is pending.
+ticket is Done, no push is pending, and stage 11's cleanup has run.
 
 Working rules, at every stage:
 
@@ -387,6 +387,35 @@ chosen per MR, so read it every time) and its `target_branch`, then the acceptan
 as a checklist. Fetch nothing into his checkout for this. Comment on tickets; never edit a
 description he did not ask you to edit.
 
+Then clean up each code repository once its MR is merged, without asking. Touch only what
+the ledger records for this ticket: its work branch, and its linked worktree when one
+survived (no merge-back, or a resumed run). Everything else in the repository belongs to
+someone else however stale it looks (another ticket's worktree, a review checkout, an entry
+git marks `prunable`), so never run `git worktree prune`.
+
+First prove nothing is lost. The local branch tip must equal the `sha` field of
+`glab mr view <branch> -R <group>/<repo> -F json`, the commit GitLab merged, and
+`git -C <path> status --short` must be empty in every checkout on that branch. For a linked
+worktree, also list what still runs inside it (his terminal, his editor's language server,
+a dev server):
+
+```
+for p in /proc/[0-9]*; do c=$(readlink "$p/cwd" 2>/dev/null); case "$c" in <worktree>*) echo "$(basename "$p") $(tr '\0' ' ' < "$p/cmdline")";; esac; done
+```
+
+When a check fails or a process shows up, stop and tell him what you found: never remove
+a tree from under his tools. Then, in this order:
+
+- a linked worktree: `git -C <repo> worktree remove .claude/worktrees/<KEY>`
+- a main checkout still on the work branch (the main-worktree choice, or after a
+  merge-back): `git -C <repo> checkout <base>`, then `git -C <repo> pull --ff-only`. A main
+  checkout on any other branch is someone else's work: leave it.
+- the branch: `git -C <repo> branch -D <branch>`. `-D`, because git never sees a squash-merged
+  branch as merged; the `sha` check above is what makes it safe.
+
+The remote branch is GitLab's to delete on merge: delete it only on his word. Keep the run
+directory, it is the record. Then write `complete` in `ledger.md`.
+
 ## Resuming
 
 List `~/.cache/ticket-delivery/*/ledger.md`. Open the run whose directory or ticket list
@@ -397,8 +426,8 @@ re-verify:
 - every repository in the ledger is among this session's working directories
 
 When something differs, stop and tell him before any dispatch or transition. Stage 11 is
-the exception: it needs only `glab` and Jira, so skip the branch and working-directory
-checks there. Then continue from the stage the ledger names. In stage 5 or 7, a round whose
+the exception: moving to Done needs only `glab` and Jira, and the cleanup runs its own
+checks, so skip the branch and working-directory checks there. Then continue from the stage the ledger names. In stage 5 or 7, a round whose
 review files exist but that the ledger does not record as triaged is untriaged: triage it,
 never re-run it.
 
