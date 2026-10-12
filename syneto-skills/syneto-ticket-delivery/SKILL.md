@@ -10,7 +10,7 @@ description: >-
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.1.6"
+  version: "0.1.7"
 ---
 
 # Syneto Ticket Delivery
@@ -77,6 +77,14 @@ Working rules, at every stage:
   re-brief it with SendMessage. Never stop it on your own call.
 - Every failure (a red test, a broken container, an unexpected error) goes to an issue
   investigator; you verify its answer before it reaches him, a ticket or an MR.
+- A git worktree lives only at `<repo>/.claude/worktrees/<name>`, inside the repository it
+  belongs to, never in the session scratchpad, whatever another skill defaults to: that is
+  where he and stage 11 look for it. Only you create one, always with
+  `git -C <repo> worktree add .claude/worktrees/<name>`: the separate worktree he asks for
+  (`references/separate-worktree.md`), or a check at another revision with `--detach`,
+  ignored the same way and removed as soon as the check is done. Never EnterWorktree or an
+  `isolation: "worktree"` dispatch: both build in the session's own repository, from the
+  remote's default branch. No subagent creates one.
 - Docker-backed tests run one session at a time on this machine, under a lock, and end with
   their stack down. The rest-api and central-backend stacks share container names and ports,
   and their fixtures rewrite the databases: a second session would test against data the
@@ -200,10 +208,11 @@ Ask with `AskUserQuestion`, recommended option first. Record his choice in `opti
 ### 4. Plan
 
 Dispatch a planner (general-purpose) with `ticket.md`, the context files, the locked scope,
-and the brief essentials. Tell it to load **superpowers:writing-plans** with three
-overrides: the plan goes to `<run>/plan.md` and nowhere in a repository; no task has a
-commit step, because the tree stays dirty; and it returns when the file is written, without
-offering execution options. The plan holds:
+and the brief essentials. Tell it to load **superpowers:writing-plans** with four
+overrides: the plan goes to `<run>/plan.md` and nowhere in a repository; its header names no
+execution skill, because this skill's workers execute it; no task has a commit step, because
+the tree stays dirty; and it returns when the file is written, without offering execution
+options. The plan holds:
 
 - **real code**, never a description of code: placeholders are where implementors invent
 - exact files, and the exact test command for each task
@@ -518,7 +527,9 @@ Every dispatch that touches a repository carries:
   from **parallel-worktrees-general** (Mode D or Mode B); for any other: "read-only on
   `<repo>`"
 - "git is read-only for you except the files you edit: no commit, stash, fetch, pull,
-  checkout or reset; a fetch here can move HEAD. No `kubectl`."
+  checkout or reset (a fetch here can move HEAD), and no second copy of the repository: no
+  `git worktree add`, EnterWorktree or `git clone`. When the task needs another revision on
+  disk (a check at `HEAD`, a bisect), say so in your report instead. No `kubectl`."
 - that repository's section of `references/repository-traps.md` beside this file: its gate,
   its traps, and its agent; when the brief may run Docker, also that file's opening
   **Docker-backed suites** paragraph and the Docker rule under *Working rules*
