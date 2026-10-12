@@ -10,7 +10,7 @@ description: >-
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.1.7"
+  version: "0.1.8"
 ---
 
 # Syneto Ticket Delivery
@@ -79,12 +79,12 @@ Working rules, at every stage:
   investigator; you verify its answer before it reaches him, a ticket or an MR.
 - A git worktree lives only at `<repo>/.claude/worktrees/<name>`, inside the repository it
   belongs to, never in the session scratchpad, whatever another skill defaults to: that is
-  where he and stage 11 look for it. Only you create one, always with
-  `git -C <repo> worktree add .claude/worktrees/<name>`: the separate worktree he asks for
-  (`references/separate-worktree.md`), or a check at another revision with `--detach`,
-  ignored the same way and removed as soon as the check is done. Never EnterWorktree or an
+  where he and stage 11 look for it. Create one only with
+  `git -C <repo> worktree add .claude/worktrees/<name>`, never EnterWorktree or an
   `isolation: "worktree"` dispatch: both build in the session's own repository, from the
-  remote's default branch. No subagent creates one.
+  remote's default branch. You create the separate worktree he asks for
+  (`references/separate-worktree.md`) and your own `--detach` checks, removed once done; a
+  subagent creates only the temporary one its brief allows.
 - Docker-backed tests run one session at a time on this machine, under a lock, and end with
   their stack down. The rest-api and central-backend stacks share container names and ports,
   and their fixtures rewrite the databases: a second session would test against data the
@@ -159,7 +159,10 @@ When the base is another branch, it replaces `central-2.10` in every line. When 
 no local branch yet, replace the checkout line with `git -C <repo> fetch origin <base>` and
 `git -C <repo> checkout --track origin/<base>`, then go on from the pull. Same branch name in
 every repository. When the status is not empty or the pull refuses to fast-forward, stop and
-tell him: never stash, reset or merge to get past it. A repository that stage 2 adds to the
+tell him: never stash, reset or merge to get past it. Then make sure the repository ignores
+`.claude/worktrees/`, where every worktree of the run lives: when
+`git -C <repo> check-ignore -q .claude/worktrees/x` fails, add `.claude/worktrees/` to
+`<repo>/.git/info/exclude`, never to `.gitignore`. A repository that stage 2 adds to the
 scope gets the same sequence then.
 
 **The deploy repo `~/Projects/central` gets no work branch.** The branch is the environment,
@@ -527,9 +530,13 @@ Every dispatch that touches a repository carries:
   from **parallel-worktrees-general** (Mode D or Mode B); for any other: "read-only on
   `<repo>`"
 - "git is read-only for you except the files you edit: no commit, stash, fetch, pull,
-  checkout or reset (a fetch here can move HEAD), and no second copy of the repository: no
-  `git worktree add`, EnterWorktree or `git clone`. When the task needs another revision on
-  disk (a check at `HEAD`, a bisect), say so in your report instead. No `kubectl`."
+  checkout or reset (a fetch here can move HEAD), no EnterWorktree, no `git clone`. For
+  another revision on disk (a check at `HEAD`, a bisect), add a temporary worktree with
+  `git -C <repo> worktree add --detach .claude/worktrees/<name> <rev>` and remove it with
+  `git -C <repo> worktree remove` before you report. In a Python repository, trust a run
+  there only once `<repo>/.venv/bin/python -c "import <package>; print(<package>.__file__)"`,
+  run from the directory the test runs in, prints no path in the main checkout. No
+  `kubectl`."
 - that repository's section of `references/repository-traps.md` beside this file: its gate,
   its traps, and its agent; when the brief may run Docker, also that file's opening
   **Docker-backed suites** paragraph and the Docker rule under *Working rules*
