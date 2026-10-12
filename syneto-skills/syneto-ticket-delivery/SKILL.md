@@ -10,7 +10,7 @@ description: >-
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.1.5"
+  version: "0.1.6"
 ---
 
 # Syneto Ticket Delivery
@@ -29,16 +29,18 @@ answers its intake gate, so do not ask it again:
 | Supervision | supervised |
 | Implementer | fleet |
 | Plan review | max 2 rounds; round 2 re-checks only what round 1 changed |
-| Code review | **change-cycle-pipeline** narrow loop, max 3 rounds, checkers take up to three findings each (stage 7) |
+| Code review | **change-cycle-pipeline** narrow loop, max 3 rounds, one `haiku` checker per finding at effort `max` (stage 7) |
 | Operator gates | stages 3, 6, 8, 9, plus every push |
 | Gate cadence | at the end: every cycle is implemented in turn, then one review loop over their union (stage 7, one cap of 3), then one stage 8 report |
-| Worktree | his answer at stage 6: the main worktree, or a separate one merged back into it; `-no-commit` workers either way, and the main worktree ends dirty |
+| Worktree | his answer at stage 6: the main worktree, or a separate one merged back into it unless he keeps it without a merge-back; `-no-commit` workers either way, and the checkout holding the change ends dirty |
 
 Re-open one of these only when he changes it.
 
-**Models.** Name no model on any dispatch: every subagent lands on his Sonnet default, and
-agent-fleet-orchestration's Opus departures do not apply here. `opus` or `fable` only when he
-asks for it on this ticket, recorded in `ledger.md`.
+**Models.** Name no model on any dispatch but stage 7's checkers, which run on `haiku` at
+effort `max`: every other subagent lands on his Sonnet default, and
+agent-fleet-orchestration's Opus departures do not apply here. `opus` or `fable` only when
+he asks for it on this ticket, recorded in `ledger.md`. A model or effort he asks for on a
+ticket wins over these defaults on every dispatch it covers, the checkers included.
 
 ## Stages
 
@@ -290,33 +292,33 @@ in parallel; inside one repository, one writer at a time.
 structure-and-style guard (`python-`, `react-`, `vue-` or `rust-`) beside the lens in every
 round: the runtime lens cannot see test-structure violations.
 
-**Checkers take findings in threes, not one each.** This replaces the pipeline's verify
-step; its other rules (merge duplicates first, drop what an earlier round refuted) still
-hold. Every checker reads the same diff, so one per finding pays for that reading once per
-finding, while one checker for the whole round lets one verdict colour the next. Group the
-round's merged findings, every severity, into checkers of up to three, keeping findings on
-the same file or code path together, and dispatch them all in one message. Each gets these
-lines, paths filled and `<out>` its own
-`<run>/code-review-rN-verdicts-K.md` (K numbers the round's checkers), then the findings
-pasted in full with their citations and plan locations:
+**One checker per finding, on `haiku`.** This is the pipeline's verify step with the brief
+below in place of its own; its other rules (merge duplicates first, drop what an earlier
+round refuted) still hold. A checker holding several findings lets one verdict colour the
+next, while on `haiku` reading the same diff once per finding stays cheap, even at `max`
+effort. Dispatch one general-purpose checker per merged finding, every severity, all in one
+message, each with model `haiku` and effort `max`. Each gets these lines, paths filled and
+`<out>` its own `<run>/code-review-rN-verdict-K.md` (K numbers the round's checkers), then
+its finding pasted in full with its citations and plan location:
 
 ```
-You are a skeptic. Below are claimed problems with the implementation of plan
-<run>/plan.md in <repo>, diffed against <base>. Judge each one on its own: a verdict on
-one finding is no evidence about another. Try to REFUTE each against the actual code, the
-plan text and the neighbouring tests: does the cited code say what the finding claims,
-and does the problem actually follow? You may run the cited test, unless it is
-Docker-backed (rest-api integration or e2e, central-backend tests/locking/integration), or a
-scoped read-only command; never modify a file. CONFIRMED needs a concrete wrong behaviour, a material
-contractual omission, a test that cannot catch the defect it claims to cover, or an
-operational gap the plan asked for. Style preference and hardening the plan never asked
-for are REFUTED, and so is anything you cannot verify. Write to <out>, per finding: its
-title, the verdict, then at most three sentences of evidence with file:line citations.
+You are a skeptic. Below is a claimed problem with the implementation of plan
+<run>/plan.md in <repo>, diffed against <base>. Try to REFUTE it against the actual code,
+the plan text and the neighbouring tests: does the cited code say what the finding claims,
+and does the problem actually follow? Other checkers are working in this tree at the same
+time. You may run the cited test alone, by its id, unless it is Docker-backed (rest-api
+integration or e2e, central-backend tests/locking/integration) or compiles before it runs
+(central-api, central-iam), or a scoped read-only command; never modify a file. CONFIRMED
+needs a concrete wrong behaviour, a material contractual omission, a test that cannot catch
+the defect it claims to cover, or an operational gap the plan asked for. Style preference
+and hardening the plan never asked for are REFUTED, and so is anything you cannot verify.
+Write to <out>: the finding's title, the verdict, then at most three sentences of evidence
+with file:line citations.
 ```
 
-A finding whose fix touches a schema, a migration, a public API or a wire format still
-gets the pipeline's three-checker panel, majority wins: three more checkers in the same
-message, each with these lines, its own `<out>` and that finding alone.
+A finding whose fix touches a schema, a migration, a public API or a wire format gets the
+pipeline's three-checker panel, majority wins: three checkers instead of one, in the same
+message, each with these lines, its own `<out>` and that finding.
 
 A red gate is the pipeline's "send a fixer" step, with an investigator first: an issue
 investigator of the matching stack, briefed with the failing test id and the command that
@@ -324,24 +326,37 @@ reproduces it, never your hunch. It runs alone in that tree and leaves `git stat
 as it found it. Then the fixer, carrying the investigator's root cause.
 
 With a separate worktree, merge it back when the loop ends, converged or capped, as
-`references/separate-worktree.md` describes, before the report.
+`references/separate-worktree.md` describes, before the report. When the main checkout holds
+another ticket, ask him first: he may keep the worktree without a merge-back, recorded in
+`ledger.md`.
 
 ### 8. Report — gate
 
-First dispatch a writer (Mode D, in the main worktree) told to load **reconcile-docs** over
-the whole diff against the base named explicitly, so it never runs `git remote set-head`.
+First dispatch a writer in the checkout holding the change (Mode D in the main worktree, Mode
+B in a linked worktree he kept without a merge-back) told to load **reconcile-docs** over the
+whole diff against the base named explicitly, so it never runs `git remote set-head`.
 **change-cycle-pipeline** runs that step after his acceptance; here it runs before his
 review, so every doc edit is in the tree he reads and nothing is edited after his word at
 stage 9.
 
-Then give him **change-cycle-pipeline**'s operator report plus `git -C <repo> status --short` for
-each repository (a diffstat omits new files). Every finding in plain words with its exact
-`file:line`. The tree stays dirty. Then stop.
+Then give him **change-cycle-pipeline**'s operator report, every finding in plain words with
+its exact `file:line`. Its next action is his review, so it ends with this block for each
+repository the change touches:
+
+```
+Review <repository name> in <absolute path of the checkout holding the change>
+  <main worktree | linked worktree>, branch <branch>, against <base, or HEAD in the deploy repo>
+  <git -C <that path> status --short --untracked-files=all, verbatim>
+```
+
+Run that status in the path you name: its paths must be the files this report lists as
+changed, which proves the path holds this ticket's change, and it lists each new file a
+diffstat omits. The tree stays dirty. Then stop.
 
 ### 9. Refactor or commit — gate
 
-Refactors he asks for go to a fixer or implementor in Mode D, followed by the gate and a
-fresh stage 8 report.
+Refactors he asks for go to a fixer or implementor in the checkout holding the change, in the
+same mode as stage 8's writer, followed by the gate and a fresh stage 8 report.
 
 Commit only when he says so, and only in the repositories he names. When another repository
 looks ready too, say so in one line and wait. One commit per repository unless he says
@@ -457,7 +472,8 @@ directory, it is the record. Then write `complete` in `ledger.md`.
 List `~/.cache/ticket-delivery/*/ledger.md`. Open the run whose directory or ticket list
 carries the key he names, else the only one not marked `complete`, else ask him. Before acting,
 re-verify:
-- `git -C <repo> status --short --branch` matches the ledger's branch and dirty files
+- `git -C <checkout> status --short --branch` matches the ledger's branch and dirty files,
+  `<checkout>` being the linked worktree he kept without a merge-back, else `<repo>`
 - each ticket's status in Jira matches the ledger
 - every repository in the ledger is among this session's working directories
 
