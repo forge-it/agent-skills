@@ -131,10 +131,59 @@ up at a time: when the other is up and you did not start it, ask him before taki
   the same conflict as a red overlay ('Plugin "unused-imports" was conflicted'), because
   ESLint climbs to the main checkout's copy; lint with
   `npx eslint --no-eslintrc -c .eslintrc "**/**/*.{js,jsx}"` (proven equivalent, 197 files).
-- **Traps:** about 9 RAS deployment tests fail on a clean tree, so take the baseline first. The
+- **Other worktrees:** `npx jest src/` in the main checkout also collects suites under any
+  `.claude/worktrees/*` left by other runs (they fail to load without their own
+  `node_modules`). Judge the gate on the `src/...` suites and the test counts, or add
+  `--testPathIgnorePatterns '<rootDir>/.claude/'`.
+- **Traps:** about 9 RAS deployment tests fail on a clean tree (rasTable, rasTabs,
+  deployRas), so take the baseline first. Under heavy CPU contention the first
+  machineDetails tests can hit Jest's 5 s timeout: rerun that suite alone before calling it
+  a regression. The
   GitLab default branch is `central-2.9`: always set the MR target. The first pipeline on a new
   branch rebuilds the base and builder images, so a failure in those jobs is an image or
   apt-mirror problem, not the ticket's: the investigator curls the mirror before anything else.
+
+## central-ui — `central/central-ui`
+
+- **Stack:** React 18 in plain JavaScript with PropTypes, UI kit `@syneto/compass-react`, no
+  i18n. `react-*` agents; tell them there is no TypeScript.
+- **Node:** prefix every command with `PATH=$HOME/.nvm/versions/node/v18.20.4/bin:$PATH`, as
+  for central-api. The main checkout has no `node_modules`: `npm ci` in the tree under test.
+- **Gate:** `npm run test:report` (mocha once, over the whole `tests/**` tree whatever files
+  you name; the result is `junit.xml`, git-ignored), then `./node_modules/.bin/eslint` on the
+  changed and new files. **Never `npm run test`**: it is `nodemon` and never exits.
+- **Tests:** Mocha + Chai + Sinon + jsdom under `tests/`, mirroring `client/`, loading modules
+  with `require`. jsdom lacks `cancelAnimationFrame`, which compass `Button` calls on unmount,
+  so a test that mounts one needs a shim (SYN-3081 put it per file).
+- **Traps:** `.gitignore` does not cover `.claude/worktrees/`: add it to `.git/info/exclude`
+  before creating a linked worktree. The GitLab default branch moves with the release
+  (`central-2.10` on 2026-10-05): always set the MR target.
+
+## bi-tool — `bi/bi-tool`
+
+- **Stack:** Airflow 1.10.12 + dbt 0.18.0 on BigQuery, plus a little Python. Not DDD. Use
+  general-purpose agents for dbt SQL, `python-*` for the Python hooks and operators. No CI, no MRs
+  required: `master` takes direct pushes, and Airflow runs from a host checkout.
+- **Venv:** the locked stack runs only on CPython ≤ 3.8. The repo's `.venv` (built on 3.11) has
+  never run dbt or airflow. Keep a 3.8 venv outside the repo; the recipe is in memory
+  `bi-tool-needs-python-38` (uv 3.8 + `poetry export` + `pip<24.1 --no-deps`, plus `pandas-gbq`).
+- **Gate:**
+  - `export AIRFLOW_HOME=<scratch copy of airflow_home>` before anything that imports airflow:
+    `airflow_home/airflow.db` is git-tracked and holds the host's connections and variables.
+    Importing airflow with the working directory at `src/` still creates an untracked
+    `src/airflow_home/logs/scheduler/{latest,<date>}` tree; tell workers to remove it before they
+    hand off, and check `git status --short` for it after every gate.
+  - pytest from the repo root: `<venv>/bin/python -m pytest tests -c tests/pytest.ini -p no:cacheprovider`
+    (31 pass; a config import also needs `AIRFLOW_VAR_AIRFLOW_ENVIRONMENT=DEV`).
+  - dbt from `transform/`: `AIRFLOW_ENVIRONMENT=DEV <venv>/bin/dbt deps --profiles-dir profiles` once
+    per machine (writes `/tmp/dbt/modules`; without it compile fails with `'dbt_utils' is undefined`),
+    then `rm -rf /tmp/dbt/target/compiled && AIRFLOW_ENVIRONMENT=DEV <venv>/bin/dbt compile --models central --profiles-dir profiles`.
+    Compile opens a read-only BigQuery connection through the tracked service-account key and checks
+    Jinja and refs, not SQL semantics. Never `dbt run`/`seed`/`test`, never BigQuery DDL/DML.
+- **Traps:** booleans land as INTEGER (`= 1`); each raw table is dropped and schema-autodetected
+  every run; a `/bi` endpoint returning `[]` or 403 drops its raw table and fails all of dbt; a 404
+  fails the whole `central` DAG; the loader string-replaces `true`/`false`/`$`/`{}`/double spaces in
+  the whole payload. A service-account key is committed under `transform/keys/`: never print it.
 
 ## syneto-diana — `hyper/syneto-diana`
 
