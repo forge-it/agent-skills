@@ -4,7 +4,7 @@ description: Rust-specific design idioms for encoding invariants in the type sys
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.5"
+  version: "0.0.6"
 ---
 
 # Design Idioms Skill
@@ -852,8 +852,8 @@ fn apply_upgrade(lock: &RepositoryLock) -> Result<(), UpgradeError> {
 }
 
 // Good - the guard releases when it goes out of scope, on every path
-struct RepositoryLockGuard<'lock> {
-    lock: &'lock RepositoryLock,
+struct RepositoryLockGuard<'a> {
+    lock: &'a RepositoryLock,
 }
 
 impl Drop for RepositoryLockGuard<'_> {
@@ -880,8 +880,8 @@ fn apply_upgrade(lock: &RepositoryLock) -> Result<(), UpgradeError> {
 **Commit-or-rollback guards.** A transaction guard rolls back in `Drop` unless `commit(self)` ran. `commit` consumes the guard, so nothing can touch the transaction after it.
 
 ```rust
-struct Transaction<'connection> {
-    connection: &'connection Connection,
+struct Transaction<'a> {
+    connection: &'a Connection,
     committed: bool,
 }
 
@@ -908,7 +908,7 @@ impl Drop for Transaction<'_> {
 Shape rules:
 - Bind the guard to a named variable: `let _guard = lock.acquire()?;`. Writing `let _ = lock.acquire()?;` drops the guard on that same line and releases immediately.
 - `Drop` cannot return an error and cannot `.await`. When release can fail in a way the caller must handle, or must await, provide an explicit `release(self) -> Result<(), ReleaseError>` (or `async fn release(self)`) and keep `Drop` as the best-effort fallback that reports.
-- A guard never outlives what it guards: borrow the resource (`&'lock RepositoryLock`) or hold an `Arc` to it.
+- A guard never outlives what it guards: borrow the resource (`&'a RepositoryLock`) or hold an `Arc` to it.
 
 **When NOT to apply:** the resource already has a guard from the standard library or the runtime (`File`, `TcpStream`, `MutexGuard`, `RwLockReadGuard`). Do not wrap what is already released on drop.
 
@@ -1096,9 +1096,9 @@ struct ParsedPackage {
 }
 
 // Good - views into the buffer already in memory; no allocation
-struct ParsedPackage<'input> {
-    name: &'input str,
-    version: &'input str,
+struct ParsedPackage<'a> {
+    name: &'a str,
+    version: &'a str,
 }
 
 fn parse_line(line: &str) -> Result<ParsedPackage<'_>, ParseError> {

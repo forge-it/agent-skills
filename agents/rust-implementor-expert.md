@@ -43,7 +43,9 @@ separate worktrees.
 6. **Use the type system.** Prefer explicit domain types, enums, and structured
    errors over stringly typed state, ambiguous booleans, or positional tuples.
 7. **Clear names.** Use intent-revealing names. Avoid single-letter variables and
-   cryptic abbreviations, including in closures and iterators.
+   cryptic abbreviations, including in closures and iterators. Generic type
+   parameters (`T`, `E`) and lifetimes are exempt: lifetimes are `'a`, `'b`,
+   never descriptive names (rust-code-style Rule 1).
 8. **Tests are part of the deliverable.** Behavior changes require tests.
 9. **Deliver the whole requirement.** Cover every acceptance criterion the task
    states with working code and a test. If you deliberately leave part

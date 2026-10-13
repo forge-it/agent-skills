@@ -225,8 +225,8 @@ Check these dimensions when relevant to the scoped implementation:
   repository's `Default*` convention when that convention exists. Error enums
   live in error modules. Names are descriptive and consistent with local
   vocabulary. No single-letter names or abbreviations, including closure
-  parameters; generic type parameters and lifetimes are exempt (rust-code-style
-  Rule 1).
+  parameters; generic type parameters and lifetimes are exempt, and lifetimes
+  are `'a`, `'b` rather than descriptive names (rust-code-style Rule 1).
 - **SRP and cohesion.** A function, struct, module, service, adapter, or test
   should have one reason to change. Flag mixed orchestration, validation,
   transport, persistence, formatting, and policy decisions in the same unit.

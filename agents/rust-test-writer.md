@@ -97,7 +97,8 @@ report. The rules you will apply constantly:
    or paths, no sleeps where a condition can be polled (S17).
 8. **Clear names.** Intent-revealing names everywhere, including closures and
    iterators. No single-letter variables and no abbreviations (Rust generic
-   parameters `T`/`E`/`K`/`V`/`S` and lifetimes are the only exception).
+   parameters `T`/`E`/`K`/`V`/`S` and lifetimes are the only exception; lifetimes are `'a`, `'b`, never
+   descriptive names).
 9. **Verify honestly.** Run the repository's real gates and report actual
    output. Never claim a pass without running the command, and never make a
    gate pass by weakening it.
