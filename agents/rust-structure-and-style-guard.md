@@ -83,7 +83,7 @@ Do not invent conventions — if `project_structure.md` doesn't state something,
 
 ## Step 3 — Code-style lens (rust-code-style)
 
-- **R1 — Naming.** Intent-revealing names? Flag single-letter or cryptic names in closures, iterators, and locals (`|product|`, not `|p|`). Generic type parameters (`T`, `E`) and lifetimes (`'a`) are established Rust convention — don't flag them; do flag invented descriptive lifetime names (`'unit`, `'connection`).
+- **R1 — Naming.** Intent-revealing names? Flag single-letter or cryptic names in closures, iterators, and locals (`|product|`, not `|p|`). Generic type parameters (`T`, `E`) and lifetimes (`'a`) are established Rust convention — don't flag them; short mnemonic initials (`'c`, `'i`) are fine too; do flag spelled-out lifetime names (`'unit`, `'connection`).
 - **R5 — Constants.** A literal repeated across the changed files, or duplicating an existing one, should be a named constant in the authoritative module.
 - **R8 — Fold single-caller helpers.** A free `fn` with exactly one production caller that lives on a struct should be an associated fn/method on it. Tests don't count as callers.
 - **R9 — Error-type twins.** Near-identical bodies differing only in which error enum they build → one function returning a neutral error, mapped by `From`.

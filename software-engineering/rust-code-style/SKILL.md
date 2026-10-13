@@ -4,7 +4,7 @@ description: Coding conventions and style rules for Rust. Apply when writing or 
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.14"
+  version: "0.0.15"
 ---
 
 # Rust Code Style Skill
@@ -15,7 +15,7 @@ Conventions for writing clean, maintainable, readable Rust. This skill covers co
 
 ### 1. Descriptive Naming (CRITICAL)
 
-Use descriptive, intent-revealing, searchable names. Never use single-letter or abbreviated names — for variables, constants, or closure and iterator parameters. This applies to every closure, including `.map()`, `.filter()`, `.find()`, `.fold()`, and any other combinator. *Exception:* generic type parameters (`T`, `E`, `K`, `V`, `S`) and lifetimes follow established Rust convention. Name lifetimes `'a`, `'b`, `'c` — do not invent descriptive lifetime names like `'unit` or `'connection`; the borrowed field or parameter already says what is borrowed. Crate-established names you consume (serde's `'de`, `'static`) stay as they are.
+Use descriptive, intent-revealing, searchable names. Never use single-letter or abbreviated names — for variables, constants, or closure and iterator parameters. This applies to every closure, including `.map()`, `.filter()`, `.find()`, `.fold()`, and any other combinator. *Exception:* generic type parameters (`T`, `E`, `K`, `V`, `S`) and lifetimes follow established Rust convention. Lifetimes are short: either sequential (`'a`, `'b`) or a mnemonic initial of what is borrowed (`'l` for a lock, `'c` for a connection, `'i` for input) — never spelled-out names like `'unit` or `'connection`; the borrowed field or parameter already says what is borrowed. Crate-established names you consume (serde's `'de`, `'static`) stay as they are.
 
 ```rust
 // Bad
