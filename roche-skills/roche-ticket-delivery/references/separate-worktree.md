@@ -43,7 +43,7 @@ Every implementor, fixer and investigator gets:
 - the subagent Docker lines (SKILL.md, *Working rules*)
 
 Every reviewer and verifier gets the worktree path, `git -C <worktree>` for every git
-command, and "read-only on `<worktree>`". It gets no gate command and no lock statement: it
+command, and "read-only on `<worktree>`". It gets no gate command and no subagent Docker lines: it
 never runs cargo, just or docker (SKILL.md, stage 7).
 
 ## Merge back
@@ -79,8 +79,10 @@ Then discard the worker copy and remove it: `git -C <worktree> reset --hard`,
 `git worktree prune`, which **parallel-worktrees-general** *Cleanup* ends with: it touches
 other tickets' worktrees (SKILL.md, stage 11). The patch file stays in `<run>`.
 
-Only then, under the Docker lock, dispatch the final-gate agent (SKILL.md, *Models*) to run
-the gate and any Docker suite the plan schedules, once, in the main worktree. On a converged
+Only then, under the Docker lock, dispatch the final-gate agent (SKILL.md, *Models*) in the
+main worktree. Its brief is the cycle Brief with the main worktree's commands in place of
+the worktree's: `DOCKER_DEFAULT_PLATFORM=linux/amd64 just quality-gate` from `<repo>`, and
+the Docker suites the plan schedules, from `<repo>`. On a converged
 loop this is change-cycle-pipeline's final gate: do not run another one in the worktree
 before the merge-back. A red result goes into the stage 8 report as open: nothing is fixed
 before he has seen the tree.

@@ -8,9 +8,10 @@ with the repository, the repository wins: fix this file in the same session.
 **Docker** runs in Colima: an aarch64 VM with 4 CPUs and 8 GiB, which mounts only `$HOME`.
 A bind mount from the session scratchpad (`/private/tmp/...`) comes up empty in the
 container, so every tree a container sees lives under `$HOME`. A
-`<repo>/.claude/worktrees/<name>` worktree qualifies. Every Docker run happens under
-SKILL.md's Docker rule: one session at a time under `~/.cache/docker-tests.lock`, with no
-`rdnx-*` container left at the end. Never install or reconfigure Docker or Colima yourself.
+`<repo>/.claude/worktrees/<name>` worktree qualifies. Every Docker run happens in the
+orchestrator's Docker session (SKILL.md, *Working rules*): one session at a time under
+`~/.cache/docker-tests.lock`, with no `rdnx-*` container left at the end except the ones
+`ledger.md` says he keeps. A subagent's brief carries the subagent Docker lines instead. Never install or reconfigure Docker or Colima yourself.
 
 ## rdnx — `remix/nifs/rdnx`
 
@@ -65,8 +66,10 @@ SKILL.md's Docker rule: one session at a time under `~/.cache/docker-tests.lock`
 - **Docker suites** (`tests/*/README.md`), outside the gate, each prefixed with
   `DOCKER_DEFAULT_PLATFORM=linux/amd64`: `just test-smoke-all`, `just test-system-all`,
   `just test-reclike-all`, and `just test-parity scenario=all`. The smoke suite leaves
-  `rdnx-repo` running and the system suite leaves `rdnx-systest-repo`: SKILL.md's Docker
-  rule removes them at the end of the session. Each
+  `rdnx-repo` running and the system suite leaves `rdnx-systest-repo`: the orchestrator
+  removes them when it ends the Docker session. When `ledger.md` keeps `rdnx-repo`, run the
+  smoke suite with `RDNX_REPO=rdnx-repo-<key in lower case>` in its environment
+  (`fixtures/docker-helpers.sh` supports it): it then leaves his container alone. Each
   case takes seconds to minutes. They use fixed container names (`rdnx-systest-*`,
   `rdnx-reclike-*`, `rdnx-fixbuild*`, `rdnx-svc-*`) and named volumes (`rdnx-seed`,
   `rdnx-systest-readonly-identity`), so they run one at a time, under the lock. The plan

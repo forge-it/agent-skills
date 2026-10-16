@@ -54,8 +54,9 @@ change-cycle-pipeline's "fail the cycle" in those rows: a second failed dispatch
 task (no result, no required handoff, or the same gate still red) means you take the task
 over, under the Docker lock, in the checkout holding the change. The stage 8 report says you
 did. Before you write, load the skills that the repository's *Agents* line in
-`references/repository-traps.md` names for workers, and read `docs/layout.md` as its
-structure rules. Run the gate as the worker's brief says.
+`references/repository-traps.md` names for workers, read `docs/layout.md` as its
+`project_structure.md`, and `docs/testing.md` (*Structure rules*) for the rules its gate
+enforces. Run the gate as the worker's brief says.
 
 ## Where things are
 
@@ -71,7 +72,7 @@ structure rules. Run the gate as the worker's brief says.
 
 | # | Stage | Writes | Gate |
 |---|---|---|---|
-| 1 | Read the tickets, move them to In Progress, cut the branches | `ticket.md`, `ledger.md` | — |
+| 1 | Read the tickets, cut the branches, move them to In Progress | `ticket.md`, `ledger.md` | — |
 | 2 | Gather context, read-only | `context-NN-<topic>.md` | — |
 | 3 | Three options and a recommendation | `options.md` | **his choice** |
 | 4 | Plan the chosen option | `plan.md` | — |
@@ -142,7 +143,9 @@ Working rules, at every stage:
     When he lets the run go ahead, record in `ledger.md` the names he keeps, and leave those
     out of the removal at the end. Before a suite that replaces or reuses one of them (the
     smoke suite recreates `rdnx-repo`; the system suite reuses `rdnx-systest-repo` with its
-    old bind mount), tell him and wait.
+    old bind mount), tell him and wait. When he lets it go ahead, drop that name from the
+    kept list in `ledger.md` and from the subagent Docker lines: what the suite leaves is
+    this session's, and the session end removes it.
   - **Run long commands in the background.** A cold gate takes about a quarter of an hour,
     longer than the Bash tool's 10-minute foreground limit. Run the gate, a fixtures recipe
     and every suite with `run_in_background`, and wait for its exit.
@@ -240,7 +243,8 @@ Once the work branch is cut in every repository in scope, move every ticket in s
 **In Progress** (see *Ticket status*). While a repository stops on its status or its pull,
 the tickets stay where they are.
 
-When the status is not empty or the pull refuses to fast-forward, stop and tell him. Never
+When the status is not empty, the pull refuses to fast-forward, or `rev-list` prints
+anything but `0` and `0`, stop and tell him. Never
 stash, reset or merge to get past it. Then make sure the repository ignores
 `.claude/worktrees/`, where every worktree of the run lives: when
 `git -C <repo> check-ignore -q .claude/worktrees/x` fails, add `.claude/worktrees/` to
@@ -613,7 +617,7 @@ exists.
 
 | When | Move to |
 |---|---|
-| Stage 1, he hands you the tickets | In Progress |
+| Stage 1, once the work branch is cut in every repository in scope | In Progress |
 | Stage 10, every repository the ticket covers has an open MR | In Code Review |
 | Stage 11, every one of those MRs is merged | the post-merge status in `ledger.md` |
 
@@ -656,10 +660,16 @@ Every dispatch that touches a repository carries:
   create or change (only its deliverables)
 - for a dispatch that edits files (implementor, fixer, investigator): the dispatch-mode
   block from **parallel-worktrees-general** (Mode D or Mode B). For any other dispatch:
-  "read-only on `<repo>`"
+  "read-only on `<repo>`". The final-gate agent's brief adds: "The recipes you run may
+  write their git-ignored outputs (`evidence/`, the generated fixtures and test
+  repositories). Change no other file."
 - this git rule: "git is read-only for you except the files you edit: no commit, stash,
   fetch, pull, checkout or reset (a fetch here can move HEAD), no EnterWorktree, no
-  `git clone`. For another revision on disk (a check at `HEAD`, a bisect), add a temporary
+  `git clone`. Before checking another revision, look at the brief's Out of scope: a
+  failure it lists already fails without your change, so report it and do not re-check it
+  at `HEAD`. Prove a new test can fail by running it before you write the implementation,
+  not at `HEAD`. When you still need another revision on disk (a bisect, a failure the
+  brief does not list), add a temporary
   worktree with `git -C <repo> worktree add --detach .claude/worktrees/<name> <rev>` and
   remove it with `git -C <repo> worktree remove` before you report. In rdnx, a temporary
   worktree has no generated fixtures: before running the gate there, run
