@@ -86,7 +86,8 @@ so that <the value it gives them>.
 - …
 ```
 
-The criteria say what is accepted, never how it is built. A Story whose only content is an
+The criteria also go into the Story's `Acceptance Criteria` field (SKILL.md, stage 5),
+unchanged. The criteria say what is accepted, never how it is built. A Story whose only content is an
 implementation step is an Enabler.
 
 ## Story points

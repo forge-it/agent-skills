@@ -45,6 +45,7 @@ A model or effort he asks for on this batch wins over it. Record it in `<run>/me
 | Assignee | Cristian, accountId `712020:8d29777e-28f3-4096-9c5a-027a637bd6b7` (from `atlassianUserInfo`) |
 | Sprint | the board's active sprint, resolved at stage 5: `getJiraBoardSprintData` (through `executeRead`) with `boardId` `22713` and `includeIssues` false gives `resolvedSprint.id`. When it reports no active sprint, ask him which sprint (from `sprints`) or the backlog, before creating |
 | Story points | `customfield_10014` |
+| Acceptance Criteria | `customfield_10214`, Stories only: a rich-text field that the "SW Def: Quality Gate" app reads when it scores a Story (it scored NIFS-13632 1 for leaving it empty) |
 | Body | GitHub-flavored Markdown with `contentFormat: "markdown"`, in the Description field only. Never Jira wiki markup, and never the `Task Description` custom field |
 
 Only three types are created: **Enabler**, **Bug** and **Story**. They are the board filter's
@@ -170,6 +171,8 @@ For each draft in `approved.md`, in order:
    (the body), `contentFormat` `markdown`, `assignee` (the accountId above),
    `additional_fields` `{"components": [{"name": "RDNX"}], "customfield_10014": <points>}`
    plus `labels` when the draft has any, and `assignToSprint` with the sprint's numeric id.
+   For a Story, `additional_fields` also carries `"customfield_10214"`: the body's
+   *Acceptance criteria* list, as the same Markdown. The Description keeps it too.
    Never `"active"`: NIFS has many boards, so name the RDNX sprint by its id.
 2. Append to `created.md` at once, before any other call: draft number, key, URL, and the sprint id the create placed it
    in (or `backlog` when he chose it). A draft
@@ -188,7 +191,8 @@ Then read every created ticket back with `getJiraIssue`, `view` `full`,
 `responseContentFormat` `html`: the compact and evidence views omit `components`, and a
 Markdown read-back shows `##` and `**` even when they rendered. Check that `components` is
 `RDNX`, the `Sprint` custom field holds the sprint's id, `assignee.accountId` is his,
-`Story Points` is the draft's points, every link in `created.md` is in `issuelinks` and points the right way (on the ticket
+`Story Points` is the draft's points, a Story's `Acceptance Criteria` holds its criteria
+as rendered list items (not literal `-` or `Given` lines run together), every link in `created.md` is in `issuelinks` and points the right way (on the ticket
 given as `inwardIssue`, the entry has that `type.name` and shows the other ticket as
 `outwardIssue`), and the
 description has `<h2>` headings and no literal `##` or `**` outside `<code>` and `<pre>`. Fix a wrong field with
