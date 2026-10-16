@@ -40,7 +40,7 @@ from cold: expect a long first gate.
 Every implementor, fixer and investigator gets:
 - the worktree path and the Mode B dispatch block from **parallel-worktrees-general**
 - the exact gate command for the worktree, with its target volume
-- the statement that you hold the Docker lock
+- the subagent Docker lines (SKILL.md, *Working rules*)
 
 Every reviewer and verifier gets the worktree path, `git -C <worktree>` for every git
 command, and "read-only on `<worktree>`". It gets no gate command and no lock statement: it
@@ -77,9 +77,13 @@ Then discard the worker copy and remove it: `git -C <worktree> reset --hard`,
 `git -C <worktree> clean -fd`, `git -C <repo> worktree remove .claude/worktrees/<KEY>`,
 `git -C <repo> branch -d <KEY>-wt`, and `docker volume rm rdnx-target-<KEY>`. Never run
 `git worktree prune`, which **parallel-worktrees-general** *Cleanup* ends with: it touches
-other tickets' worktrees (SKILL.md, stage 11). The patch file stays in `<run>`. Only then, under the Docker lock, run the gate and any
-Docker suite the plan schedules, once in the main worktree. A red result goes into the stage
-8 report as open: nothing is fixed before he has seen the tree.
+other tickets' worktrees (SKILL.md, stage 11). The patch file stays in `<run>`.
+
+Only then, under the Docker lock, dispatch the final-gate agent (SKILL.md, *Models*) to run
+the gate and any Docker suite the plan schedules, once, in the main worktree. On a converged
+loop this is change-cycle-pipeline's final gate: do not run another one in the worktree
+before the merge-back. A red result goes into the stage 8 report as open: nothing is fixed
+before he has seen the tree.
 
 From here on the main worktree is the only tree. Later workers run there in Mode D, and their
 brief lists the patch's files as their starting tree.

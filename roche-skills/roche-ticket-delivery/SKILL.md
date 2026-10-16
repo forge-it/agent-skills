@@ -53,7 +53,9 @@ writer fails the same task twice, do the task yourself. This replaces
 change-cycle-pipeline's "fail the cycle" in those rows: a second failed dispatch of the same
 task (no result, no required handoff, or the same gate still red) means you take the task
 over, under the Docker lock, in the checkout holding the change. The stage 8 report says you
-did.
+did. Before you write, load the skills that the repository's *Agents* line in
+`references/repository-traps.md` names for workers, and read `docs/layout.md` as its
+structure rules. Run the gate as the worker's brief says.
 
 ## Where things are
 
@@ -98,7 +100,9 @@ ticket is a subtask of one story, else the first ticket's key.
 
 Update the stage line at every stage change, a ticket's status at every move, and inside
 stages 5 and 7 at every round, naming the set dispatched
-(`7: round 2 dispatched (rust, guard), triage pending`, then `7: round 2 triaged`). From stage 6 the ledger is also **change-cycle-pipeline**'s ledger.
+(`7: round 2 dispatched (rust, guard), triage pending`, then
+`7: round 2 checkers dispatched (1 <title>, 2 <title>, ...)`, then `7: round 2 triaged`).
+From stage 6 the ledger is also **change-cycle-pipeline**'s ledger.
 It is kept here so nothing is added to a repository's `.gitignore`. Its last line is
 `complete` once every ticket has reached its post-merge status and stage 11's cleanup has run.
 
@@ -133,8 +137,8 @@ Working rules, at every stage:
     Bash (`until [ ! -d ~/.cache/docker-tests.lock ]; do sleep 30; done`). Never remove a
     lock you did not take, even when its owner looks dead: ask him.
   - **Check that no container is left:** `docker ps -a --filter name=rdnx-` must list
-    nothing. A container that exists belongs to nobody holding the lock, either his own or
-    one left behind. The run would reuse it, write into it or replace it, so ask him first.
+    nothing except the names `ledger.md` says he keeps. Any other container belongs to
+    nobody holding the lock, either his own or one left behind. The run would reuse it, write into it or replace it, so ask him first.
     When he lets the run go ahead, record in `ledger.md` the names he keeps, and leave those
     out of the removal at the end. Before a suite that replaces or reuses one of them (the
     smoke suite recreates `rdnx-repo`; the system suite reuses `rdnx-systest-repo` with its
@@ -147,13 +151,20 @@ Working rules, at every stage:
     except the ones the ledger says he keeps, was started by this session. The smoke suite
     leaves `rdnx-repo` running by design, and the system suite leaves `rdnx-systest-repo`.
     Remove them with `docker rm -f <names>`. Confirm the filter lists only the kept names,
-    and that `docker ps -q --filter volume=<target volume>` lists nothing (the gate's
-    container has no name). Then run `rm -r ~/.cache/docker-tests.lock`. Named volumes,
-    networks and images stay: they are caches.
+    and that `docker ps -q --filter volume=<v>` lists nothing for every target volume this
+    session used (the gate's container has no name). When it lists a container, the gate
+    behind it is still running: if its run is alive, wait for it to exit; if its run was
+    killed, `docker rm -f` it. Then check again, and only then run
+    `rm -r ~/.cache/docker-tests.lock`. Named volumes, networks and images stay: they are
+    caches.
 
-  A subagent runs Docker only under your lock. Brief it with this rule and the repository's
-  Docker lines. Take the lock before dispatching it, and end the session after its report.
-  With several Docker-running dispatches in flight, end the session only after the last of
+  A subagent runs Docker only under your lock. Take the lock and run the container check
+  before dispatching it, and end the session after its report. Its brief carries the
+  repository's Docker lines and, in place of this rule, the **subagent Docker lines**: "The
+  orchestrator holds the Docker lock and ends the Docker session. Never create or remove
+  `~/.cache/docker-tests.lock`, and never stop or remove a container. Never run a suite that
+  replaces or reuses `<names the ledger says he keeps, or: none>`. Run the gate, a fixtures
+  recipe and every suite with `run_in_background`, and wait for its exit." With several Docker-running dispatches in flight, end the session only after the last of
   them reports. Two dispatches whose Docker runs share a volume or a container name never
   run in parallel.
 
@@ -205,9 +216,7 @@ Then ask, in **one** message, everything that applies:
   when the tickets in scope differ in type, and the post-merge status for a Bug
 
 The tickets in scope are the ones he handed over plus the subtasks he confirms. Write
-`ticket.md` (verbatim) and `ledger.md`. Then, once every repository's
-`git -C <repo> status --short` is empty, move every ticket in scope to **In Progress** (see
-*Ticket status*). While a repository is not clean, the tickets stay where they are.
+`ticket.md` (verbatim) and `ledger.md`.
 
 Then cut the work branch in each repository yourself, before any gatherer reads the code.
 **Always pull first.** Never branch from the local base without pulling, and never from
@@ -226,6 +235,10 @@ branch yet, replace the checkout line with `git -C <repo> fetch origin <base>` a
 `git -C <repo> checkout --track origin/<base>`, then go on from the pull. When he chose to
 continue on an existing remote branch, check it out with `--track` and pull it, instead of
 the `checkout -b`. Use the same branch name in every repository.
+
+Once the work branch is cut in every repository in scope, move every ticket in scope to
+**In Progress** (see *Ticket status*). While a repository stops on its status or its pull,
+the tickets stay where they are.
 
 When the status is not empty or the pull refuses to fast-forward, stop and tell him. Never
 stash, reset or merge to get past it. Then make sure the repository ignores
@@ -591,8 +604,9 @@ When something differs, stop and tell him before any dispatch or transition. Sta
 exception: the status move needs only `glab` and Jira, and the cleanup runs its own checks,
 so skip the branch and working-directory checks there. Then continue from the stage the
 ledger names. In stage 5 or 7, a round the ledger does not record as triaged is untriaged.
-Compare its files with the set the ledger names. Re-dispatch only the reviewers or checkers
-whose file is missing, in one message, then triage the round. Never re-run one whose file
+Compare its files with the set the ledger names. Re-dispatch only the reviewers, or the
+checkers by their recorded number, whose file is missing, in one message, then triage the
+round. Never re-run one whose file
 exists.
 
 ## Ticket status
@@ -657,8 +671,8 @@ Every dispatch that touches a repository carries:
   another revision, never edit in it, and remove it before you report."
 - the `model` and `effort` from *Models*
 - that repository's section of `references/repository-traps.md` beside this file: its gate,
-  its traps, its docs rules and its agents. When the brief may run Docker, also the Docker
-  rule under *Working rules*, and the statement that you hold the lock
+  its traps, its docs rules and its agents. When the brief may run Docker, also the
+  subagent Docker lines under *Working rules*
 - for a dispatch that is not briefed to run Docker (gatherers, the planner, plan reviewers,
   lenses, guards, checkers, the stage 8 writer): "Never run cargo, just or docker: they
   share Docker state with other sessions."
