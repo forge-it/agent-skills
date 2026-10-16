@@ -23,8 +23,12 @@ under `$HOME`, so Colima mounts it into Docker.
 
 A linked worktree starts without git-ignored files. For rdnx that means:
 - no `target/`: the gate builds into a Docker volume anyway
-- no generated test repositories: the `*-fixtures` recipes rebuild them when a suite needs
-  them
+- no generated adapter fixtures (`libdnf5-adapter/tests/fixtures/generated/`): the gate's
+  adapter tests panic without them. Under the lock, run
+  `DOCKER_DEFAULT_PLATFORM=linux/amd64 just test-adapter-fixtures` from `<worktree>` before
+  the first gate
+- no generated test repositories: the other `*-fixtures` recipes rebuild them when a suite
+  needs them
 - no `evidence/`
 
 Run the gate from `<worktree>` with its own target volume, `rdnx-target-<KEY>`, as
@@ -63,9 +67,11 @@ as one `?? dir/` line. A missing path means the patch left it out and the worktr
 only copy: stop and tell him. This comparison is the validation that *Cleanup* asks for
 before it discards the worker copy.
 
-Then remove the linked worktree and its branch as **parallel-worktrees-general** *Cleanup*
-describes. The patch is applied, and its file stays in `<run>`. Also run
-`docker volume rm rdnx-target-<KEY>`. Only then, under the Docker lock, run the gate and any
+Then discard the worker copy and remove it: `git -C <worktree> reset --hard`,
+`git -C <worktree> clean -fd`, `git -C <repo> worktree remove .claude/worktrees/<KEY>`,
+`git -C <repo> branch -d <KEY>-wt`, and `docker volume rm rdnx-target-<KEY>`. Never run
+`git worktree prune`, which **parallel-worktrees-general** *Cleanup* ends with: it touches
+other tickets' worktrees (SKILL.md, stage 11). The patch file stays in `<run>`. Only then, under the Docker lock, run the gate and any
 Docker suite the plan schedules, once in the main worktree. A red result goes into the stage
 8 report as open: nothing is fixed before he has seen the tree.
 

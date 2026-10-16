@@ -17,7 +17,10 @@ SKILL.md's Docker rule: one session at a time under `~/.cache/docker-tests.lock`
 - **What it is:** the package-management service for REC. It is a Rust workspace (`app/`,
   `core/`, `crates/`, `libdnf5-adapter/`) that drives libdnf5 in process and serves a gRPC
   API (`package_management.v1`) over a Unix domain socket. Its layout is set out in
-  `docs/layout.md`, its design in `docs/architecture.md` and RFD-001.
+  `docs/layout.md`, its structure rules in `docs/testing.md` (*Structure rules*), and its
+  design in `docs/architecture.md` and RFD-001. rdnx has no `project_structure.md` and no
+  `CLAUDE.md`, so every Rust agent reads `docs/layout.md` as its `project_structure.md`,
+  whether or not its definition waits for a `CLAUDE.md` pointer. Say so in every brief.
 - **Agents:** `rust-implementor-expert-no-commit`, `rust-fixer-no-commit`,
   `rust-test-writer`, `rust-issue-investigator`, `rust-code-reviewer` and
   `rust-structure-and-style-guard`. Workers load **rust-code-style**, **rust-testing**,
@@ -32,18 +35,38 @@ SKILL.md's Docker rule: one session at a time under `~/.cache/docker-tests.lock`
   `DOCKER_DEFAULT_PLATFORM=linux/amd64 just quality-gate`. It builds `rdnx-builder:dev`,
   then runs `cargo fmt --all --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`,
   `cargo test --workspace --locked` and `cargo audit --deny unsound` in it. It is
-  non-mutating, so a read-only final gate can run it. There is no host toolchain: libdnf5
-  exists only in the image, so `cargo` never runs on the Mac directly.
-- **Formatter (writers only):**
-  `DOCKER_DEFAULT_PLATFORM=linux/amd64 docker run --rm -v "$PWD":/src -v rdnx-cargo-registry:/root/.cargo/registry -v rdnx-target:/src/target -w /src rdnx-builder:dev cargo fmt --all`.
+  non-mutating, so a read-only final gate can run it. The host has rustup, cargo and just,
+  but no libdnf5, which exists only in the image: never run `cargo` on the Mac directly.
+- **Gate prerequisite:** the adapter's integration tests, part of `cargo test --workspace`,
+  open real libdnf5 sessions against `libdnf5-adapter/tests/fixtures/generated/`, which is
+  git-ignored, and panic without it (`docs/testing.md`, *Gates in the builder*). In a tree
+  without that directory, run `DOCKER_DEFAULT_PLATFORM=linux/amd64 just test-adapter-fixtures`
+  first, under the lock.
+- **Focused commands (writers and investigators):** the Rust agents iterate with
+  `cargo check`, `cargo clippy` and focused `cargo test -p <crate> [--test <target>] [<filter>]`.
+  Run them in the builder image, from the root of the tree under test, under the lock:
+  `DOCKER_DEFAULT_PLATFORM=linux/amd64 docker run --rm -v "$PWD":/src -v rdnx-cargo-registry:/root/.cargo/registry -v <target volume>:/src/target -w /src rdnx-builder:dev cargo <subcommand> --locked <args>`.
+  `rdnx-builder:dev` must exist, so run the gate once first. The full gate still runs once
+  before the worker reports.
+- **Formatter (writers only):** the same `docker run` line with `cargo fmt --all` as the
+  command.
+- **Target volume:** `<target volume>` is `rdnx-target` in the main worktree,
+  `rdnx-target-<KEY>` in the separate worktree, and `rdnx-target-<KEY>-<name>` in a
+  temporary `--detach` worktree.
 - **Linked worktree:** the recipe mounts the `rdnx-target` volume, which the main checkout
-  shares. In a linked worktree, run the recipe's `docker run` line by hand, from
-  `<worktree>`, with `-v rdnx-target-<KEY>:/src/target` in place of `-v rdnx-target:/src/target`.
-  Each tree then has its own build cache; stage 11 removes the volume. `rdnx-builder:dev` is
-  one tag for every tree: when the change edits `docker/Dockerfile.builder` or
-  `rust-toolchain.toml`, the gate rebuilds the shared tag, so say so in the report.
-- **Docker suites** (`tests/*/README.md`), outside the gate: `just test-smoke-all`,
-  `just test-system-all`, `just test-reclike-all`, and `just test-parity scenario=all`. Each
+  shares. In a linked worktree, first run
+  `DOCKER_DEFAULT_PLATFORM=linux/amd64 just builder-image-build` from `<worktree>` (a
+  private recipe, callable by name; it is the gate's own dependency), then the recipe's
+  `docker run` line by hand, from `<worktree>`, with `-v rdnx-target-<KEY>:/src/target` in
+  place of `-v rdnx-target:/src/target`. Each tree then has its own build cache; stage 11
+  removes the volume. `rdnx-builder:dev` is one tag for every tree: when the change edits
+  `docker/Dockerfile.builder` or `rust-toolchain.toml`, the build rebuilds the shared tag,
+  so say so in the report.
+- **Docker suites** (`tests/*/README.md`), outside the gate, each prefixed with
+  `DOCKER_DEFAULT_PLATFORM=linux/amd64`: `just test-smoke-all`, `just test-system-all`,
+  `just test-reclike-all`, and `just test-parity scenario=all`. The smoke suite leaves
+  `rdnx-repo` running and the system suite leaves `rdnx-systest-repo`: SKILL.md's Docker
+  rule removes them at the end of the session. Each
   case takes seconds to minutes. They use fixed container names (`rdnx-systest-*`,
   `rdnx-reclike-*`, `rdnx-fixbuild*`, `rdnx-svc-*`) and named volumes (`rdnx-seed`,
   `rdnx-systest-readonly-identity`), so they run one at a time, under the lock. The plan

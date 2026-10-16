@@ -18,8 +18,8 @@ metadata:
 ## Purpose
 
 Take a NIFS ticket from the RDNX board from "here it is" to "merged" and into its post-merge
-status. You orchestrate: you read, brief, verify and report. You never implement and never
-diagnose a failure yourself. A fleet of subagents does the work, and Cristian decides at the
+status. You orchestrate: you read, brief, verify and report. You never implement, except the
+takeover under *Models*, and never diagnose a failure yourself. A fleet of subagents does the work, and Cristian decides at the
 gates below.
 
 Load **agent-fleet-orchestration** once, before the first dispatch. This skill already
@@ -45,11 +45,11 @@ definition. Pass `model` and `effort` explicitly on every dispatch:
 | Implementors, fixers, test writers | `sonnet`, `xhigh` |
 | Plan reviewers, code-review lenses, structure-and-style guards | `sonnet` at `medium`, or `haiku` at `max` when the review is simple. Say which in one line |
 | Stage 7 checkers (refuters) | `haiku`, `max`, always |
-| Gatherers, the planner, issue investigators | what he names. Ask once at stage 1 and record it in `ledger.md` |
+| Gatherers, the planner, issue investigators, the stage 8 docs writer, the final-gate agent | what he names. Ask once at stage 1 and record it in `ledger.md` |
 
 A model or effort he asks for on a ticket wins over these defaults on every dispatch it
-covers, the checkers included. Record it in `ledger.md`. When an implementor fails the same
-task twice, do the task yourself.
+covers, the checkers included. Record it in `ledger.md`. When an implementor, fixer or test
+writer fails the same task twice, do the task yourself.
 
 ## Where things are
 
@@ -86,6 +86,8 @@ ticket is a subtask of one story, else the first ticket's key.
 - each ticket's issue type and its post-merge status (see *Ticket status*)
 - the models he named for gatherers, the planner and investigators
 - the worktree choice, once made
+- the checkout holding the change, and its `git status --short --untracked-files=all`
+  after each writer returns
 - each ticket's status, with the repositories it covers
 
 Update the stage line at every stage change, a ticket's status at every move, and inside
@@ -127,9 +129,13 @@ Working rules, at every stage:
   - **Check that no container is left:** `docker ps -a --filter name=rdnx-` must list
     nothing. A container that exists belongs to nobody holding the lock, either his own or
     one left behind. The run would reuse it, write into it or replace it, so ask him first.
-  - **End the session in the same turn, whether the run passed, failed or was killed:**
-    `docker ps -a --filter name=rdnx-` lists nothing. Only then run
-    `rm -r ~/.cache/docker-tests.lock`. Named volumes and images stay: they are caches.
+  - **End the session in the same turn, whether the run passed, failed or was killed.** The
+    check above found no container, so every container that
+    `docker ps -a --filter name=rdnx- --format '{{.Names}}'` lists now was started by this
+    session. The smoke suite leaves `rdnx-repo` running by design, and the system suite
+    leaves `rdnx-systest-repo`. Remove them all with `docker rm -f <names>`, confirm the
+    filter lists nothing, then run `rm -r ~/.cache/docker-tests.lock`. Named volumes,
+    networks and images stay: they are caches.
 
   A subagent runs Docker only under your lock. Brief it with this rule and the repository's
   Docker lines. Take the lock before dispatching it, and end the session after its report.
@@ -151,12 +157,14 @@ Record each ticket's issue type. It sets the branch prefix and the post-merge st
 
 | Issue type | Meaning (the architect's rule) | Branch prefix |
 |---|---|---|
-| Enabler | development that needs no testing | `feature/` |
-| Story | development that is tested afterwards | `feature/` |
-| Bug | a defect | `bugfix/` |
+| Enabler | development that needs no testing | `feat/` |
+| Story | development that is tested afterwards | `feat/` |
+| Bug | a defect | `fix/` |
 
-rdnx has only Enablers and Bugs for now. Stories come near the end of the project. Any other
-type: ask him which prefix and post-merge status it takes.
+Most rdnx tickets are Enablers or Bugs; NIFS-13632 (the CI pipeline) is a Story. A
+`Sub-task` takes its parent's type. Any other type: ask him which prefix and post-merge
+status it takes. When the tickets in scope differ in type, ask which prefix the shared
+branch takes.
 
 Settle the repositories and the base branch. The base is the one he names. When he names
 none, the base is `main`. `git -C <repo> ls-remote --heads origin <base>` must print the
@@ -173,8 +181,10 @@ Then ask, in **one** message, everything that applies:
   to another team
 - the base, when he named none and `main` disagrees with him or with the ticket
 - whether to continue on an existing remote branch for the key, or cut a new one
-- the model and effort for gatherers, the planner and investigators
-- the post-merge status, for a Bug or for any type the table above does not cover
+- the model and effort for gatherers, the planner, investigators, the stage 8 docs writer
+  and the final-gate agent
+- the branch prefix and post-merge status, for any type the table above does not cover or
+  when the tickets in scope differ in type, and the post-merge status for a Bug
 
 The tickets in scope are the ones he handed over plus the subtasks he confirms. Write
 `ticket.md` (verbatim) and `ledger.md`, then move every ticket in scope to **In Progress**
@@ -211,7 +221,9 @@ Dispatch gatherers in parallel, one per repository or open question: general-pur
 briefed read-only on the repositories, each writing only its own `context-NN-<topic>.md`.
 Give each an **exhaustive** mandate: every reference to the code in play, including docs
 (`docs/rfds`, `docs/adrs`, `docs/engineering-notes`, `docs/gaps`), packaging, Docker, the
-`just` recipes, the test suites and CI, with `file:line` for each claim. Pages in the `nIfS`
+`just` recipes, the test suites and CI, with `file:line` for each claim. `docs/rfds/0001-*.md` is about 400 KB, and `architecture.md`,
+`layout.md` and `operations.md` are 50-60 KB each: search them for the symbols in play and
+read only the matching sections, never whole. Pages in the `nIfS`
 space count as context when the ticket links them; read them with `getConfluenceContent`.
 
 Check the ticket's premise too: the bug reproduces, the behaviour the ticket assumes exists,
@@ -321,15 +333,40 @@ Then run **change-cycle-pipeline** with the cycles he just saw: one brief per cy
 implementor that the repository's section of `references/repository-traps.md` names, in its
 `-no-commit` form, or a general-purpose agent briefed "do not commit" in those words.
 Independent repositories can run in parallel; inside one repository, one writer at a time.
-The gate runs in Docker, so each worker runs it under your lock.
+The gate runs in Docker, so each worker runs it under your lock. Each implementor's brief
+also says: "Do not load reconcile-docs: stage 8 reconciles docs over the whole diff. Edit a
+doc only when the plan task names it."
 
 ### 7. Code review
 
 Run **change-cycle-pipeline**'s narrow loop, cap 3. Each lens carries its prompt verbatim with
 `<X> =` `<run>/plan.md`, `<Y> =` `<run>/code-review-rN-<lens>.md` and `<Z> =` the base. Never
-leave `<Z>` empty: it would diff against a guessed default branch. When a change adds or
-edits Rust, dispatch `rust-structure-and-style-guard` beside the lens in every round: the
-runtime lens cannot see structure and test-layout violations.
+leave `<Z>` empty: it would diff against a guessed default branch. Lens prompts are under
+`~/src/agent-skills/prompts/code-implementation-review/`; the `/home/cristi/...` path in
+change-cycle-pipeline is another machine's. Use `single-language/implementation-review-rust.md`
+for Rust, `generic/implementation-review-loss-framing.md` for anything else, or one of
+`lenses/` chosen for what the change risks.
+
+The workers never stage, so a diff against the base leaves out every new file. Every lens
+and checker brief carries: "The change set also includes every untracked file that
+`git -C <checkout> ls-files --others --exclude-standard` lists: review each as a file this
+change adds."
+
+When a change adds or edits Rust, dispatch `rust-structure-and-style-guard` beside the lens in
+every round: the runtime lens cannot see structure and test-layout violations. The guard
+works out its own diff, so its brief carries these lines: "Run every git command as
+`git -C <checkout holding the change>`. In Step 1, use `<base>` in place of the
+`git symbolic-ref` expression; never guess the default branch. The change set is the union
+of Step 1's three lists, not the staged set." The guard has no Write tool: save its final
+message verbatim to `<run>/code-review-rN-guard.md` yourself as soon as it returns, before
+triage.
+
+The round's gate result is the last writer's gate transcript, or a gate you run under the
+lock. No lens or guard builds or tests anything: the host has no libdnf5, and the Docker
+gate needs the lock. Add to every lens and guard brief: "Never run cargo, just or docker:
+the gate result for this tree is <path>. A claim that only a build or a test could prove
+goes under Open Questions with the exact command. Do not dispatch subagents; review the
+whole set yourself."
 
 **One checker per finding, on `haiku`.** This is the pipeline's verify step with the brief
 below in place of its own. Its other rules still hold: merge duplicates first, and drop what
@@ -354,10 +391,27 @@ anything you cannot verify. Write to <out>: the finding's title, the verdict, th
 three sentences of evidence with file:line citations.
 ```
 
+A finding from `rust-structure-and-style-guard`, or one that names a rule rather than a
+behaviour (rust-code-style Rule N, rust-project-structure Principle N, rust-testing Section
+N, a structural SRP violation), gets these lines instead of the ones above. The brief above
+would refute it as style preference:
+
+```
+You are a skeptic. Below is a claimed rule violation in the change to <repo>, diffed against
+<base>. Try to REFUTE it: open the named rule in
+~/src/agent-skills/software-engineering/<skill>/SKILL.md and the repository's
+docs/layout.md. CONFIRMED needs the cited lines to be added or moved by this change, and to
+break the rule as its text states it, with no sanction in docs/layout.md or a
+conventions-crate ledger. REFUTED when the rule does not say that, the lines are not in the
+change, or the repository documents the exception. Never run cargo, just or docker; never
+modify a file. Write to <out>: the finding's title, the verdict, then at most three
+sentences of evidence with file:line citations.
+```
+
 A finding whose fix touches a public API, the gRPC proto (`package_management.v1`), on-disk
 state or a wire format gets the pipeline's three-checker panel, majority wins: three
-checkers instead of one, in the same message, each with these lines, its own `<out>` and
-that finding.
+checkers instead of one, in the same message, each with the brief that fits it, its own
+`<out>` and that finding.
 
 A red gate is the pipeline's "send a fixer" step, with an investigator first: an issue
 investigator of the matching stack, briefed with the failing test id and the command that
@@ -368,7 +422,11 @@ cause.
 With a separate worktree, merge it back when the loop ends, converged or capped, as
 `references/separate-worktree.md` describes, before the report. When the main checkout holds
 another ticket, ask him first: he may keep the worktree without a merge-back, recorded in
-`ledger.md`.
+`ledger.md`. When he keeps it and the work branch is not checked out in the main checkout,
+run `git -C <worktree> switch <branch>` and `git -C <repo> branch -d <KEY>-wt`: both
+branches point at the same commit, so the dirty tree carries over. Record it in
+`ledger.md`. From then on the worktree is on the work branch, and stages 9-11 use it. When
+the work branch is checked out in the main checkout, stop and ask him.
 
 ### 8. Report — gate
 
@@ -444,7 +502,8 @@ and the report names the repository still without one.
 When the repository has a `.gitlab-ci.yml` on the pushed branch, arm one Monitor per pipeline
 the push started, each reporting jobs as they finish, and send an investigator on the first
 blocking failure. The ids come from
-`glab api "projects/<group>%2F<repo>/pipelines?sha=<pushed sha>"`, repeated every 15 seconds
+`glab api "projects/<project path with every / as %2F>/pipelines?sha=<pushed sha>"` (rdnx:
+`projects/remix%2Fnifs%2Frdnx/...`, or its numeric id `605898`), repeated every 15 seconds
 until the list is not empty. After two minutes, tell him no pipeline started. Without a
 `.gitlab-ci.yml`, say in one line that the repository has no CI, and arm nothing.
 
@@ -476,7 +535,7 @@ First prove nothing is lost:
 - `git -C <path> status --short` must be empty in every checkout on that branch
 - for a linked worktree, list what still runs inside it, such as his terminal, his editor's
   language server or a container: `lsof -d cwd 2>/dev/null | grep -F "<worktree>"` and
-  `docker ps --format '{{.Names}} {{.Mounts}}' | grep -F "<worktree>"`
+  `docker ps --no-trunc --format '{{.Names}} {{.Mounts}}' | grep -F "<worktree>"`
 
 When a check fails or a process shows up, stop and tell him what you found: never remove a
 tree from under his tools. Then, in this order:
@@ -498,7 +557,8 @@ List `~/.cache/roche-ticket-delivery/*/ledger.md`. Open the run whose directory 
 carries the key he names, else the only one not marked `complete`, else ask him. Before
 acting, re-verify:
 - `git -C <checkout> status --short --branch` matches the ledger's branch and dirty files.
-  `<checkout>` is the linked worktree he kept without a merge-back, else `<repo>`
+  `<checkout>` is the linked worktree whenever the ledger records one not yet removed, else
+  `<repo>`. The dirty files to match are the ledger's last recorded status of that checkout
 - each ticket's status in Jira matches the ledger
 - every repository in the ledger is among this session's working directories
 
@@ -518,7 +578,7 @@ record as triaged is untriaged: triage it, never re-run it.
 
 | Issue type | Post-merge status |
 |---|---|
-| Enabler | Done |
+| Enabler | Done. From In Code Review the workflow offers no Done, and neither does In Testing Dev or In Testing: only In Progress does. So the route is In Code Review → In Progress → Done, listing the transitions at each step |
 | Story | In Testing Dev. Testers take it from there; never move it further |
 | Bug, or any other type | his answer at stage 1 |
 
@@ -527,7 +587,8 @@ Never reuse a transition id. For each issue, call `executeRead listJiraIssueTran
 that id to `transitionJiraIssue`. A wrong id succeeds into a plausible wrong state. The
 transition names do not always match their target (from To Do, the transition to To Do is
 named `To Do (2)`). When the target is not among the transitions, say which ones are
-offered and ask him: never chain intermediate moves on your own. Read the status back after
+offered and ask him: never chain intermediate moves on your own. The Enabler route in the
+table above is the one sanctioned chain. Read the status back after
 every move.
 
 - When a transition is refused for a required field, set the field with `editJiraIssue`
@@ -555,8 +616,15 @@ Every dispatch that touches a repository carries:
   fetch, pull, checkout or reset (a fetch here can move HEAD), no EnterWorktree, no
   `git clone`. For another revision on disk (a check at `HEAD`, a bisect), add a temporary
   worktree with `git -C <repo> worktree add --detach .claude/worktrees/<name> <rev>` and
-  remove it with `git -C <repo> worktree remove` before you report."
+  remove it with `git -C <repo> worktree remove` before you report. In rdnx, a temporary
+  worktree has no generated fixtures: before running the gate there, run
+  `DOCKER_DEFAULT_PLATFORM=linux/amd64 just test-adapter-fixtures` in it, and give it its own target volume
+  `rdnx-target-<KEY>-<name>`, removed with `docker volume rm` together with the worktree. A
+  test that fails there only for lack of fixtures proves nothing about `HEAD`."
 - the `model` and `effort` from *Models*
 - that repository's section of `references/repository-traps.md` beside this file: its gate,
   its traps, its docs rules and its agents. When the brief may run Docker, also the Docker
   rule under *Working rules*, and the statement that you hold the lock
+- for a dispatch that is not briefed to run Docker (gatherers, the planner, plan reviewers,
+  lenses, guards, checkers, the stage 8 writer): "Never run cargo, just or docker: they
+  share Docker state with other sessions."
