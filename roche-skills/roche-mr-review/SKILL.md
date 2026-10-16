@@ -76,7 +76,9 @@ the same run directory. Before its gate, move `gate.md`, `ledger-*.md`, `refute-
 `review-mr-<iid>.md` into `<run>/round-<N>/`, where N counts the rounds already done. Fill
 the synthesizer's `{FIRST}` with one more than the highest finding number in `posted.json` or `notes/`, compared as numbers, so no new finding takes a posted
 finding's number and `post_notes.py` never updates a live note with a new finding's text.
-Before the new round, ask him about any `notes/NN.md` with no `posted.json` entry: post it
+Materialize the ticket again (the stage-1 steps below), overwriting `ticket.md`: comments
+added since the last round often settle what the push changed. Before the new round, ask
+him about any `notes/NN.md` with no `posted.json` entry: post it
 or delete it. A note already posted is edited or withdrawn only on his word.
 
 The run directory must be shared with the session, because the lenses write their ledgers
@@ -159,21 +161,26 @@ finding you cannot confirm goes to him as uncertain, never as fact, with the sam
 On a later round, first list the posted findings, one line each with their *On the new head*
 status, so he can say which threads to answer or resolve. Then list, one line each, this
 round's findings that carry a *Declined earlier* line: he has passed on them once. Then show
-the rest of this round's findings. A class or category pick never includes a posted or a
-declined-earlier finding; only a pick by number does.
+the rest of this round's findings as below.
 
 Show the Critical and Important findings in full (Finding N — Severity — title, Where, Impact,
 Description, Recommended fix), then one table row per Minor and Nit (number, severity,
 category, title, anchor), one line per Critical or Important finding the refuters dropped
 (title and the refuter's reason, so he can disagree), the ledger path, the gate result, and
-the static-review caveat when it applies. Every finding keeps its exact `file:line` and quoted line, explained in plain
-words; he rejects unexplained jargon. Then stop.
+the static-review caveat when it applies. Every finding keeps its exact `file:line` and
+quoted line, explained in plain words; he rejects unexplained jargon. Record in
+`meta-notes.md` that this round's ledger was presented. Then stop.
 
 His picks come as a severity class ("all critical + important"), numbers ("1 3 5 6"),
-categories ("all SRP, all docs"), or a mix. A category pick matches the ledger's **Category**
-field exactly. A finding whose content fits the named class but whose category differs (test
-constants filed under tests, a placement issue filed under architecture when he said SRP) is
-not posted: name it in the post report as "possibly also in that class" and let him add it.
+categories ("all SRP, all docs"), or a mix. Record them in `meta-notes.md`. A category pick
+matches the ledger's **Category** field exactly. A finding whose content fits the named class
+but whose category differs (test constants filed under tests, a placement issue filed under
+architecture when he said SRP) is not posted: name it in the post report as "possibly also
+in that class" and let him add it.
+
+A class or category pick never includes a posted, a declined-earlier or an *Uncertain*
+finding: those are posted only when he names their number. A posted finding is never posted
+again: its number in his answer names its thread (stage 7).
 
 ### 6. Post
 
@@ -198,7 +205,8 @@ line: 185
 Notes are English, dev to dev, in plain words, with the severity in the title (and the
 category in parentheses when the title does not make it obvious). The ledger's machinery stays
 out of GitLab: no lens names, no "found by", no "Finding N". The developer has no ledger, so
-point at other places as `path:line`.
+point at other places as `path:line`. A note for an *Uncertain* finding says in its
+Description, in one plain sentence, what could not be confirmed.
 
 Run `post_notes.py <run>`, a dry run that prints where each note will land and preflights
 every body against GitLab's markdown endpoint. Read the plan, then run
