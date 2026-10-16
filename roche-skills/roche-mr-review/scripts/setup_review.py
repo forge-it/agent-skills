@@ -4,7 +4,7 @@ Writes meta.json and mr-description.md, and puts a detached worktree on the MR h
 <run>/wt, after fetching both branches. Rerunning it after the author pushes moves the
 worktree to the new head and keeps notes/ and posted.json.
 
-Usage: python3 -B setup_review.py <merge request URL> [--repository <local clone>] [--ticket <KEY>]
+Usage: uv run -q --no-project --python 3.13 python -B setup_review.py <merge request URL> [--repository <local clone>] [--ticket <KEY>]
 """
 
 import argparse
@@ -72,7 +72,9 @@ def main():
         run_git(repository, "worktree", "add", "--quiet", "--force", "--detach", str(worktree), head_commit)
 
     description = merge_request.get("description") or ""
-    ticket_match = TICKET_KEY_PATTERN.search(f"{merge_request['title']}\n{description}\n{source_branch}")
+    ticket_keys = list(
+        dict.fromkeys(TICKET_KEY_PATTERN.findall(f"{merge_request['title']}\n{source_branch}\n{description}"))
+    )
     review_run = ReviewRun(
         hostname=hostname,
         project_path=project_path,
@@ -88,7 +90,7 @@ def main():
         start_commit=merge_request["diff_refs"]["start_sha"],
         head_commit=head_commit,
         repository_path=str(repository),
-        ticket_key=arguments.ticket or (ticket_match.group(0) if ticket_match else ""),
+        ticket_key=arguments.ticket or (ticket_keys[0] if ticket_keys else ""),
     )
     (run_directory / META_FILE_NAME).write_text(json.dumps(asdict(review_run), indent=2) + "\n")
     (run_directory / MR_DESCRIPTION_FILE_NAME).write_text(f"# {review_run.title}\n\n{description}\n")
@@ -99,6 +101,9 @@ def main():
     print(f"base          : {review_run.base_commit}  ({target_branch})")
     print(f"author        : {review_run.author_name} ({review_run.author_username})")
     print(f"ticket        : {review_run.ticket_key or 'none found: ask the operator for the spec'}")
+    other_ticket_keys = [ticket_key for ticket_key in ticket_keys if ticket_key != review_run.ticket_key]
+    if other_ticket_keys:
+        print(f"other keys    : {', '.join(other_ticket_keys)} (ask the operator which belong to the spec)")
     print(f"changed files : {len(changed_files)}")
 
 

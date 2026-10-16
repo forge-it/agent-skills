@@ -20,7 +20,8 @@ You orchestrate: set up, run the gate, brief, verify, present, post. Load
 **agent-fleet-orchestration** once before the first dispatch. This skill already answers its
 intake gate: supervised, the spec is `ticket.md`, the base is `base_commit`, and the briefs
 in `references/lens-briefs.md` replace both the pipeline-variant choice and the
-code-implementation-review prompts. So the three gates below are the only stops.
+code-implementation-review prompts. So the two gates below, his picks and his satisfaction
+with the notes, are the only stops.
 
 **Models.** His global instructions set them, and they win over any skill or agent
 definition. Pass `model` and `effort` explicitly on every dispatch:
@@ -59,21 +60,37 @@ README, justfile and layout, propose an entry to him, and add it once he agrees.
 
 ### 1. Set up
 
+Given only `!<iid>`, build the URL from the repository's entry in
+`references/repository-facts.md`: `https://code.roche.com/<project path>/-/merge_requests/<iid>`.
+Ask him which repository when it is unclear.
+
 `setup_review.py <MR URL>` fetches both branches, puts a detached worktree on the MR head at
 `<run>/wt` (the operator's own checkout is never touched), and writes `meta.json` and
-`mr-description.md`. It finds the ticket key (`NIFS-<n>`) in the MR title, description or
-source branch; pass `--ticket <KEY>` when none carries it. Rerun it after the author pushes:
-it moves the worktree to the new head and keeps the notes, and the gate runs again.
+`mr-description.md`. It takes the ticket key (`NIFS-<n>`) from the MR title, source branch
+or description, in that order, and prints any other keys it saw: ask him which of them
+belong to the spec. Pass `--ticket <KEY>` when none carries it.
+
+**A later round.** Rerun `setup_review.py` after the author pushes: it moves the worktree to
+the new head and keeps `notes/` and `posted.json`. Reviewing the new head is a new round in
+the same run directory. Before its gate, move `gate.md`, `ledger-*.md`, `refute-*.md` and
+`review-mr-<iid>.md` into `<run>/round-<N>/`, where N counts the rounds already done. Fill
+the synthesizer's `{FIRST}` with one more than the highest finding number in `posted.json`,
+so no new finding takes a posted finding's number and `post_notes.py` never updates a live
+note with a new finding's text. A note already posted is edited or withdrawn only on his
+word.
 
 The run directory must be shared with the session, because the lenses write their ledgers
 there. When `~/.cache/roche-mr-review` is not among the session's working directories, ask
 him to run `/add-dir ~/.cache/roche-mr-review`. The directory is under `$HOME`, so Colima
 mounts the worktree into Docker.
 
-Materialize the ticket into `<run>/ticket.md`, verbatim, with the Atlassian MCP's
-`getJiraIssue` (cloudId `3ccaad2c-2e75-4a7c-b9aa-c3eddcd6a020`; summary, description,
-comments, subtasks, links, as markdown). The server's name changes between sessions, so find
-the tool by searching for `getJiraIssue`. When the ticket has a parent, add the parent's
+Materialize the ticket into `<run>/ticket.md`, verbatim, with the Atlassian MCP (cloudId
+`3ccaad2c-2e75-4a7c-b9aa-c3eddcd6a020`, as markdown): `getJiraIssue` with view `evidence`
+for the summary, description, subtasks, links and parent, then every comment with
+`listJiraIssueComments` through `executeRead`, paging until the last page. `getJiraIssue`
+reports only how many comments there are, and decisions are often agreed in comments. The
+server's name changes between sessions, so find the tools by searching for `getJiraIssue`.
+With several keys in the spec, materialize each. When the ticket has a parent, add the parent's
 description: open questions and design decisions often live there and nowhere else. With no
 ticket key, ask him for the spec. With none at all, lens 07 judges contract and migration
 only, and the ledger says so.
@@ -89,7 +106,8 @@ the shared lock, note the containers already there, run in the background, and e
 session in the same turn. A cold gate under emulation can outlast the Bash tool's 10-minute
 foreground limit.
 
-Write `<run>/gate.md`: the exact command, the head commit it ran on, the exit status, and for
+Write `<run>/gate.md`: the exact command, the head commit it ran on, the exit status of every
+step (and which steps never ran, when the entry's gate stops at the first failure), and for
 a red gate every failing step with its failing test ids or diagnostics, verbatim. When the
 gate cannot run here (no entry, Docker unavailable, the entry says not runnable), write that
 in `gate.md`: the review is static, and everything you present says so.
@@ -106,14 +124,22 @@ structure document, and its facts.
 ### 4. Synthesize, refute, verify
 
 Once all eight ledgers exist, dispatch the synthesizer brief. When a lens died or wrote no
-ledger, re-dispatch that lens once before the synthesizer; when it fails again, the
+ledger, move any partial ledger it left to `ledger-NN-<slug>.md.partial` (rust-code-reviewer
+will not write over an existing file) and re-dispatch that lens once before the synthesizer; when it fails again, the
 synthesizer runs without it and the headline names the missing lens.
 
 Then dispatch one refuter per Critical and Important finding of `ledger-synthesized.md`, all
-in one message, each on `haiku` at `max`, with the refuter brief from
-`references/lens-briefs.md` and its own `<run>/refute-K.md` (K is the finding's ledger
-number). A REFUTED finding moves to the ledger's *Dropped* section with the refuter's reason;
-change its severity instead when the refuter shows a lower one is right.
+in one message, each on `haiku` at `max`, with its own `<run>/refute-K.md` (K is the
+finding's ledger number) and the refuter brief from `references/lens-briefs.md` that fits
+its Category: the rule-finding brief for SRP, architecture, naming, constants/enums, style
+and tests, the behaviour brief for the rest. The behaviour brief would refute a rule finding
+for having no wrong behaviour.
+
+Read each REFUTED and LOWER verdict against the cited lines before you act on it. When its
+evidence is only that the refuter could not verify the claim (a race, a cancellation path,
+an FFI lifetime: things a refuter cannot build or run), keep the finding at its severity and
+present it as uncertain. Otherwise a REFUTED finding moves to the ledger's *Dropped* section
+with the refuter's reason, and a LOWER one takes the severity the refuter shows.
 
 Then read the cited lines of every surviving Critical and Important finding yourself: the
 fleet is cheap, and a false positive posted on a colleague's MR costs him credibility. A
@@ -123,7 +149,8 @@ finding you cannot confirm goes to him as uncertain, never as fact.
 
 Show the Critical and Important findings in full (Finding N — Severity — title, Where, Impact,
 Description, Recommended fix), then one table row per Minor and Nit (number, severity,
-category, title, anchor), the ledger path, the gate result, and the static-review caveat when
+category, title, anchor), one line per Critical or Important finding the refuters dropped
+(title and the refuter's reason, so he can disagree), the ledger path, the gate result, and the static-review caveat when
 it applies. Every finding keeps its exact `file:line` and quoted line, explained in plain
 words; he rejects unexplained jargon. Then stop.
 
@@ -197,7 +224,8 @@ will be added to this stage later.
 
 When he closes the review, remove the worktree with
 `git -C <repository> worktree remove <run>/wt`, and any build cache the repository's entry
-says the gate created for this run. Keep the run directory: its notes and `posted.json`
+says the gate created for this run. Tell him of any shared image the gate rebuilt from the
+MR's files (the entry names them). Keep the run directory: its notes and `posted.json`
 still allow later edits.
 
 ## Stack table

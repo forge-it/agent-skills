@@ -4,7 +4,7 @@ It holds only the findings that have a note file in notes/ (the ones the operato
 taken from the synthesized ledger, renumbered 1..N in ledger order, with the
 ledger-internal fields dropped.
 
-Usage: python3 -B build_final_markdown.py <run directory>
+Usage: uv run -q --no-project --python 3.13 python -B build_final_markdown.py <run directory>
 """
 
 import argparse

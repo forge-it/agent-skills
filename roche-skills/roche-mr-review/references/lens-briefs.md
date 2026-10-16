@@ -10,6 +10,7 @@ Dispatch all eight lenses in one message.
 | `{WT}` | `{RUN}/wt` |
 | `{IID}`, `{REPO}`, `{TICKET}`, `{TARGET}` | `merge_request_iid`, project name, `ticket_key`, `target_branch` |
 | `{BASE}` | `base_commit` |
+| `{FIRST}` | 1, or on a later round one more than the highest finding number in `posted.json` |
 | `{GATE_LINE}` | gate ran → `Gate result: {RUN}/gate.md (it ran once on the MR head; read it, never rerun it).` · it could not run → `No gate ran: static review only. Say so where it matters.` |
 | `{STRUCTURE_DOC}` | the structure document the repository's entry names, else `CLAUDE.md` |
 | `{STYLE_SKILL}`, `{TEST_SKILL}`, `{ARCHITECTURE_LINE}`, `{REVIEWER_AGENT}` | from the stack table in SKILL.md |
@@ -142,7 +143,7 @@ Inputs in {RUN}: ledger-01-logic.md … ledger-08-safety-security.md, ticket.md,
 2. Verify every finding against the code: the cited line exists at the MR head and says what the quote says, and the claim follows from it. Fix wrong line numbers. Drop a finding (list it under "Dropped" with a one-line reason) when it is false, concerns only code the MR did not touch, or the code contradicts it. Add no findings of your own.
 3. Merge duplicates (the same underlying issue from several lenses) into one finding, keeping the highest justified severity and noting which lenses found it. Keep every location of a repeated problem in that one finding.
 4. Re-judge severity honestly. Critical: data loss, security, or broken production behaviour. Important: a real bug, or a contract or maintainability problem that should be fixed before merge. Minor: should be fixed, does not block. Nit: cosmetic.
-5. Number the findings 1..N: Critical, then Important, Minor, Nit, and by corroboration within a severity.
+5. Number the findings {FIRST}..N: Critical, then Important, Minor, Nit, and by corroboration within a severity.
 6. Never refer to another finding by its number: findings get renumbered when a subset is sent on. If two are related, repeat the one fact the reader needs.
 
 Write {RUN}/ledger-synthesized.md:
@@ -165,14 +166,28 @@ Then every finding in exactly this shape:
 
 Then "## Dropped" (one line each: lens id, title, reason) and "## Checked and sound" (merged and deduplicated, short).
 
+On a later round ({FIRST} above 1), add "## Posted in earlier rounds": copy verbatim every `### Finding N` of the previous round's ledger-synthesized.md (in {RUN}/round-<N>/) that has a file in {RUN}/notes/, and add one line to each saying whether the new head fixes it, with a citation.
+
 Your final message: the counts by severity and the summary table, nothing else.
 ```
 
 ## Refuter — `general-purpose` on `haiku` at `max`, one per Critical and Important finding
 
-Fill `{K}` with the finding's ledger number and paste the finding in full after the brief.
+This is the behaviour brief, for every Category except the rule ones below. Fill `{K}` with the finding's ledger number and paste the finding in full after the brief.
 
 ```
 You are a skeptic. Below is Finding {K} from the synthesized review ledger of GitLab MR !{IID} on {REPO}, worktree {WT}, diffed against {BASE}. Try to REFUTE it against the actual code on the MR head, the ticket ({RUN}/ticket.md), the MR description and {RUN}/gate.md: does the cited code say what the finding claims, does the problem actually follow, is it in code the MR changed, and is its severity right? Run every git command as `git -C {WT}`. Never run cargo, just, docker or any build or test, and never modify a file. CONFIRMED needs a concrete wrong behaviour, a material contract or ticket omission, a test that cannot catch the defect it claims to cover, or a safety or security hole. REFUTED when the code does not say that, the problem does not follow, or it concerns code the MR did not touch. LOWER when the problem is real but its severity is too high: name the right one. Anything you cannot verify is REFUTED.
+Write to {RUN}/refute-{K}.md: the finding's title, the verdict (CONFIRMED, REFUTED, or LOWER to <severity>), then at most three sentences of evidence with file:line citations.
+```
+
+## Refuter for a rule finding — `general-purpose` on `haiku` at `max`
+
+Use it instead of the behaviour brief for a Critical or Important finding whose Category is
+SRP, architecture, naming, constants/enums, style or tests. Fill `{K}` and `{RULE_SKILLS}`
+(the stack row's `{STYLE_SKILL}`, `{TEST_SKILL}` and the skills its `{ARCHITECTURE_LINE}`
+loads), and paste the finding in full after the brief.
+
+```
+You are a skeptic. Below is Finding {K} from the synthesized review ledger of GitLab MR !{IID} on {REPO}, worktree {WT}, diffed against {BASE}: a claimed rule violation. Run every git command as `git -C {WT}`. Try to REFUTE it: open the rule it relies on in the skills {RULE_SKILLS} (each at ~/src/agent-skills/software-engineering/<skill>/SKILL.md) and in {WT}/{STRUCTURE_DOC}. CONFIRMED needs the cited lines to be added or changed by this MR and to break the rule as its text states it, with no exception granted in {STRUCTURE_DOC} or in a ledger the repository keeps for such exceptions. REFUTED when the rule does not say that, the lines are not in the change, or the repository documents the exception. LOWER when the violation is real but costs less than its severity says: name the right one. Never run cargo, just, docker or any build or test, and never modify a file.
 Write to {RUN}/refute-{K}.md: the finding's title, the verdict (CONFIRMED, REFUTED, or LOWER to <severity>), then at most three sentences of evidence with file:line citations.
 ```

@@ -69,10 +69,10 @@ def load_review_notes(run_directory: Path) -> tuple[ReviewNote, ...]:
 
         ---
         finding: 4
-        path: src/central_rest_api/api/hardware.py
-        line: 285
+        path: core/src/application/plan.rs
+        line: 185
         ---
-        **Important — pagination links drop the filters**
+        **Important — a plan whose TTL expired is still applied**
         ...
     """
     notes_directory = run_directory / NOTES_DIRECTORY_NAME

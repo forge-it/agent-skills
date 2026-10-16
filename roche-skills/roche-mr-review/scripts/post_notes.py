@@ -5,7 +5,7 @@ body against the GitLab firewall through the markdown preview endpoint, which cr
 nothing. With --post it creates new notes and updates edited ones in place; posted.json
 records what is live, so a rerun skips unchanged notes.
 
-Usage: python3 -B post_notes.py <run directory> [--post]
+Usage: uv run -q --no-project --python 3.13 python -B post_notes.py <run directory> [--post]
 """
 
 import argparse
@@ -121,7 +121,7 @@ def main():
             print(f"\nfirewall blocks finding {note_plan.review_note.finding} ({note_plan.review_note.source_file.name}):")
             for blocked_line in blocked_lines:
                 print(f"    {blocked_line}")
-        sys.exit("\nreword the blocked lines (known trigger: `time (`) and rerun; nothing was posted")
+        sys.exit("\nreword the blocked lines and rerun; nothing was posted")
 
     if not arguments.post:
         print("\ndry run: nothing was posted. Rerun with --post to publish.")

@@ -33,14 +33,23 @@ under a lock shared with every other skill:
   `project_structure.md`. The rules the gate enforces are in `docs/testing.md`
   (*Structure rules*).
 - **Gate**, from `<run>/wt`, under the Docker rule:
-  1. `DOCKER_DEFAULT_PLATFORM=linux/amd64 just test-adapter-fixtures`: the worktree has no
-     git-ignored `libdnf5-adapter/tests/fixtures/generated/`, and the adapter's integration
-     tests in the gate panic without it.
-  2. `DOCKER_DEFAULT_PLATFORM=linux/amd64 just builder-image-build`.
-  3. The `quality-gate` recipe's `docker run` line by hand, with
-     `-v rdnx-target-mr-<iid>:/src/target` in place of `-v rdnx-target:/src/target`, so
-     the review never shares the main checkout's build cache. It runs `cargo fmt --check`,
-     `clippy -D warnings`, `cargo test --workspace --locked` and `cargo audit`.
+  1. `DOCKER_DEFAULT_PLATFORM=linux/amd64 just test-adapter-fixtures`, on every gate, a
+     rerun after a push included: the adapter's integration tests read the git-ignored
+     `libdnf5-adapter/tests/fixtures/generated/`, which a fresh worktree lacks and a rerun
+     holds from the previous head.
+  2. `DOCKER_DEFAULT_PLATFORM=linux/amd64 just builder-image-build`. `rdnx-builder:dev` is
+     one tag for every checkout on this machine. When the MR edits `docker/Dockerfile.builder`
+     or `rust-toolchain.toml`, this step rebuilds the shared tag from the MR's files: say so
+     in `gate.md`, and tell him at close.
+  3. Every check of the `quality-gate` recipe, each one run whatever the one before did:
+     ```
+     DOCKER_DEFAULT_PLATFORM=linux/amd64 docker run --rm -v "$PWD":/src -v rdnx-cargo-registry:/root/.cargo/registry -v rdnx-target-mr-<iid>:/src/target -w /src rdnx-builder:dev bash -c 'status=0; for step in "fmt --all --check" "clippy --workspace --all-targets --locked -- -D warnings" "test --workspace --locked --no-fail-fast" "audit --deny unsound"; do echo "== cargo $step"; cargo $step || { echo "== FAILED: cargo $step"; status=1; }; done; exit $status'
+     ```
+     The recipe chains its checks with `&&`, so one unformatted line would hide clippy, the
+     tests and audit; `--no-fail-fast` runs every test binary. The target volume
+     `rdnx-target-mr-<iid>` is the review's own, so it never shares the main checkout's
+     build cache. Never copy the recipe line itself: bash leaves its
+     `{{justfile_directory()}}` unexpanded, and Docker rejects it.
   The vendored libdnf5 RPMs are x86_64, so every Docker command needs
   `DOCKER_DEFAULT_PLATFORM=linux/amd64`. A cold run under emulation takes about a quarter of
   an hour. At close, also `docker volume rm rdnx-target-mr-<iid>`. The Docker suites
