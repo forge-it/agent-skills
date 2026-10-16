@@ -63,6 +63,7 @@ They live in `roche-skills/`. On a Roche machine, `~/.local/bin/agent-skills-syn
 | Skill | Description |
 |-------|-------------|
 | [roche-mr-review](roche-skills/roche-mr-review/SKILL.md) | Review a code.roche.com merge request with an eight-lens fleet against the skills and the NIFS ticket, after one gate run; Haiku refuters check every Critical and Important finding, and only the operator's picks become review notes (sending the developer file is disabled for now) |
+| [roche-ticket-creation](roche-skills/roche-ticket-creation/SKILL.md) | Draft NIFS tickets (Enabler, Bug, Story) for the RDNX board from any source in the team's templates, have a Sonnet reviewer check them, and create them on the operator's yes with component, sprint, assignee, estimate and links |
 | [roche-ticket-delivery](roche-skills/roche-ticket-delivery/SKILL.md) | Take a NIFS ticket from the RDNX board from hand-over to merged: fleet context, three options, a reviewed plan, fleet implementation and review, with his four gates and the In Progress → In Code Review → post-merge status moves |
 
 ### Greenfield Project Setup
