@@ -358,12 +358,14 @@ repository the change touches:
 ```
 Review <repository name> in <absolute path of the checkout holding the change>
   <main worktree | linked worktree>, branch <branch>, against <base, or HEAD in the deploy repo>
-  <git -C <that path> status --short --untracked-files=all, verbatim>
 ```
 
-Run that status in the path you name: its paths must be the files this report lists as
-changed, which proves the path holds this ticket's change, and it lists each new file a
-diffstat omits. The tree stays dirty. Then stop.
+Those two lines and nothing more: he reads the status output as noise. Before writing them,
+run `git -C <that path> status --short --untracked-files=all` yourself: its paths must be the
+files this report lists as changed, which proves the path holds this ticket's change. When
+they differ, you are naming the wrong checkout: fix that before the report. Any new file the
+status shows belongs in the report's list of what changed, since a diffstat omits it. The
+tree stays dirty. Then stop.
 
 ### 9. Refactor or commit — gate
 
