@@ -139,7 +139,7 @@ def plan_note(
             sys.exit(
                 f"{review_note.source_file.name}: finding {review_note.finding} is already posted as "
                 f"{posted_anchor}, and GitLab cannot move a note. Restore that anchor, or withdraw the "
-                "note (SKILL.md stage 6) and post it again."
+                "note (SKILL.md stage 7) and post it again."
             )
         line_position = None
         posts_inline = posted_note.posted_inline

@@ -51,8 +51,8 @@ The scripts live in `scripts/` beside this file. They need Python 3.11 or later,
 Mac's `/usr/bin/python3` is 3.9, so run them as
 `uv run -q --no-project --python 3.13 python -B ~/src/agent-skills/roche-skills/roche-mr-review/scripts/<name>.py`
 (`-B` keeps Python from writing `__pycache__` into the skills repository). Each has `--help`.
-A later session resumes from the run directory: `meta.json`, `gate.md` and the ledgers carry
-the review, and `posted.json` says what is live.
+A later session resumes from the run directory: `meta.json`, `meta-notes.md`, `gate.md`, the
+ledgers (with their *Uncertain* lines) and `refute-*.md` carry the review, and `posted.json` says what is live.
 
 Every repository has an entry in `references/repository-facts.md`: its stack, its gate, its
 structure document and its traps. For a repository with no entry, read its CLAUDE.md,
@@ -144,19 +144,23 @@ brief would refute a coverage finding for breaking no rule.
 
 Read each REFUTED and LOWER verdict against the cited lines before you act on it. When its
 evidence is only that the refuter could not verify the claim (a race, a cancellation path,
-an FFI lifetime: things a refuter cannot build or run), keep the finding at its severity and
-present it as uncertain. Otherwise a REFUTED finding moves to the ledger's *Dropped* section
+an FFI lifetime: things a refuter cannot build or run), keep the finding at its severity,
+present it as uncertain, and add the line `**Uncertain:** <why>` to it in
+`ledger-synthesized.md`. Otherwise a REFUTED finding moves to the ledger's *Dropped* section
 with the refuter's reason, and a LOWER one takes the severity the refuter shows.
 
-Then read the cited lines of every surviving Critical and Important finding yourself: the
-fleet is cheap, and a false positive posted on a colleague's MR costs him credibility. A
-finding you cannot confirm goes to him as uncertain, never as fact.
+Then read the cited lines of every surviving Critical and Important finding yourself, and, on
+a later round, the citation in every posted finding's *On the new head* line: the fleet is
+cheap, and a false positive posted on a colleague's MR costs him credibility. A
+finding you cannot confirm goes to him as uncertain, never as fact, with the same line.
 
 ### 5. Present — gate
 
 On a later round, first list the posted findings, one line each with their *On the new head*
-status, so he can say which threads to answer or resolve; then show only this round's
-findings.
+status, so he can say which threads to answer or resolve. Then list, one line each, this
+round's findings that carry a *Declined earlier* line: he has passed on them once. Then show
+the rest of this round's findings. A class or category pick never includes a posted or a
+declined-earlier finding; only a pick by number does.
 
 Show the Critical and Important findings in full (Finding N — Severity — title, Where, Impact,
 Description, Recommended fix), then one table row per Minor and Nit (number, severity,
@@ -222,6 +226,13 @@ When he withdraws a note, delete it on GitLab (`glab api --hostname code.roche.c
 DELETE projects/<project_id>/merge_requests/<iid>/notes/<note_id>`, the id from
 `posted.json`), then drop its `posted.json` entry and its `notes/NN.md`: the developer file
 is built from `notes/`.
+
+When he asks to answer a thread, draft the reply, show it, and post it only on his yes:
+`glab api --hostname code.roche.com --method POST projects/<project_id>/merge_requests/<iid>/discussions/<discussion_id>/notes -f body=<reply>`.
+To resolve one:
+`glab api --hostname code.roche.com --method PUT "projects/<project_id>/merge_requests/<iid>/discussions/<discussion_id>?resolved=true"`.
+The `discussion_id` is in `posted.json`. Leave its `notes/NN.md` and `posted.json` entry
+alone.
 
 ### 8. The developer file — not sent
 

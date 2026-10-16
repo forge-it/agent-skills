@@ -19,7 +19,7 @@ SECTION_HEADER_PATTERN = re.compile(r"^## ", re.MULTILINE)
 FINDING_REFERENCE_PATTERN = re.compile(r"\b(finding) (\d+)\b", re.IGNORECASE)
 UNLISTED_REFERENCE_PARENTHETICAL_PATTERN = re.compile(r"\s*\((?:see |also )?finding (\d+)\)", re.IGNORECASE)
 PLURAL_REFERENCE_PATTERN = re.compile(r"\bfindings \d+", re.IGNORECASE)
-INTERNAL_FIELD_PREFIXES = ("**Anchor:**", "**Found by:**")
+INTERNAL_FIELD_PREFIXES = ("**Anchor:**", "**Found by:**", "**Declined earlier:**", "**Uncertain:**")
 TRAILING_RULE = "---"
 
 
