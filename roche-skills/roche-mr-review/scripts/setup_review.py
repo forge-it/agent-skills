@@ -75,6 +75,8 @@ def main():
     ticket_keys = list(
         dict.fromkeys(TICKET_KEY_PATTERN.findall(f"{merge_request['title']}\n{source_branch}\n{description}"))
     )
+    meta_file = run_directory / META_FILE_NAME
+    previous_ticket_key = json.loads(meta_file.read_text()).get("ticket_key", "") if meta_file.exists() else ""
     review_run = ReviewRun(
         hostname=hostname,
         project_path=project_path,
@@ -90,9 +92,9 @@ def main():
         start_commit=merge_request["diff_refs"]["start_sha"],
         head_commit=head_commit,
         repository_path=str(repository),
-        ticket_key=arguments.ticket or (ticket_keys[0] if ticket_keys else ""),
+        ticket_key=arguments.ticket or previous_ticket_key or (ticket_keys[0] if ticket_keys else ""),
     )
-    (run_directory / META_FILE_NAME).write_text(json.dumps(asdict(review_run), indent=2) + "\n")
+    meta_file.write_text(json.dumps(asdict(review_run), indent=2) + "\n")
     (run_directory / MR_DESCRIPTION_FILE_NAME).write_text(f"# {review_run.title}\n\n{description}\n")
 
     changed_files = run_git(worktree, "diff", "--name-only", review_run.base_commit, head_commit).splitlines()

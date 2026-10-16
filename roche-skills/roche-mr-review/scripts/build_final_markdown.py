@@ -26,6 +26,13 @@ TRAILING_RULE = "---"
 def main():
     argument_parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     argument_parser.add_argument("run_directory", type=Path)
+    argument_parser.add_argument(
+        "--leave-out",
+        type=int,
+        nargs="*",
+        default=[],
+        help="ledger numbers to leave out (posted findings the new head fixed)",
+    )
     arguments = argument_parser.parse_args()
 
     review_run = load_review_run(arguments.run_directory)
@@ -33,7 +40,11 @@ def main():
     if not ledger_file.exists():
         sys.exit(f"{ledger_file} not found: run the synthesizer first")
     ledger_findings = read_ledger_findings(ledger_file.read_text())
-    picked_ledger_numbers = sorted(review_note.finding for review_note in load_review_notes(arguments.run_directory))
+    picked_ledger_numbers = sorted(
+        review_note.finding
+        for review_note in load_review_notes(arguments.run_directory)
+        if review_note.finding not in arguments.leave_out
+    )
     if not picked_ledger_numbers:
         sys.exit(
             f"no note files in {arguments.run_directory / NOTES_DIRECTORY_NAME}: the developer file holds the posted findings"

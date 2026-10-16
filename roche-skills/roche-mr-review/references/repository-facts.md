@@ -32,18 +32,18 @@ under a lock shared with every other skill:
 - **Structure document:** `docs/layout.md`. rdnx has no `CLAUDE.md` or
   `project_structure.md`. The rules the gate enforces are in `docs/testing.md`
   (*Structure rules*).
-- **Gate**, from `<run>/wt`, under the Docker rule:
-  1. `DOCKER_DEFAULT_PLATFORM=linux/amd64 just test-adapter-fixtures`, on every gate, a
+- **Gate**, on `<run>/wt` with every path written absolute, under the Docker rule:
+  1. `DOCKER_DEFAULT_PLATFORM=linux/amd64 just --justfile <run>/wt/justfile test-adapter-fixtures`, on every gate, a
      rerun after a push included: the adapter's integration tests read the git-ignored
      `libdnf5-adapter/tests/fixtures/generated/`, which a fresh worktree lacks and a rerun
      holds from the previous head.
-  2. `DOCKER_DEFAULT_PLATFORM=linux/amd64 just builder-image-build`. `rdnx-builder:dev` is
+  2. `DOCKER_DEFAULT_PLATFORM=linux/amd64 just --justfile <run>/wt/justfile builder-image-build`. `rdnx-builder:dev` is
      one tag for every checkout on this machine. When the MR edits `docker/Dockerfile.builder`
      or `rust-toolchain.toml`, this step rebuilds the shared tag from the MR's files: say so
      in `gate.md`, and tell him at close.
   3. Every check of the `quality-gate` recipe, each one run whatever the one before did:
      ```
-     DOCKER_DEFAULT_PLATFORM=linux/amd64 docker run --rm -v "$PWD":/src -v rdnx-cargo-registry:/root/.cargo/registry -v rdnx-target-mr-<iid>:/src/target -w /src rdnx-builder:dev bash -c 'status=0; for step in "fmt --all --check" "clippy --workspace --all-targets --locked -- -D warnings" "test --workspace --locked --no-fail-fast" "audit --deny unsound"; do echo "== cargo $step"; cargo $step || { echo "== FAILED: cargo $step"; status=1; }; done; exit $status'
+     DOCKER_DEFAULT_PLATFORM=linux/amd64 docker run --rm -v <run>/wt:/src -v rdnx-cargo-registry:/root/.cargo/registry -v rdnx-target-mr-<iid>:/src/target -w /src rdnx-builder:dev bash -c 'status=0; for step in "fmt --all --check" "clippy --workspace --all-targets --locked -- -D warnings" "test --workspace --locked --no-fail-fast" "audit --deny unsound"; do echo "== cargo $step"; cargo $step || { echo "== FAILED: cargo $step"; status=1; }; done; exit $status'
      ```
      The recipe chains its checks with `&&`, so one unformatted line would hide clippy, the
      tests and audit; `--no-fail-fast` runs every test binary. The target volume

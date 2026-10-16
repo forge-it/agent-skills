@@ -74,10 +74,10 @@ belong to the spec. Pass `--ticket <KEY>` when none carries it.
 the new head and keeps `notes/` and `posted.json`. Reviewing the new head is a new round in
 the same run directory. Before its gate, move `gate.md`, `ledger-*.md`, `refute-*.md` and
 `review-mr-<iid>.md` into `<run>/round-<N>/`, where N counts the rounds already done. Fill
-the synthesizer's `{FIRST}` with one more than the highest finding number in `posted.json`,
-so no new finding takes a posted finding's number and `post_notes.py` never updates a live
-note with a new finding's text. A note already posted is edited or withdrawn only on his
-word.
+the synthesizer's `{FIRST}` with one more than the highest finding number in `posted.json` or `notes/`, compared as numbers, so no new finding takes a posted
+finding's number and `post_notes.py` never updates a live note with a new finding's text.
+Before the new round, ask him about any `notes/NN.md` with no `posted.json` entry: post it
+or delete it. A note already posted is edited or withdrawn only on his word.
 
 The run directory must be shared with the session, because the lenses write their ledgers
 there. When `~/.cache/roche-mr-review` is not among the session's working directories, ask
@@ -125,15 +125,22 @@ structure document, and its facts.
 
 Once all eight ledgers exist, dispatch the synthesizer brief. When a lens died or wrote no
 ledger, move any partial ledger it left to `ledger-NN-<slug>.md.partial` (rust-code-reviewer
-will not write over an existing file) and re-dispatch that lens once before the synthesizer; when it fails again, the
-synthesizer runs without it and the headline names the missing lens.
+will not write over an existing file) and re-dispatch that lens once before the synthesizer.
+When it fails again, the synthesizer runs without it and the headline names the missing lens.
 
-Then dispatch one refuter per Critical and Important finding of `ledger-synthesized.md`, all
-in one message, each on `haiku` at `max`, with its own `<run>/refute-K.md` (K is the
-finding's ledger number) and the refuter brief from `references/lens-briefs.md` that fits
-its Category: the rule-finding brief for SRP, architecture, naming, constants/enums, style
-and tests, the behaviour brief for the rest. The behaviour brief would refute a rule finding
-for having no wrong behaviour.
+Then dispatch one refuter per Critical and Important finding numbered `{FIRST}` or above in
+`ledger-synthesized.md` (never one under *Posted in earlier rounds*: those are already
+decided and live on GitLab), all in one message, each on `haiku` at `max`, with its own
+`<run>/refute-K.md` (K is the finding's ledger number) and the refuter brief from
+`references/lens-briefs.md` that fits the finding:
+
+| Finding | Brief |
+|---|---|
+| SRP, architecture, naming, constants/enums, style; a tests finding about how a test is written (placement, naming, shape, shared state, magic values) | rule-finding brief |
+| everything else, including a tests finding that a promised behaviour is untested or that a test asserts the wrong thing | behaviour brief |
+
+The behaviour brief would refute a rule finding for having no wrong behaviour, and the rule
+brief would refute a coverage finding for breaking no rule.
 
 Read each REFUTED and LOWER verdict against the cited lines before you act on it. When its
 evidence is only that the refuter could not verify the claim (a race, a cancellation path,
@@ -147,11 +154,15 @@ finding you cannot confirm goes to him as uncertain, never as fact.
 
 ### 5. Present — gate
 
+On a later round, first list the posted findings, one line each with their *On the new head*
+status, so he can say which threads to answer or resolve; then show only this round's
+findings.
+
 Show the Critical and Important findings in full (Finding N — Severity — title, Where, Impact,
 Description, Recommended fix), then one table row per Minor and Nit (number, severity,
 category, title, anchor), one line per Critical or Important finding the refuters dropped
-(title and the refuter's reason, so he can disagree), the ledger path, the gate result, and the static-review caveat when
-it applies. Every finding keeps its exact `file:line` and quoted line, explained in plain
+(title and the refuter's reason, so he can disagree), the ledger path, the gate result, and
+the static-review caveat when it applies. Every finding keeps its exact `file:line` and quoted line, explained in plain
 words; he rejects unexplained jargon. Then stop.
 
 His picks come as a severity class ("all critical + important"), numbers ("1 3 5 6"),
@@ -216,7 +227,8 @@ is built from `notes/`.
 
 `build_final_markdown.py <run>` writes `review-mr-<iid>.md`: only the findings that have note
 files, taken from the synthesized ledger, renumbered 1..N, with Anchor and Found-by dropped. A
-warning about an unresolved "Finding N" reference means an edit by hand.
+warning about an unresolved "Finding N" reference means an edit by hand. On a later round,
+pass `--leave-out` with the posted findings whose *On the new head* line says fixed.
 
 Sending it to the developer is **disabled**: never send it, over Teams or anything else.
 Give him the file's path; he sends it himself if he wants to. Sending over Microsoft Teams
@@ -232,7 +244,7 @@ still allow later edits.
 
 | Stack | `{STYLE_SKILL}` | `{TEST_SKILL}` | `{ARCHITECTURE_LINE}` for lens 03 | `{REVIEWER_AGENT}` |
 |---|---|---|---|---|
-| Rust | rust-code-style | rust-testing | Load rust-hexagonal-architecture and rust-project-structure: dependencies point inward, ports hold traits only. Where the repository's structure document says otherwise, it wins. | rust-code-reviewer |
+| Rust | rust-code-style | rust-testing | Load rust-design-principles (single responsibility), rust-hexagonal-architecture and rust-project-structure: dependencies point inward, ports hold traits only. Where the repository's structure document says otherwise, it wins. | rust-code-reviewer |
 
 For any other stack, ask him which skills and reviewer agent apply, and add a row once he
 agrees.

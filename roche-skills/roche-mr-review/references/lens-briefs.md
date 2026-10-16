@@ -10,7 +10,8 @@ Dispatch all eight lenses in one message.
 | `{WT}` | `{RUN}/wt` |
 | `{IID}`, `{REPO}`, `{TICKET}`, `{TARGET}` | `merge_request_iid`, project name, `ticket_key`, `target_branch` |
 | `{BASE}` | `base_commit` |
-| `{FIRST}` | 1, or on a later round one more than the highest finding number in `posted.json` |
+| `{FIRST}` | 1, or on a later round one more than the highest finding number in `posted.json` or `notes/`, compared as numbers |
+| `{PREVIOUS_LEDGER}` | on a later round, `{RUN}/round-<N>/ledger-synthesized.md` for the highest N present |
 | `{GATE_LINE}` | gate ran → `Gate result: {RUN}/gate.md (it ran once on the MR head; read it, never rerun it).` · it could not run → `No gate ran: static review only. Say so where it matters.` |
 | `{STRUCTURE_DOC}` | the structure document the repository's entry names, else `CLAUDE.md` |
 | `{STYLE_SKILL}`, `{TEST_SKILL}`, `{ARCHITECTURE_LINE}`, `{REVIEWER_AGENT}` | from the stack table in SKILL.md |
@@ -166,28 +167,28 @@ Then every finding in exactly this shape:
 
 Then "## Dropped" (one line each: lens id, title, reason) and "## Checked and sound" (merged and deduplicated, short).
 
-On a later round ({FIRST} above 1), add "## Posted in earlier rounds": copy verbatim every `### Finding N` of the previous round's ledger-synthesized.md (in {RUN}/round-<N>/) that has a file in {RUN}/notes/, and add one line to each saying whether the new head fixes it, with a citation.
+On a later round ({FIRST} above 1), add "## Posted in earlier rounds": copy verbatim every `### Finding N` of {PREVIOUS_LEDGER} that has a file in {RUN}/notes/, and end each with one line `**On the new head:** fixed — <citation>` or `**On the new head:** still present — <path:line>`. A finding from this round's lenses that is the same problem as a posted one is not a new finding: give it no number, cite its new location in that posted finding's *On the new head* line, and list it under "Dropped" as "already posted as Finding N".
 
 Your final message: the counts by severity and the summary table, nothing else.
 ```
 
 ## Refuter — `general-purpose` on `haiku` at `max`, one per Critical and Important finding
 
-This is the behaviour brief, for every Category except the rule ones below. Fill `{K}` with the finding's ledger number and paste the finding in full after the brief.
+This is the behaviour brief, for the findings SKILL.md stage 4 routes to it. Fill `{K}` with the finding's ledger number and paste the finding in full after the brief.
 
 ```
-You are a skeptic. Below is Finding {K} from the synthesized review ledger of GitLab MR !{IID} on {REPO}, worktree {WT}, diffed against {BASE}. Try to REFUTE it against the actual code on the MR head, the ticket ({RUN}/ticket.md), the MR description and {RUN}/gate.md: does the cited code say what the finding claims, does the problem actually follow, is it in code the MR changed, and is its severity right? Run every git command as `git -C {WT}`. Never run cargo, just, docker or any build or test, and never modify a file. CONFIRMED needs a concrete wrong behaviour, a material contract or ticket omission, a test that cannot catch the defect it claims to cover, or a safety or security hole. REFUTED when the code does not say that, the problem does not follow, or it concerns code the MR did not touch. LOWER when the problem is real but its severity is too high: name the right one. Anything you cannot verify is REFUTED.
+You are a skeptic. Below is Finding {K} from the synthesized review ledger of GitLab MR !{IID} on {REPO}, worktree {WT}, diffed against {BASE}. Try to REFUTE it against the actual code on the MR head, the ticket ({RUN}/ticket.md), the MR description and {RUN}/gate.md: does the cited code say what the finding claims, does the problem actually follow, is it in code the MR changed, and is its severity right? Run every git command as `git -C {WT}`. Never run cargo, just, docker or any build or test, and never modify a file. CONFIRMED needs a concrete wrong behaviour, a material contract or ticket omission, a test that cannot catch the defect it claims to cover, a safety or security hole, a promised behaviour (ticket, MR description) that no test exercises, a doc or comment the change made false or left false, or a performance cost the finding ties to an input size the service really meets. REFUTED when the code does not say that, the problem does not follow, or it concerns code the MR did not touch. LOWER when the problem is real but its severity is too high: name the right one. Anything you cannot verify is REFUTED.
 Write to {RUN}/refute-{K}.md: the finding's title, the verdict (CONFIRMED, REFUTED, or LOWER to <severity>), then at most three sentences of evidence with file:line citations.
 ```
 
 ## Refuter for a rule finding — `general-purpose` on `haiku` at `max`
 
-Use it instead of the behaviour brief for a Critical or Important finding whose Category is
-SRP, architecture, naming, constants/enums, style or tests. Fill `{K}` and `{RULE_SKILLS}`
+Use it instead of the behaviour brief for a Critical or Important finding that SKILL.md
+stage 4 routes to it. Fill `{K}` and `{RULE_SKILLS}`
 (the stack row's `{STYLE_SKILL}`, `{TEST_SKILL}` and the skills its `{ARCHITECTURE_LINE}`
 loads), and paste the finding in full after the brief.
 
 ```
-You are a skeptic. Below is Finding {K} from the synthesized review ledger of GitLab MR !{IID} on {REPO}, worktree {WT}, diffed against {BASE}: a claimed rule violation. Run every git command as `git -C {WT}`. Try to REFUTE it: open the rule it relies on in the skills {RULE_SKILLS} (each at ~/src/agent-skills/software-engineering/<skill>/SKILL.md) and in {WT}/{STRUCTURE_DOC}. CONFIRMED needs the cited lines to be added or changed by this MR and to break the rule as its text states it, with no exception granted in {STRUCTURE_DOC} or in a ledger the repository keeps for such exceptions. REFUTED when the rule does not say that, the lines are not in the change, or the repository documents the exception. LOWER when the violation is real but costs less than its severity says: name the right one. Never run cargo, just, docker or any build or test, and never modify a file.
+You are a skeptic. Below is Finding {K} from the synthesized review ledger of GitLab MR !{IID} on {REPO}, worktree {WT}, diffed against {BASE}: a claimed rule violation. Run every git command as `git -C {WT}`. Try to REFUTE it: open the rule it relies on in the skills {RULE_SKILLS} (each at ~/src/agent-skills/software-engineering/<skill>/SKILL.md) and in {WT}/{STRUCTURE_DOC}, and, for an SRP finding, the rule lens 03 applies: one job for each module, type and function, and a name that says that job. CONFIRMED needs the cited lines to be added or changed by this MR and to break the rule as its text states it, with no exception granted in {STRUCTURE_DOC} or in a ledger the repository keeps for such exceptions. REFUTED when the rule does not say that, the lines are not in the change, or the repository documents the exception. LOWER when the violation is real but costs less than its severity says: name the right one. Never run cargo, just, docker or any build or test, and never modify a file.
 Write to {RUN}/refute-{K}.md: the finding's title, the verdict (CONFIRMED, REFUTED, or LOWER to <severity>), then at most three sentences of evidence with file:line citations.
 ```
