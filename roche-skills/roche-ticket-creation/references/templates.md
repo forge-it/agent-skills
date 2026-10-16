@@ -38,9 +38,11 @@ The chosen solution, briefly, in terms of what changes (crates, files, recipes, 
 
 ## Acceptance criteria
 - [ ] <a checkable statement: a behaviour, a file or doc that exists, a command that passes>
-- [ ] the repository's gate is green (`just quality-gate` in rdnx); drop this line for work
-      that changes no repository
+- [ ] `just quality-gate` is green
 ```
+
+The last criterion names the repository's own gate (`just quality-gate` in rdnx). Leave it
+out when the work changes no repository.
 
 Acceptance criteria are what a reviewer ticks off against the merge request: each one names
 something observable, never an activity ("investigate", "look into").

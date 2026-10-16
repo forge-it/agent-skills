@@ -78,7 +78,8 @@ session's working directories, ask him to run `/add-dir ~/.cache/roche-ticket-cr
 
 The run directory carries the batch across sessions. A later session resumes from
 `approved.md` (what he approved), `created.md` (what exists in Jira) and `drafts/`. With no
-`approved.md`, resume at stage 4 and present the batch again. A draft modified after
+`approved.md`: when `review.md` is missing, finish the drafts that `source.md`'s split lists,
+then run stage 3; otherwise resume at stage 4 and present the batch again. A draft modified after
 `approved.md` was written needs his yes again.
 
 ### 1. Intake
@@ -100,7 +101,8 @@ A match goes to him in stage 4 as "possibly already covered by NIFS-n", and that
 not created unless he says so.
 
 Split the work into tickets that can each be delivered and reviewed on their own: one
-problem per ticket. A Story or Enabler worth more than 8 points is too big: split it.
+problem per ticket. A Story or Enabler worth more than 8 points is too big: split it. Append the split to
+`source.md`, one line per planned draft.
 
 ### 2. Draft
 
@@ -128,7 +130,7 @@ them only.
 
 Write for a developer who has not seen the source: plain English, the concrete file, crate,
 RPC, recipe or doc each time (as `path` or `path:line` at the commit you read, and name that commit once, as
-`main@<short sha>`, at the end of the body), and no conversation history. Product and technical content only: never business context, never why
+`<branch>@<short sha>` (`main@…` when you read main), at the end of the body), and no conversation history. Product and technical content only: never business context, never why
 a technology was chosen for non-technical reasons, and never a docs/gaps entry argued as a
 design reason. A ticket from a docs/gaps entry names the entry's path in its body.
 
@@ -151,7 +153,10 @@ that draft again; his yes covers the batch as it then stands. An earlier "create
 these" is not approval of drafts he has not seen.
 
 At his yes, write `approved.md` at once: the date and the draft numbers he approved, and
-none he left out, such as a "possibly already covered" draft he did not ask for.
+none he left out, such as a "possibly already covered" draft he did not ask for. When an
+approved draft links to a `draft NN` he left out, ask him in the same turn whether that link
+goes to the existing ticket that covers it or is dropped, and record his answer in
+`approved.md`.
 
 ### 5. Create
 
@@ -166,7 +171,8 @@ For each draft in `approved.md`, in order:
    `additional_fields` `{"components": [{"name": "RDNX"}], "customfield_10014": <points>}`
    plus `labels` when the draft has any, and `assignToSprint` with the sprint's numeric id.
    Never `"active"`: NIFS has many boards, so name the RDNX sprint by its id.
-2. Append to `created.md` at once, before any other call: draft number, key, link. A draft
+2. Append to `created.md` at once, before any other call: draft number, key, URL, and the sprint id the create placed it
+   in (or `backlog` when he chose it). A draft
    already in `created.md` is never created again.
 3. When the response says `sprintAssignment.assigned: false`, the ticket exists: never
    create it again. Move it with `transitionJiraIssue` (`sprintId` only), report it, and
@@ -182,9 +188,13 @@ Then read every created ticket back with `getJiraIssue`, `view` `full`,
 `responseContentFormat` `html`: the compact and evidence views omit `components`, and a
 Markdown read-back shows `##` and `**` even when they rendered. Check that `components` is
 `RDNX`, the `Sprint` custom field holds the sprint's id, `assignee.accountId` is his,
-`Story Points` is the draft's points, every link in `created.md` is in `issuelinks`, and the
-description has `<h2>` headings and no literal `##` or `**` text. Fix a wrong field with
-`editJiraIssue`, never by creating again.
+`Story Points` is the draft's points, every link in `created.md` is in `issuelinks` and points the right way (on the ticket
+given as `inwardIssue`, the entry has that `type.name` and shows the other ticket as
+`outwardIssue`), and the
+description has `<h2>` headings and no literal `##` or `**` outside `<code>` and `<pre>`. Fix a wrong field with
+`editJiraIssue`, a wrong sprint with `transitionJiraIssue` (`sprintId` only) and a missing
+link with `createJiraIssueLink`, never by creating again. The sprint to check against is the
+one `created.md` records; a ticket recorded as `backlog` has no sprint.
 
 Leave the status as Jira sets it. Moving a ticket on is the delivery skill's job.
 
