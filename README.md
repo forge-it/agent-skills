@@ -54,6 +54,16 @@ They live in `syneto-skills/`, which is the directory `~/.claude/skills` points 
 | [syneto-ticket-delivery](syneto-skills/syneto-ticket-delivery/SKILL.md) | Take a SYN ticket from hand-over to merged: fleet context, three options, a reviewed plan, fleet implementation and review, with his four gates and the ticket status moves |
 | [syneto-mr-review](syneto-skills/syneto-mr-review/SKILL.md) | Review a gitlab.syneto.eu merge request with a Sonnet fleet; the operator picks the findings, and only those become review notes and the file sent to the author over Google Chat |
 
+### Roche
+
+Organisation-specific skills for Roche work (the NIFS project's RDNX board on navify.atlassian.net, code on code.roche.com). They are not portable to other projects.
+
+They live in `roche-skills/`. On a Roche machine, `~/.local/bin/agent-skills-sync` links each skill named in `~/.claude/skills.allow` from `software-engineering/` or `roche-skills/`, whichever holds it.
+
+| Skill | Description |
+|-------|-------------|
+| [roche-ticket-delivery](roche-skills/roche-ticket-delivery/SKILL.md) | Take a NIFS ticket from the RDNX board from hand-over to merged: fleet context, three options, a reviewed plan, fleet implementation and review, with his four gates and the In Progress → In Code Review → post-merge status moves |
+
 ### Greenfield Project Setup
 
 Start a new project with [`greenfield-project-setup`](software-engineering/greenfield-project-setup/SKILL.md) — a thin orchestrator that brings up a python+vue, rust+vue, or combination monorepo correctly from commit 1. It detects the stack, walks an ordered phase sequence, delegates each phase to the skill or pattern that owns it, and runs a verification gate after each so a missing invariant fails at setup rather than months later.
