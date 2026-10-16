@@ -49,7 +49,11 @@ definition. Pass `model` and `effort` explicitly on every dispatch:
 
 A model or effort he asks for on a ticket wins over these defaults on every dispatch it
 covers, the checkers included. Record it in `ledger.md`. When an implementor, fixer or test
-writer fails the same task twice, do the task yourself.
+writer fails the same task twice, do the task yourself. This replaces
+change-cycle-pipeline's "fail the cycle" in those rows: a second failed dispatch of the same
+task (no result, no required handoff, or the same gate still red) means you take the task
+over, under the Docker lock, in the checkout holding the change. The stage 8 report says you
+did.
 
 ## Where things are
 
@@ -84,15 +88,17 @@ ticket is a subtask of one story, else the first ticket's key.
 `ledger.md` is written at stage 1. It opens with the stage reached, then holds:
 - the repositories with their base and work branches, and their merge order when there is one
 - each ticket's issue type and its post-merge status (see *Ticket status*)
-- the models he named for gatherers, the planner and investigators
+- the models he named for gatherers, the planner, investigators, the stage 8 docs writer
+  and the final-gate agent, and any model or effort he set for this ticket
+- container names he chose to keep when the Docker check found them (see *Working rules*)
 - the worktree choice, once made
 - the checkout holding the change, and its `git status --short --untracked-files=all`
   after each writer returns
 - each ticket's status, with the repositories it covers
 
 Update the stage line at every stage change, a ticket's status at every move, and inside
-stages 5 and 7 at every round (`5: round 2 dispatched, triage pending`, then `5: round 2
-triaged, plan revised`). From stage 6 the ledger is also **change-cycle-pipeline**'s ledger.
+stages 5 and 7 at every round, naming the set dispatched
+(`7: round 2 dispatched (rust, guard), triage pending`, then `7: round 2 triaged`). From stage 6 the ledger is also **change-cycle-pipeline**'s ledger.
 It is kept here so nothing is added to a repository's `.gitignore`. Its last line is
 `complete` once every ticket has reached its post-merge status and stage 11's cleanup has run.
 
@@ -129,16 +135,27 @@ Working rules, at every stage:
   - **Check that no container is left:** `docker ps -a --filter name=rdnx-` must list
     nothing. A container that exists belongs to nobody holding the lock, either his own or
     one left behind. The run would reuse it, write into it or replace it, so ask him first.
-  - **End the session in the same turn, whether the run passed, failed or was killed.** The
-    check above found no container, so every container that
-    `docker ps -a --filter name=rdnx- --format '{{.Names}}'` lists now was started by this
-    session. The smoke suite leaves `rdnx-repo` running by design, and the system suite
-    leaves `rdnx-systest-repo`. Remove them all with `docker rm -f <names>`, confirm the
-    filter lists nothing, then run `rm -r ~/.cache/docker-tests.lock`. Named volumes,
+    When he lets the run go ahead, record in `ledger.md` the names he keeps, and leave those
+    out of the removal at the end. Before a suite that replaces or reuses one of them (the
+    smoke suite recreates `rdnx-repo`; the system suite reuses `rdnx-systest-repo` with its
+    old bind mount), tell him and wait.
+  - **Run long commands in the background.** A cold gate takes about a quarter of an hour,
+    longer than the Bash tool's 10-minute foreground limit. Run the gate, a fixtures recipe
+    and every suite with `run_in_background`, and wait for its exit.
+  - **End the session in the same turn, whether the run passed, failed or was killed.**
+    Every container that `docker ps -a --filter name=rdnx- --format '{{.Names}}'` lists now,
+    except the ones the ledger says he keeps, was started by this session. The smoke suite
+    leaves `rdnx-repo` running by design, and the system suite leaves `rdnx-systest-repo`.
+    Remove them with `docker rm -f <names>`. Confirm the filter lists only the kept names,
+    and that `docker ps -q --filter volume=<target volume>` lists nothing (the gate's
+    container has no name). Then run `rm -r ~/.cache/docker-tests.lock`. Named volumes,
     networks and images stay: they are caches.
 
   A subagent runs Docker only under your lock. Brief it with this rule and the repository's
   Docker lines. Take the lock before dispatching it, and end the session after its report.
+  With several Docker-running dispatches in flight, end the session only after the last of
+  them reports. Two dispatches whose Docker runs share a volume or a container name never
+  run in parallel.
 
 ### 1. Read the tickets
 
@@ -162,8 +179,9 @@ Record each ticket's issue type. It sets the branch prefix and the post-merge st
 | Bug | a defect | `fix/` |
 
 Most rdnx tickets are Enablers or Bugs; NIFS-13632 (the CI pipeline) is a Story. A
-`Sub-task` takes its parent's type. Any other type: ask him which prefix and post-merge
-status it takes. When the tickets in scope differ in type, ask which prefix the shared
+`Sub-task` takes its parent's branch prefix. Its post-merge status is Done, by the Enabler
+route, whatever its parent's type: the Sub-task workflow offers no In Testing Dev. Any other
+type: ask him which prefix and post-merge status it takes. When the tickets in scope differ in type, ask which prefix the shared
 branch takes.
 
 Settle the repositories and the base branch. The base is the one he names. When he names
@@ -187,8 +205,9 @@ Then ask, in **one** message, everything that applies:
   when the tickets in scope differ in type, and the post-merge status for a Bug
 
 The tickets in scope are the ones he handed over plus the subtasks he confirms. Write
-`ticket.md` (verbatim) and `ledger.md`, then move every ticket in scope to **In Progress**
-(see *Ticket status*).
+`ticket.md` (verbatim) and `ledger.md`. Then, once every repository's
+`git -C <repo> status --short` is empty, move every ticket in scope to **In Progress** (see
+*Ticket status*). While a repository is not clean, the tickets stay where they are.
 
 Then cut the work branch in each repository yourself, before any gatherer reads the code.
 **Always pull first.** Never branch from the local base without pulling, and never from
@@ -345,7 +364,9 @@ leave `<Z>` empty: it would diff against a guessed default branch. Lens prompts 
 `~/src/agent-skills/prompts/code-implementation-review/`; the `/home/cristi/...` path in
 change-cycle-pipeline is another machine's. Use `single-language/implementation-review-rust.md`
 for Rust, `generic/implementation-review-loss-framing.md` for anything else, or one of
-`lenses/` chosen for what the change risks.
+`lenses/` chosen for what the change risks. Add after the `<Z> =` line: "The change is in
+<checkout holding the change>: run every git command as `git -C <that path>`, and read
+files there."
 
 The workers never stage, so a diff against the base leaves out every new file. Every lens
 and checker brief carries: "The change set also includes every untracked file that
@@ -379,7 +400,8 @@ checkers), then its finding pasted in full with its citations and plan location:
 
 ```
 You are a skeptic. Below is a claimed problem with the implementation of plan
-<run>/plan.md in <repo>, diffed against <base>. Try to REFUTE it against the actual code,
+<run>/plan.md in <checkout holding the change>, diffed against <base>. Run every git command
+as `git -C <checkout holding the change>`. Try to REFUTE it against the actual code,
 the plan text and the neighbouring tests: does the cited code say what the finding claims,
 and does the problem actually follow? Other checkers are working in this tree at the same
 time. Never run cargo, just or docker: every build and test here runs in a shared Docker
@@ -397,8 +419,9 @@ N, a structural SRP violation), gets these lines instead of the ones above. The 
 would refute it as style preference:
 
 ```
-You are a skeptic. Below is a claimed rule violation in the change to <repo>, diffed against
-<base>. Try to REFUTE it: open the named rule in
+You are a skeptic. Below is a claimed rule violation in the change in <checkout holding the
+change>, diffed against <base>. Run every git command as
+`git -C <checkout holding the change>`. Try to REFUTE it: open the named rule in
 ~/src/agent-skills/software-engineering/<skill>/SKILL.md and the repository's
 docs/layout.md. CONFIRMED needs the cited lines to be added or moved by this change, and to
 break the rule as its text states it, with no sanction in docs/layout.md or a
@@ -420,10 +443,11 @@ leaves `git status --short` as it found it. Then the fixer, carrying the investi
 cause.
 
 With a separate worktree, merge it back when the loop ends, converged or capped, as
-`references/separate-worktree.md` describes, before the report. When the main checkout holds
-another ticket, ask him first: he may keep the worktree without a merge-back, recorded in
-`ledger.md`. When he keeps it and the work branch is not checked out in the main checkout,
-run `git -C <worktree> switch <branch>` and `git -C <repo> branch -d <KEY>-wt`: both
+`references/separate-worktree.md` describes, before the report. When its status check of the
+main checkout fails (another branch, or any dirty path), ask him first: he may keep the
+worktree without a merge-back, recorded in `ledger.md`. When he keeps it and the work branch
+is not checked out in the main checkout, run `git -C <worktree> switch <branch>` and
+`git -C <worktree> branch -d <KEY>-wt`: both
 branches point at the same commit, so the dirty tree carries over. Record it in
 `ledger.md`. From then on the worktree is on the work branch, and stages 9-11 use it. When
 the work branch is checked out in the main checkout, stop and ask him.
@@ -556,7 +580,8 @@ directory, it is the record. Then write `complete` in `ledger.md`.
 List `~/.cache/roche-ticket-delivery/*/ledger.md`. Open the run whose directory or ticket list
 carries the key he names, else the only one not marked `complete`, else ask him. Before
 acting, re-verify:
-- `git -C <checkout> status --short --branch` matches the ledger's branch and dirty files.
+- `git -C <checkout> status --short --branch --untracked-files=all` matches the ledger's
+  branch and dirty files.
   `<checkout>` is the linked worktree whenever the ledger records one not yet removed, else
   `<repo>`. The dirty files to match are the ledger's last recorded status of that checkout
 - each ticket's status in Jira matches the ledger
@@ -565,8 +590,10 @@ acting, re-verify:
 When something differs, stop and tell him before any dispatch or transition. Stage 11 is the
 exception: the status move needs only `glab` and Jira, and the cleanup runs its own checks,
 so skip the branch and working-directory checks there. Then continue from the stage the
-ledger names. In stage 5 or 7, a round whose review files exist but that the ledger does not
-record as triaged is untriaged: triage it, never re-run it.
+ledger names. In stage 5 or 7, a round the ledger does not record as triaged is untriaged.
+Compare its files with the set the ledger names. Re-dispatch only the reviewers or checkers
+whose file is missing, in one message, then triage the round. Never re-run one whose file
+exists.
 
 ## Ticket status
 
@@ -580,6 +607,7 @@ record as triaged is untriaged: triage it, never re-run it.
 |---|---|
 | Enabler | Done. From In Code Review the workflow offers no Done, and neither does In Testing Dev or In Testing: only In Progress does. So the route is In Code Review → In Progress → Done, listing the transitions at each step |
 | Story | In Testing Dev. Testers take it from there; never move it further |
+| Sub-task | Done, by the Enabler route, whatever its parent's type |
 | Bug, or any other type | his answer at stage 1 |
 
 Never reuse a transition id. For each issue, call `executeRead listJiraIssueTransitions`
@@ -588,14 +616,16 @@ that id to `transitionJiraIssue`. A wrong id succeeds into a plausible wrong sta
 transition names do not always match their target (from To Do, the transition to To Do is
 named `To Do (2)`). When the target is not among the transitions, say which ones are
 offered and ask him: never chain intermediate moves on your own. The Enabler route in the
-table above is the one sanctioned chain. Read the status back after
-every move.
+table above is a sanctioned chain, and so is Backlog → To Do (transition `To Do (2)`) → In
+Progress at stage 1. A ticket already at the target status is left as it is. Read the status
+back after every move.
 
 - When a transition is refused for a required field, set the field with `editJiraIssue`
   only when the ticket or the board gives its value. Otherwise ask him.
 - A parent moves to In Code Review or past it only once every one of its subtasks, including
   any outside this run, is at that status or past it. Until then it stays In Progress, and
-  the report names the subtask holding it.
+  the report names the subtask holding it. For a parent Story, a subtask at Done counts as
+  past In Testing Dev.
 - Every Jira body (comment, description edit) is GitHub-flavoured Markdown with
   `contentFormat: "markdown"`, never wiki markup.
 
@@ -603,8 +633,9 @@ every move.
 
 Every dispatch that touches a repository carries:
 
-- the absolute repository root (`~/Projects` itself is not a repository), and `git -C <repo>`
-  for every git command
+- the absolute repository root (`~/Projects` itself is not a repository), the checkout the
+  dispatch works in (`<repo>`, or the linked worktree under Mode B), and
+  `git -C <that checkout>` for every git command
 - absolute paths for the files to open
 - scope, out of scope, and the locked scope from stage 3
 - the run directory or scratchpad for its working files, and the repository files it may
@@ -620,7 +651,10 @@ Every dispatch that touches a repository carries:
   worktree has no generated fixtures: before running the gate there, run
   `DOCKER_DEFAULT_PLATFORM=linux/amd64 just test-adapter-fixtures` in it, and give it its own target volume
   `rdnx-target-<KEY>-<name>`, removed with `docker volume rm` together with the worktree. A
-  test that fails there only for lack of fixtures proves nothing about `HEAD`."
+  test that fails there only for lack of fixtures proves nothing about `HEAD`. This
+  temporary `--detach` worktree is the one exception to the dispatch block's 'Do not create
+  or enter a worktree' and 'other worktrees are off-limits': create it only for a check at
+  another revision, never edit in it, and remove it before you report."
 - the `model` and `effort` from *Models*
 - that repository's section of `references/repository-traps.md` beside this file: its gate,
   its traps, its docs rules and its agents. When the brief may run Docker, also the Docker

@@ -48,8 +48,8 @@ SKILL.md's Docker rule: one session at a time under `~/.cache/docker-tests.lock`
   `DOCKER_DEFAULT_PLATFORM=linux/amd64 docker run --rm -v "$PWD":/src -v rdnx-cargo-registry:/root/.cargo/registry -v <target volume>:/src/target -w /src rdnx-builder:dev cargo <subcommand> --locked <args>`.
   `rdnx-builder:dev` must exist, so run the gate once first. The full gate still runs once
   before the worker reports.
-- **Formatter (writers only):** the same `docker run` line with `cargo fmt --all` as the
-  command.
+- **Formatter (writers only):** the same `docker run` line ending in `cargo fmt --all`,
+  without `--locked`, which `cargo fmt` rejects.
 - **Target volume:** `<target volume>` is `rdnx-target` in the main worktree,
   `rdnx-target-<KEY>` in the separate worktree, and `rdnx-target-<KEY>-<name>` in a
   temporary `--detach` worktree.

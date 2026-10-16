@@ -42,14 +42,20 @@ Every implementor, fixer and investigator gets:
 - the exact gate command for the worktree, with its target volume
 - the statement that you hold the Docker lock
 
-Every reviewer and verifier gets the same, with "read-only on `<worktree>`" in place of the
-block.
+Every reviewer and verifier gets the worktree path, `git -C <worktree>` for every git
+command, and "read-only on `<worktree>`". It gets no gate command and no lock statement: it
+never runs cargo, just or docker (SKILL.md, stage 7).
 
 ## Merge back
 
 Merge back when the code review loop ends, converged or capped. An open finding travels in
 the report, not in a worktree. The workers did not commit, so the merge is a patch, applied
-uncommitted to the main worktree's work branch:
+uncommitted to the main worktree's work branch.
+
+First, `git -C <repo> status --short --branch --untracked-files=all` must show
+`## <branch>` (with its tracking suffix) and no other line. When it shows another branch or
+any dirty path, the main checkout holds other work: stop and ask him, offering to keep the
+worktree without a merge-back (SKILL.md, stage 7). Then:
 
 ```
 git -C <worktree> add -N <each new file>
