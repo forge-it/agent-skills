@@ -32,7 +32,7 @@ definition. Pass `model` and `effort` explicitly:
 |---|---|
 | Draft reviewer (stage 3) | `sonnet` at `medium` |
 
-A model or effort he asks for on this batch wins over it. Record it in `meta-notes.md`.
+A model or effort he asks for on this batch wins over it. Record it in `<run>/meta-notes.md`.
 
 ## The board
 
@@ -43,7 +43,7 @@ A model or effort he asks for on this batch wins over it. Record it in `meta-not
 | Board filter | `project = NIFS AND component = RDNX AND type IN (Bug, Enabler, Story)` |
 | Component | `RDNX`, always: Jira refuses a create without a component, and a ticket without `RDNX` never appears on the board |
 | Assignee | Cristian, accountId `712020:8d29777e-28f3-4096-9c5a-027a637bd6b7` (from `atlassianUserInfo`) |
-| Sprint | the board's active sprint, resolved at stage 5: `getJiraBoardSprintData` (through `executeRead`) with `boardId` `22713` and `includeIssues` false gives `resolvedSprint.id` |
+| Sprint | the board's active sprint, resolved at stage 5: `getJiraBoardSprintData` (through `executeRead`) with `boardId` `22713` and `includeIssues` false gives `resolvedSprint.id`. When it reports no active sprint, ask him which sprint (from `sprints`) or the backlog, before creating |
 | Story points | `customfield_10014` |
 | Body | GitHub-flavored Markdown with `contentFormat: "markdown"`, in the Description field only. Never Jira wiki markup, and never the `Task Description` custom field |
 
@@ -67,14 +67,19 @@ When the type is unclear, propose one with a one-line reason and let him decide 
 | 1 | Intake: read the source, check for duplicates, split | `~/.cache/roche-ticket-creation/<batch>/source.md` | — |
 | 2 | Draft every ticket | `drafts/NN.md` | — |
 | 3 | Review the drafts, apply the findings | `review.md` | — |
-| 4 | Present the batch | — | **his yes** |
+| 4 | Present the batch | `approved.md` | **his yes** |
 | 5 | Create, place in the sprint, link, verify | `created.md` | — |
 
 `<batch>` is a short kebab-case slug of what the batch is about, plus the date
-(`ci-pipeline-2026-10-16`). The run directory carries the batch across sessions: a later
-session resumes from `created.md` (what exists in Jira) and `drafts/` (what does not yet).
-When `~/.cache/roche-ticket-creation` is not among the session's working directories, ask
-him to run `/add-dir ~/.cache/roche-ticket-creation`.
+(`ci-pipeline-2026-10-16`); `<run>` is `~/.cache/roche-ticket-creation/<batch>`. Run
+`mkdir -p <run>/drafts` first. When `~/.cache/roche-ticket-creation` is not among the
+session's working directories, ask him to run `/add-dir ~/.cache/roche-ticket-creation`
+(it refuses a path that does not exist, hence the `mkdir` first).
+
+The run directory carries the batch across sessions. A later session resumes from
+`approved.md` (what he approved), `created.md` (what exists in Jira) and `drafts/`. With no
+`approved.md`, resume at stage 4 and present the batch again. A draft modified after
+`approved.md` was written needs his yes again.
 
 ### 1. Intake
 
@@ -109,17 +114,21 @@ points: 3
 points_reason: one line, for him only, never posted
 links:
   - relates to NIFS-13631
+  - is blocked by draft 01
 labels: []
 ---
 <the body, in the type's template from references/templates.md>
 ```
 
 `references/templates.md` holds the title rule, each type's template, the estimation scale
-and the linking rules. Follow it exactly: a missing section is a finding in stage 3.
+and the linking rules. Follow it exactly: a missing section is a finding in stage 3. Each
+`links` entry is one of the wordings in its *Links* table, then a key (`NIFS-n`) or
+`draft NN` for another draft of this batch. A link between two drafts is listed in one of
+them only.
 
 Write for a developer who has not seen the source: plain English, the concrete file, crate,
-RPC, recipe or doc each time (as `path` or `path:line` at the commit you read), and no
-conversation history. Product and technical content only: never business context, never why
+RPC, recipe or doc each time (as `path` or `path:line` at the commit you read, and name that commit once, as
+`main@<short sha>`, at the end of the body), and no conversation history. Product and technical content only: never business context, never why
 a technology was chosen for non-technical reasons, and never a docs/gaps entry argued as a
 design reason. A ticket from a docs/gaps entry names the entry's path in its body.
 
@@ -141,25 +150,41 @@ One yes covers the whole batch as shown. When he asks for a change, edit the dra
 that draft again; his yes covers the batch as it then stands. An earlier "create tickets for
 these" is not approval of drafts he has not seen.
 
+At his yes, write `approved.md` at once: the date and the draft numbers he approved, and
+none he left out, such as a "possibly already covered" draft he did not ask for.
+
 ### 5. Create
 
-For each approved draft, in order:
+On a resumed batch, before creating a draft that `created.md` does not list, search
+`filter = 88390 AND reporter = currentUser() AND created >= -14d AND summary ~ "<two or three title words>"`.
+A match with the draft's title is that draft: record it in `created.md` and do not create it.
+
+For each draft in `approved.md`, in order:
 
 1. `createJiraIssue`: `cloudId`, `projectKey` `NIFS`, `issueType`, `summary`, `description`
    (the body), `contentFormat` `markdown`, `assignee` (the accountId above),
    `additional_fields` `{"components": [{"name": "RDNX"}], "customfield_10014": <points>}`
-   plus `labels` when the draft has any, and `assignToSprint` with the active sprint's
-   numeric id. Never `"active"`: NIFS has many boards, so name the RDNX sprint by its id.
-2. When the response says `sprintAssignment.assigned: false`, the ticket exists: never
-   create it again. Move it with `transitionJiraIssue` (`sprintId` only) and report it.
-3. Each link with `createJiraIssueLink` through `executeWrite`, with the `linkType`,
-   `inwardIssue` and `outwardIssue` that `references/templates.md` gives for the relation.
-4. Append to `created.md` at once: draft number, key, link, sprint, links made. A batch that
-   stops halfway resumes from here, so a draft already in `created.md` is never created twice.
+   plus `labels` when the draft has any, and `assignToSprint` with the sprint's numeric id.
+   Never `"active"`: NIFS has many boards, so name the RDNX sprint by its id.
+2. Append to `created.md` at once, before any other call: draft number, key, link. A draft
+   already in `created.md` is never created again.
+3. When the response says `sprintAssignment.assigned: false`, the ticket exists: never
+   create it again. Move it with `transitionJiraIssue` (`sprintId` only), report it, and
+   record the sprint in `created.md`.
 
-Then read every created ticket back with `getJiraIssue` and check the component, the sprint,
-the assignee and that the description renders as Markdown (no literal `##` or `**`). Fix a
-wrong field with `editJiraIssue`, never by creating again.
+When every draft is created, make the links. For each `links` entry, resolve `draft NN` to
+its key from `created.md`, and call `createJiraIssueLink` through `executeWrite` with the
+`linkType`, `inwardIssue` and `outwardIssue` that `references/templates.md` gives for its
+wording. Append each link to `created.md` as it is made. On a resumed batch, make only the
+links and sprint moves that `created.md` does not record.
+
+Then read every created ticket back with `getJiraIssue`, `view` `full`,
+`responseContentFormat` `html`: the compact and evidence views omit `components`, and a
+Markdown read-back shows `##` and `**` even when they rendered. Check that `components` is
+`RDNX`, the `Sprint` custom field holds the sprint's id, `assignee.accountId` is his,
+`Story Points` is the draft's points, every link in `created.md` is in `issuelinks`, and the
+description has `<h2>` headings and no literal `##` or `**` text. Fix a wrong field with
+`editJiraIssue`, never by creating again.
 
 Leave the status as Jira sets it. Moving a ticket on is the delivery skill's job.
 

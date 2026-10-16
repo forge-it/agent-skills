@@ -38,7 +38,8 @@ The chosen solution, briefly, in terms of what changes (crates, files, recipes, 
 
 ## Acceptance criteria
 - [ ] <a checkable statement: a behaviour, a file or doc that exists, a command that passes>
-- [ ] `just quality-gate` is green
+- [ ] the repository's gate is green (`just quality-gate` in rdnx); drop this line for work
+      that changes no repository
 ```
 
 Acceptance criteria are what a reviewer ticks off against the merge request: each one names
@@ -99,13 +100,14 @@ number; it stays in the draft.
 "`inwardIssue` <outward wording> `outwardIssue`", so with `Blocks` the inward issue blocks
 the outward one:
 
-| Relation | `linkType` | `inwardIssue` | `outwardIssue` |
-|---|---|---|---|
-| Related work, a split of one piece of work, a follow-up of a Done ticket | `Relates` | this | that |
-| This must finish before that can start | `Blocks` | this | that |
-| This fixes that Bug | `Resolve` | this | that |
-| That requirement or decision drives this | `Requirement: Drive` | that | this |
-| This duplicates that | `Duplicate` | this | that |
+| Front matter wording | Meaning | `linkType` | `inwardIssue` | `outwardIssue` |
+|---|---|---|---|---|
+| `relates to X` | related work, a split of one piece of work, a follow-up of a Done ticket | `Relates` | this | X |
+| `blocks X` | this must finish before X can start | `Blocks` | this | X |
+| `is blocked by X` | X must finish before this can start | `Blocks` | X | this |
+| `resolves X` | this fixes Bug X | `Resolve` | this | X |
+| `is driven by X` | requirement or decision X drives this | `Requirement: Drive` | X | this |
+| `duplicates X` | this duplicates X | `Duplicate` | this | X |
 
 Link to every ticket the source names. A ticket from a review finding links to the ticket of
 the MR it came from with `Relates`.
