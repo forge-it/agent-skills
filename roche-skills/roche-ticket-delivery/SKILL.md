@@ -480,18 +480,39 @@ acceptance. Here it runs before his review, so every doc edit is in the tree he 
 nothing is edited after his word at stage 9.
 
 Then give him **change-cycle-pipeline**'s operator report, every finding in plain words with
-its exact `file:line`. Its next action is his review, so it ends with this block for each
-repository the change touches:
+its exact `file:line`. Its next action is his review, so it ends with a review guide for
+each repository the change touches. The guide tells him where to spend his attention, in
+the order to read it:
 
 ```
 Review <repository name> in <absolute path of the checkout holding the change>
   <main worktree | linked worktree>, branch <branch>, against <base>
-  <git -C <that path> status --short --untracked-files=all, verbatim>
+
+Read closely: the behaviour change
+  1. <path:line> — <what changed there, and the question to check it against>
+  2. …
+Tests that pin it
+  - <path:line> — <the behaviour the test proves, and the case it would miss, if any>
+Skim: mechanical or docs-only
+  - <path, or a group: docs/gaps/0001–0015 (15 files)> — <what changed, in one line>
+Your call
+  - <path:line> — <a decision the agents could not make, or a trade-off they took>
 ```
 
-Run that status in the path you name. Its paths must be the files this report lists as
-changed: that proves the path holds this ticket's change, and it lists each new file a
-diffstat omits. The tree stays dirty. Then stop.
+- *Read closely* holds the few places where a wrong line changes behaviour: new or changed
+  logic, a changed contract (types, proto, public API, error kinds), locking and
+  cancellation, error paths. Order them so each makes sense after the ones above it, usually
+  domain, then application, then adapters. The line is the hunk's, not the file's top.
+- Each entry carries a question he can answer by reading, such as "does every `match` on
+  `OperationState` handle `Cancelling`?", never "review the changes".
+- *Skim* puts files that changed the same way on one line. Mark a new file `(new)`.
+- Leave out a section with nothing in it.
+
+Build it from `git -C <that path> diff <base>` and
+`git -C <that path> status --short --untracked-files=all`, run in the path you name. Every
+path the status lists appears in the guide, alone or in a group, and the guide names no
+other: that proves the path holds this ticket's change, and that no new file was missed. Never
+print the status itself. The tree stays dirty. Then stop.
 
 ### 9. Refactor or commit — gate
 
