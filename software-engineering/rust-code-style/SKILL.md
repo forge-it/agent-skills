@@ -4,7 +4,7 @@ description: Coding conventions and style rules for Rust. Apply when writing or 
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.15"
+  version: "0.0.16"
 ---
 
 # Rust Code Style Skill
@@ -40,6 +40,39 @@ paths.iter().filter_map(|path| path.parent())
 ```
 
 **Rationale:** Single-letter names force the reader to mentally track what each variable represents and defeat search.
+
+Being long enough is not the bar. A name must say **what the thing is for**, so the code explains itself without the reader looking anything up. This applies to types, enum variants, fields, parameters, locals and methods alike:
+
+- **Name the purpose, not the mechanics.** Don't name a type after how it is held (`QueueShared` only says it is behind an `Arc`) or after a generic noun (`Share`, `Reservation` don't say what is shared or reserved). Name what it holds or decides: `QueueLedger`, `Headroom`, `ReservationOutcome`.
+- **Avoid words that read two ways.** `Share::Full` and `put_full` read as "the queue is full" when they mean "may use the whole budget". Pick the word that cannot be misread: `Headroom::MayUse`, `put_using_headroom`.
+- **A field or binding that holds a domain type is named after that type, in snake_case, and every sibling follows the same rule.** Don't shorten one sibling to a bare noun while another keeps its prefix. This doesn't apply to std or primitive types (`channel`, `receiver`, `join`).
+- **Name a flag as a flag.** A bare verb such as `stop` reads like a command. A shared `AtomicBool` that signals a request is named for its meaning and its kind: `stop_request_flag`.
+- **One to three words. Use four or more only in special cases.** If the exact name would be longer (`LifecycleEventLineHeadroom`, `LineRoomReservationOutcome`), keep the short name and finish the meaning in its `///` line.
+
+```rust
+// Bad: the names say how the value is held, or nothing at all
+pub(crate) struct QueueShared {
+    budget: QueueBudget,          // bare noun…
+    drain: DrainBudget,           // …next to a sibling that drops a different part of its type name
+}
+pub(crate) enum Share { Full, ThreeQuarters }
+pub(crate) enum Reservation { Granted, Refused }
+stop: Arc<AtomicBool>,
+
+// Good: each name says its purpose; the doc line completes a short name
+/// Room, drops and drain time that every sender and the writer thread account against.
+pub(crate) struct QueueLedger {
+    queue_budget: QueueBudget,
+    drain_budget: DrainBudget,
+}
+/// Headroom kept for lifecycle event lines: whether an entry may use the last quarter of the budget.
+pub(crate) enum Headroom { MayUse, MustLeave }
+/// Outcome of reserving room in the log queue for one line: a line slot plus its bytes.
+pub(crate) enum ReservationOutcome { Reserved, NoRoom }
+stop_request_flag: Arc<AtomicBool>,
+```
+
+**Rationale:** A vague name moves the explanation out of the code and into the reader's head, and every reader has to rebuild it. Treat a name that doesn't state its purpose as a defect for review to raise, never as a style preference to wave away.
 
 ### 2. Type Inference (HIGH)
 
@@ -542,3 +575,4 @@ Several `bool`/`Option` fields whose combinations encode a state (`running`, `fa
 14. **Gratuitous `unsafe`** — `unsafe` for convenience or to silence the borrow checker (Rule 11)
 15. **Inline step implementations in coordinators** — a service/orchestrator fn implementing a step in a multi-line block instead of naming it as a call (Rule 12)
 16. **Stringly-typed closed sets** — a `&str` status/kind/mode with a family of `const &str` alternatives, or bare string literals compared with `==`, instead of one `enum` (Rule 13)
+17. **Names that hide their purpose** — a type named for how it is held (`…Shared`), a generic noun (`Share`, `Reservation`), a word that reads two ways (`Full`), a bare-verb flag (`stop`), or sibling fields that shorten their type names inconsistently (`budget` next to `drain_budget`) (Rule 1)
