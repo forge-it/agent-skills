@@ -521,11 +521,31 @@ same mode as stage 8's writer, followed by the gate and a fresh stage 8 report.
 
 Commit only when he says so, and only in the repositories he names. When another repository
 looks ready too, say so in one line and wait. Make one commit per repository unless he says
-otherwise. The subject is the ticket key, a space, then a subject in the repository's own
-shape (`git -C <repo> log --format=%s -20` shows it): `NIFS-13632 Add the CI pipeline`. With
-subtasks, the key is the subtasks' keys. The body says why. It ends with the
-`Co-Authored-By:` trailer line that the session's attribution reminder gives, exactly as
-given.
+otherwise. The MR is squash-merged into one commit, so this message is what teammates read in
+`git log`. Write it for a person:
+
+- **title:** the ticket key, a space, then what the change does, in the imperative and in the
+  repository's own shape (`git -C <repo> log --format=%s -20` shows it):
+  `NIFS-13632 Add the CI pipeline`. With subtasks, the key is the subtasks' keys. The whole
+  line fits in 72 characters.
+- **description:** two to four sentences of plain prose, wrapped at 72 columns: what changed
+  for someone using or working on the code, and why. File lists, rule and test names, test
+  counts, how it was tested and the docs touched go in the MR description instead.
+- **trailer:** after a blank line, the `Co-Authored-By:` line that the session's attribution
+  reminder gives, exactly as given.
+
+```
+NIFS-13639 Run the whole test set with one command, also on macOS
+
+`just test-all` now runs every crate test and every Docker suite in one
+go and names what failed. Before, the tests were spread over several
+recipes, and the suite scripts did not run on a Mac.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+```
+
+A later commit on the same branch, such as a fix after review, is a title alone: the squash
+folds it into the first.
 
 Before committing, `git -C <repo> status --short --untracked-files=all` must show only the
 change's files: nothing from an agent's scratch.
@@ -540,16 +560,18 @@ Push only on his word, only what he named: `git -C <repo> push -u origin <branch
 the MR, per repository: the description alone in `<run>/mr-<repo>.md`, and in `<run>/mr.md`
 its title, the description, and, once created, its URL.
 
-- **title:** the commit subject
+- **title:** the commit title, character for character. GitLab's default squash commit
+  message is the MR title alone, so this is the line that lands on `<base>`
 - **description:** dev to dev, in plain words: what changed and why, how it was tested, the
   risk, and the ticket link (`https://navify.atlassian.net/browse/<KEY>`). When the ledger
   records a merge order, state it and why, in the same words in every MR of the ticket. It
   ends with the attribution line the session's reminder gives for pull request descriptions.
 - **the merge request:** create it yourself, targeting the base explicitly:
-  `glab mr create -R <group>/<repo> --source-branch <branch> --target-branch <base> --title "<title>" --description "$(cat <run>/mr-<repo>.md)" --yes`.
+  `glab mr create -R <group>/<repo> --source-branch <branch> --target-branch <base> --title "<title>" --description "$(cat <run>/mr-<repo>.md)" --squash-before-merge=true --yes`.
   Read it back with `glab mr view <branch> -R <group>/<repo> -F json`: `target_branch` must
-  be `<base>` and `state` must be `opened`. Hand him its `web_url`. When creation errors,
-  check with `glab mr list -R <group>/<repo> --source-branch <branch>` before retrying: an
+  be `<base>`, `state` must be `opened` and `squash` must be `true`. Hand him its `web_url`.
+  When creation errors, check with `glab mr list -R <group>/<repo> --source-branch <branch>`
+  before retrying: an
   error does not prove no MR was created. When an MR already exists for the branch (a
   follow-up push), do not create another: hand over its `web_url`. Only when creation still
   fails, hand him the form link
