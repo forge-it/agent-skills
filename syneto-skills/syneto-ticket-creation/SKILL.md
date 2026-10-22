@@ -34,6 +34,7 @@ Templates for every body: `references/templates.md`. Read it before drafting.
 | | |
 |---|---|
 | Site, project | syneto.atlassian.net, cloudId `15c97e39-64e4-4518-8e86-e141a20215e1`, project `SYN` |
+| Tools | the Atlassian MCP `mcp__atlassian__*` (load with ToolSearch `select:`; if it comes back empty, retry once: the server may still be connecting). When it fails with 404, stop the Jira steps and ask him to reconnect it with `/mcp`; keep drafting meanwhile |
 | Types used | Story (`10001`), Subtask (`10005`), Bug (`10003`), under the Epic (`10004`) he names. Never "Technical Task" (`10002`) |
 | Parent | a story's parent is the epic; a subtask's parent is its story (`parent` on create) |
 | Sprint | `customfield_10020` with the sprint's numeric id, on stories and bugs. A subtask can't take one: it inherits its story's |
@@ -213,7 +214,15 @@ Only when he says so, with the number of Sonnet agents with Jira access he allow
    `key:` line in the draft's front matter.
 4. Reads it back (`getJiraIssue` with `expand: renderedFields`; asking for ADF returns Markdown):
    fields set, parent right, headings and lists rendered. Fixes with `editJiraIssue`, never by
-   creating again.
+   creating again. Jira assigns a new subtask to its creator even when no assignee is sent, so a
+   subtask without an assignee in the table gets `editJiraIssue` `{"assignee": null}` right after.
+5. Frontend subtasks only: links each backend subtask it can't be built or shipped before (one
+   that adds or changes an endpoint, field or behaviour it uses, or that the body says it ships
+   with or after; not one mentioned only for context) with `createIssueLink` `type: "Blocks"`,
+   `inwardIssue` = the backend key, `outwardIssue` = the frontend key, after checking the existing
+   links. It reads back the first link: the frontend subtask must show "is blocked by" (a wrong
+   link can't be removed through the MCP). A blocker not yet in Jira goes to
+   `<run>/created/links-pending.md` for you to link once it exists.
 
 If Jira refuses a value that isn't a formatting problem (a missing version, say), every agent gets
 the same rule from you; none decides on its own.
@@ -235,4 +244,5 @@ sprint's id, show it, create it on his yes, link it to the story with `relates t
   subtask (the API contract is the one exception).
 - Slice stories by repo, or split a subtask per repo when one developer delivers it in one go.
 - Invent a route, field or caller to fill a gap in the spec: say what's missing and ask him.
+- Put a new or changed HTTP route in a ticket or a technical spec without designing it against the `syneto-rest-api-design` skill first (nouns only, PATCH not PUT, mutations as 202 jobs, the `{"error": {code, message, details}}` body, `items` + `pagination` lists). When a route copies an older local style that breaks the skill, say so and let him choose.
 - File a bug as a subtask.
