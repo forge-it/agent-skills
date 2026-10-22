@@ -1,21 +1,28 @@
-# Draft reviewer brief
+# Review briefs
 
-Dispatch as `general-purpose` (his standing model rule: `sonnet` unless he names another). Fill
-`{RUN}` (absolute), `{KIND}` (stories, subtasks of SYN-XXXX, or bugs) and `{FILES}` (the draft
-paths).
+## Per-ticket review and fix (stages 3 and 4)
+
+The reviewer and fixer prompts for single tickets live in the pipeline scripts:
+`pipeline-stories.js` (`reviewPrompt`, `fixPrompt`) and `pipeline-subtasks.js` (the same, with
+the shape per subtask kind). Reuse them from there, so the briefs and the chain stay one thing.
+
+## Map review (stage 2)
+
+Dispatch one `general-purpose` agent with the model and effort he names. Fill `{RUN}` (absolute)
+and `{N}` (the round). Round 2 and later also get the previous review and the map before it.
 
 ```
-You review drafts of new Jira tickets for Syneto's SYN board before they are created. READ-ONLY: never edit a draft, never create, edit or comment on anything in Jira or Confluence, never edit a repository, and don't start other agents. Never print secret values you may see.
+You review a ticket map (round {N}) before any Jira ticket is written. READ-ONLY: never edit the map or any other existing file, never create, edit or comment on anything in Jira or Confluence, never edit a repository, don't start other agents, never print secret values. The only file you write is the review named below. If you start any local process, kill it only by its captured PID, never with pkill or killall.
 
-Inputs: {RUN}/source.md (the spec pages, epic, sprint, fix versions and priority rules), the drafts {FILES} ({KIND}), the templates in /home/cristi/Projects/agent-skills/syneto-skills/syneto-ticket-creation/references/templates.md, and the UI ticket playbook in /home/cristi/.claude/projects/-home-cristi-Projects/memory/frontend-ticket-template.md and frontend-tickets-no-implementation-details.md for any frontend draft. Read the spec sections a draft cites, and for backend drafts the code it points to (read-only, `git -C <repo>`, repos under /home/cristi/Projects).
+The map {RUN}/stories/story-map.md lists the planned stories and, per story, its technical subtasks: B backend (may span several backend services), CF Central frontend (central-ui and central-hub in one subtask), OF syneto-os-frontend. The team's split rules are in /home/cristi/Projects/agent-skills/syneto-skills/syneto-ticket-creation/SKILL.md ("How the work splits") and references/templates.md. Each ticket body stays under 4,000 characters, so a subtask that can't be described in that space must be split. Other teams' repos get no ticket from us; the story names them as "owners".
 
-Check every draft for:
-1. Shape: the right template for its kind; story = "### User Story" in first person plus grouped "### Acceptance Criteria", no endpoint, field, payload or code; backend = repos line, what to build with code pointers, the contract when it changes one, tests, acceptance criteria; frontend = Description, API Usage, Acceptance criteria, nothing about how to build it; bug = Observed, Expected, Steps, Where. Every subtask and bug starts with the repos line, except syneto-os-frontend ones; stories have none. The spec line closes stories and subtasks.
-2. Size and voice: body under 4,000 characters; plain, human, on point; no sentence said twice, no boilerplate repeated from a sibling, no out-of-scope lists.
-3. Truth: every spec section, path, route, field and behaviour a draft names exists and says what the draft says. Nothing invented to fill a gap.
-4. Coverage: the stories together cover the spec sections in source.md, each one end to end (Central, mercurio, SynetoOS UI); the subtasks of a story together deliver all its acceptance criteria; one backend subtask owns each API contract and the frontend subtasks point to it.
-5. Split: no story per repo; no subtask per repo where one developer delivers it in one go; Central frontend work for central-ui and central-hub in one subtask; syneto-os-frontend in its own; a bug is never a subtask.
-6. Fields: title is one plain sentence with no prefix; priority, fix versions exactly as source.md names them for each side (machine side, Central side, or both; never a version source.md doesn't name), parent, sprint (stories and bugs only), estimate in hours on subtasks and bugs, label UI and the named assignee on frontend tickets only.
+Inputs: {RUN}/source.md (fix versions, priority rules, ticket repos), the functional spec and the technical specification named there (local copies in {RUN}/specs/ and {RUN}/tech-spec.md), the batch's decisions ({RUN}/decisions.md and the ledger). Read code read-only (`git -C <repo>`, repos under /home/cristi/Projects) when a finding depends on what a repo does today.
 
-Write {RUN}/reviews/<kind>-<date>.md: per finding, the draft file, severity (Important when the ticket would mislead or block whoever picks it up; Minor otherwise), what is wrong with a short quote, and the exact replacement text. End with one line per draft that has no finding. Final message: the count of findings by severity.
+Ground rules: decided items are final, so flag a map line only when it disagrees with a recorded decision; the VPE is always right where an undecided disagreement remains; ticket repos are only those source.md lists. In round 2 and later, don't re-raise a finding that was applied as written.
+
+Check: 1. coverage, spec → stories (every requirement in a story, or out of scope by a recorded decision); 2. coverage, technical spec → subtasks (every deliverable for our repos, every rollout step, every test duty that needs a ticket), nothing in two homes; 3. split and size; 4. each endpoint a frontend subtask needs is owned by one backend subtask; 5. priority and fix versions per source.md and the decisions; 6. a delivery order that matches the rollout steps, with no cycle; 7. titles one plain user-world sentence, spec references right, owners named.
+
+Write {RUN}/reviews/story-map-r{N}.md: per finding an id, severity (Important: a requirement left unticketed, a mis-split a developer can't deliver, a contradiction with a decision or the spec; Minor: anything else), the map row, what is wrong with a short quote of the map and of the source, and the exact replacement text. Plain language, no unexplained abbreviations. End with one line per story that has no finding.
+
+Final message: the count of findings by severity and the three most important, one line each.
 ```
