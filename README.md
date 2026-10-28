@@ -25,6 +25,7 @@ Each skill includes:
 | [change-cycle-pipeline](software-engineering/change-cycle-pipeline/SKILL.md) | Delivery pipeline for a code change: cycles, briefs, and the review → verify → fix loop |
 | [technical-design-discussions](software-engineering/technical-design-discussions/SKILL.md) | Design conversations: verify sources, weigh trade-offs, recommend, record ADRs |
 | [git-workflow](software-engineering/git-workflow/SKILL.md) | Git branch naming, commits, and version control |
+| [ci-pipeline-watch](software-engineering/ci-pipeline-watch/SKILL.md) | Watch a GitLab or GitHub Actions pipeline with one Monitor each: a stage board for the operator, blocking failures and the end result for the agent |
 | [database-management](software-engineering/database-management/SKILL.md) | Database schema management and migration strategies |
 | [python-code-style](software-engineering/python-code-style/SKILL.md) | Python code style for clean, maintainable code |
 | [python-commands](software-engineering/python-commands/SKILL.md) | Running Python through the project's package manager, inside the right virtualenv |

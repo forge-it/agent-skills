@@ -4,7 +4,7 @@ description: Use when shipping a Syneto Central release after its release notes 
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.6"
+  version: "0.0.7"
 ---
 
 # Syneto Release Promote Skill
@@ -229,8 +229,8 @@ are green.
 reports when every pipeline has finished sits silent on a failure that happened
 fifteen minutes earlier — the 2026-09-30 release lost that time on a central-ui
 test failure the operator spotted before the loop did. Each pipeline gets its own
-watcher, each watcher emits every job as it reaches a terminal state, and a blocking
-failure is acted on the moment it arrives, not after the others finish.
+watcher, each watcher emits a blocking failure the moment it lands, and that failure
+is acted on at once, not after the others finish.
 
 ## Watching the Pipelines
 
@@ -257,24 +257,15 @@ sha=$(git -C <root>/<repo> rev-parse origin/<prod>)
 glab api "projects/central%2F<repo>/pipelines?sha=$sha" | jq -r '.[] | "\(.id) \(.status) \(.web_url)"'
 ```
 
-**Arm one watcher per pipeline id.** In Claude Code that is one `Monitor` per
-pipeline (30s poll, 30-minute timeout, re-armed on expiry); elsewhere, one
-background process per pipeline. Each emits every job reaching a terminal state,
-marks non-`allow_failure` failures, and exits when the pipeline does:
+**Arm one watcher per pipeline id** with **ci-pipeline-watch**: one `Monitor` per
+pipeline, 30-minute timeout, armed again on expiry, running
 
 ```bash
-R=<repo>; P=<pipeline-id>; prev=""
-while true; do
-  j=$(glab api "projects/central%2F$R/pipelines/$P/jobs?per_page=100" 2>/dev/null) || { sleep 30; continue; }
-  cur=$(jq -r '.[] | select(.status|test("success|failed|canceled|skipped|manual"))
-    | "\(.status) \(.stage)/\(.name) job=\(.id)\(if .status=="failed" and (.allow_failure|not)
-        then " <<BLOCKING FAILURE>>" elif .status=="failed" then " (allowed to fail)" else "" end)"' <<<"$j" | sort)
-  comm -13 <(echo "$prev") <(echo "$cur") | sed "s/^/$R: /"; prev=$cur
-  s=$(glab api "projects/central%2F$R/pipelines/$P" 2>/dev/null | jq -r .status) || s=unknown
-  case $s in success|failed|canceled|skipped) echo "$R: PIPELINE $P FINISHED status=$s"; break;; esac
-  sleep 30
-done
+uv run --quiet --no-project ~/.claude/skills/ci-pipeline-watch/scripts/ci_watch.py gitlab central/<repo> <pipeline-id>
 ```
+
+It emits a blocking failure the moment it lands and the pipeline's end, and keeps
+the stage board in the Monitor's details view; the report shape is that skill's.
 
 A job failing with `allow_failure: true` (central-backend's `sonarqube-check`)
 leaves the pipeline green — report it, do not chase it. A downstream job showing
@@ -299,10 +290,13 @@ read the JUnit report first. Then decide flake versus real before touching anyth
 3. Did the release touch the failing test or the code under it
    (`git log <prod>..<dev> -- <paths>`)?
 
-Identical tree, passing on dev, untouched by the release → a flake: retry the job
-(`glab api -X POST "projects/central%2F<repo>/jobs/<job-id>/retry"`), note the new
-job id, and let the same watcher follow it — retried jobs replace the original in the
-jobs listing. Anything else is a real defect: dispatch an investigator, never retry a
+Identical tree, passing on dev, untouched by the release → a flake. This is the one
+fix applied without waiting for his pick: retry the job
+(`glab api -X POST "projects/central%2F<repo>/jobs/<job-id>/retry"`) and send the
+failure report with option 3 marked done and the three checks as its evidence. If the
+pipeline is still running, its watcher follows the retry — retried jobs replace the
+original in the jobs listing; if it already ended, arm the same `ci_watch.py` command
+again. Anything else is a real defect: dispatch an investigator, never retry a
 genuine failure into green. A promotion is `--no-ff`, so a defect that must come
 out is reverted with `git revert -m 1 <merge>`, never force-pushed away.
 

@@ -10,7 +10,7 @@ description: >-
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.1.8"
+  version: "0.1.9"
 ---
 
 # Syneto Ticket Delivery
@@ -415,10 +415,8 @@ with any order first. A ticket moves to **Review** once every code repository it
 an open MR; record each URL in `ledger.md` and `mr.md`. Until then the ticket stays In
 Progress, and the report names the repository still without one.
 
-Arm one Monitor per pipeline the push started, each reporting jobs as they finish, and send
-an investigator on the first blocking failure. The ids come from
-`glab api "projects/<group>%2F<repo>/pipelines?sha=<pushed sha>"`, repeated every 15 seconds
-until the list is not empty; after two minutes, tell him no pipeline started.
+Watch every pipeline the push started with **ci-pipeline-watch**, resolved from the pushed
+sha.
 
 **A push to the deploy repo is a deployment**: CI runs `pulumi up` on the branch pushed.
 There is no MR, so the deploy repo does not count toward Review; it counts toward Done once
@@ -437,12 +435,13 @@ shows `state: merged`, mark that repository merged in `ledger.md`.
 
 Then run any pending deploy push the ledger records. Its image exists once the post-merge
 pipeline passes: `glab api "projects/<group>%2F<repo>/pipelines?ref=<base>&sha=<merge_commit_sha>"`
-(`squash_commit_sha` when that is null), watched by a Monitor until `success`; `pulumi up`
+(`squash_commit_sha` when that is null), watched with **ci-pipeline-watch** until it passes;
+a failed pipeline holds the deploy push and gets that skill's failure report. `pulumi up`
 pins the image digest it finds, so an earlier push deploys the old image. Then
 `git -C ~/Projects/central status --short --branch` must match the ledger and
 `pull --ff-only` must succeed; when either fails, stop and tell him. Commit the reviewed
 change if it is still uncommitted (his word for the push covers that commit), push with the
-command shown, and arm its Monitor.
+command shown, and watch its pipeline with **ci-pipeline-watch**.
 
 Once every code repository a ticket covers is merged and its deploy branch, if it has one,
 is pushed, move the ticket to **Done** without asking, subtasks
