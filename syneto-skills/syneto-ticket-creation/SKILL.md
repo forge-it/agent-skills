@@ -240,6 +240,12 @@ sprint's id, show it, create it on his yes, link it to the story with `relates t
 
 - Create, edit or link anything in Jira before he says so.
 - Edit an existing ticket's description unless he asks; comment instead.
+- Change a Done ticket in any way: description, comments, estimate or links. A Done ticket records
+  what was built. When a later decision changes what it built, create a follow-up subtask for the
+  same author: same parent story, assignee, labels, fix version and priority. It states only the
+  difference from what was built, and is linked to the Done ticket with `relates to`. Check every
+  ticket's status before an update pass, and put this rule in every ticket-update brief
+  (2026-10-28: SYN-3435 and SYN-3436 were edited in place and had to be reverted).
 - Put an endpoint, field, payload or code in a story, or implementation detail in a frontend
   subtask (the API contract is the one exception).
 - Slice stories by repo, or split a subtask per repo when one developer delivers it in one go.
