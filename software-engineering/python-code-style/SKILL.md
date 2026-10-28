@@ -4,7 +4,7 @@ description: Defines code style conventions for Python. Use whenever writing, re
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "1.1.0"
+  version: "1.2.0"
 ---
 
 # Python Code Style Skill
@@ -126,3 +126,25 @@ def retention_days(status: BackupStatus) -> int:
 Compare with `==` (`status == BackupStatus.ARCHIVED`), never `is` and never `.value`. Members are strings, so they serialize as their value and pass anywhere a `str` is expected — but a value that arrived as a raw string (a plain text column, a JSON payload) is only *equal* to its member, never identical to it, so `is` fails silently and no type checker flags it. Coerce once at that boundary (`BackupStatus(raw_status)`) and pass members inward. Per-member behaviour belongs on the enum as a method or property, not in an `if` ladder repeated at each call site. `Literal["..."]` is acceptable only for a keyword argument that never leaves its own signature.
 
 **Not applicable** when the set isn't closed — values come from a database table, a config file, or user input (tenant names, tag keys, a catalogue that grows) — or for a single standalone value with no siblings, which is a constant (Rule 6).
+
+### 17. Route Modules Hold Only Routes (CRITICAL)
+
+A module that declares HTTP routes — `api/`, `routers/`, `presentation/routers/`, any file with `@router.get`/`@router.post` and siblings — contains only the router objects, the route functions, and at most constants. No other top-level `def`, `async def` or `class`: no private helpers (`_require_activated`), no shared request builders (`_enqueue_…`), no gates or decision functions, no readers, no dependency logic, no schemas. A route body calls the application layer and returns; logic two routes share, a business rule, or a check before the call (is the product activated, may this caller do this) belongs in an application service (or a validator, or a FastAPI dependency defined outside the route module), and the route calls that.
+
+```python
+# api/licensing.py — routes and constants only
+LICENSING_TAGS = ("Licensing",)
+
+@router_v1.get("/services/licensing", tags=LICENSING_TAGS)
+def get_licensing_details_v1() -> LicensingDetails:
+    return LicensingDetails.from_domain_model(licensing_service.read_activated_licensing())
+
+# application/services/licensing.py — the not-activated rule lives here
+def read_activated_licensing(self) -> ActivatedDetails:
+    details = self._reader.read_with_limits()
+    if not details:
+        raise NotActivatedError()
+    return details
+```
+
+A review flags every top-level non-route definition in a route module as a violation, whatever its size; Rule 9 does not make a one-liner acceptable here, it only says where the logic goes once moved.
