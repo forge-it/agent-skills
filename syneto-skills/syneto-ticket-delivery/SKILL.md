@@ -10,7 +10,7 @@ description: >-
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.1.10"
+  version: "0.1.11"
 ---
 
 # Syneto Ticket Delivery
@@ -352,10 +352,14 @@ the renamed tree:
 1. **Propose.** Dispatch two designers in one message, read-only, each writing its proposal to
    its own file in `<run>`: the stack's code designer (`python-code-designer`,
    `rust-code-designer`; for Vue or React a general-purpose agent told to load that stack's
-   code-style skill).
+   code-style skill). Each brief opens with: "Read
+   `~/.claude/skills/syneto-ticket-delivery/references/naming-guide.md` first; its order of
+   precedence and its list of names you do not change apply. Cite the guide rule each
+   proposal applies (`T2`, `P4`, `PEP8`), and mark 'needs his word' a rename that reaches a
+   name on that list."
    - `naming-types.md`: every class, protocol or trait, domain type and module the change
-     adds, judged against the language's code-style skill and the names the neighbouring
-     code uses. For each one that names its mechanism instead of its job, or only echoes the
+     adds, judged against the naming guide, the language's code-style skill and the names
+     the neighbouring code uses. For each one that names its mechanism instead of its job, or only echoes the
      library call it wraps: three alternatives, what each says and hides, a recommendation,
      and whether its protocol, domain type and module should be renamed with it.
    - `naming-functions.md`: every function, method, attribute, parameter, constant, fixture,
@@ -367,17 +371,18 @@ the renamed tree:
    - Both end with the blast radius: each rename's files and occurrence count, so a fixer can
      apply it mechanically.
 2. **Accept.** You decide; this is not one of his gates. Accept some or all, and amend a
-   proposal where a shorter or clearer name does the job. Record every accepted rename, every
-   rejected one and why, in `ledger.md`.
+   proposal where a shorter or clearer name does the job. A rename marked "needs his word"
+   is not yours to accept: it goes to the stage 8 report as a proposal. Record every
+   accepted rename, every rejected one and why, in `ledger.md`.
 3. **Apply.** One fixer, in the same mode as the loop's fixer, carrying the final mapping old
    → new: a pure rename, no behaviour change, the same test count before and after, every
    import and keyword call site updated, an untracked file renamed with plain `mv`. Its gate
-   adds one `rg` over every old name, which must come back empty. Log text and served docs
+   adds one `grep -rn` over every old name (`rg` is not installed), which must come back empty. Log text and served docs
    change only where they quote a renamed identifier.
 4. **Gate.** Run the working gate yourself, then the final gate as the pipeline says.
 
-The stage 8 report lists the renames applied and the ones you rejected, so he can overrule a
-rejection at his review.
+The stage 8 report lists the renames applied, the ones you rejected, and the ones that need
+his word, each with its guide rule id, so he can overrule a rejection at his review.
 
 ### 8. Report — gate
 
