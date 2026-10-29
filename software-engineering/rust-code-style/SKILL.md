@@ -45,8 +45,12 @@ Being long enough is not the bar. A name must say **what the thing is for**, so 
 
 - **Name the purpose, not the mechanics.** Don't name a type after how it is held (`QueueShared` only says it is behind an `Arc`) or after a generic noun (`Share`, `Reservation` don't say what is shared or reserved). Name what it holds or decides: `QueueLedger`, `Headroom`, `ReservationOutcome`.
 - **Avoid words that read two ways.** `Share::Full` and `put_full` read as "the queue is full" when they mean "may use the whole budget". Pick the word that cannot be misread: `Headroom::MayUse`, `put_using_headroom`.
-- **A field or binding that holds a domain type is named after that type, in snake_case, and every sibling follows the same rule.** Don't shorten one sibling to a bare noun while another keeps its prefix. This doesn't apply to std or primitive types (`channel`, `receiver`, `join`).
-- **Name a flag as a flag.** A bare verb such as `stop` reads like a command. A shared `AtomicBool` that signals a request is named for its meaning and its kind: `stop_request_flag`.
+- **A binding of one of the project's own types is named after that type, in snake_case, and every sibling follows the same rule.** Don't shorten one sibling to a bare noun while another keeps its prefix.
+  - A field always: it is read far from its declaration (`self.queue_budget`), where its type is not in sight.
+  - A parameter or local only when a sibling is in scope: another value of a related kind visible in the same function, including one reached through a field. `fn cancel(&self, id: &OperationId)` is fine; `fn attach(&self, id: &OperationId, plan: &Plan)` whose body uses `plan.id` names its parameter `operation_id`.
+  - Look through `&`, `Option`, `Arc` and `Box` (`queue_ledger: Arc<QueueLedger>`). This doesn't apply to std, framework or primitive types (`channel`, `receiver`, `join`).
+  - A deviation is allowed with a `// why:` that names the constraint (`// why: mirrors the libdnf5 field`), not the deviation.
+- **A bool reads as a statement, not an order.** A bare verb such as `stop` or `disable_cache` reads like a command: rename it to `stop_requested` or `cache_disabled`, never by adding `_flag`. A predicate method reads as a question (`is_empty()`, `has_terminal()`). `_flag` is only for a shared `AtomicBool` that signals a request: `stop_request_flag`.
 - **One to four words. Use five or six only in special cases.** When the exact name would need five or more words, or a shorter name with its `///` line reads better at the call site (`Headroom` over `LifecycleEventLineHeadroom`, `ReservationOutcome` over `LineRoomReservationOutcome`), keep the short name and finish the meaning in its `///` line.
 
 ```rust
