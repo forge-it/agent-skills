@@ -10,7 +10,7 @@ description: >-
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.1.9"
+  version: "0.1.10"
 ---
 
 # Syneto Ticket Delivery
@@ -30,6 +30,7 @@ answers its intake gate, so do not ask it again:
 | Implementer | fleet |
 | Plan review | max 2 rounds; round 2 re-checks only what round 1 changed |
 | Code review | **change-cycle-pipeline** narrow loop, max 3 rounds, one `haiku` checker per finding at effort `max` (stage 7) |
+| Naming | one designer round after the review loop, every ticket: designers propose renames, you accept some or all, one fixer applies them (stage 7, *Naming round*) |
 | Operator gates | stages 3, 6, 8, 9, plus every push |
 | Gate cadence | at the end: every cycle is implemented in turn, then one review loop over their union (stage 7, one cap of 3), then one stage 8 report |
 | Worktree | his answer at stage 6: the main worktree, or a separate one merged back into it unless he keeps it without a merge-back; `-no-commit` workers either way, and the checkout holding the change ends dirty |
@@ -52,7 +53,7 @@ ticket wins over these defaults on every dispatch it covers, the checkers includ
 | 4 | Plan the chosen option | `plan.md` | — |
 | 5 | Review the plan, max 2 rounds | `plan-review-rN-<lens>.md`, `plan.rN.md` | — |
 | 6 | Implement, in the worktree he picks | the dirty tree | **his worktree choice, before it starts** |
-| 7 | Review the code, max 3 rounds | `code-review-rN-<lens>.md` | — |
+| 7 | Review the code, max 3 rounds, then the naming round | `code-review-rN-<lens>.md`, `naming-<scope>.md` | — |
 | 8 | Report, tree left dirty | — | **his review** |
 | 9 | Refactor or commit | commits | **his word** |
 | 10 | Push, create the MR, move to Review | `mr.md` | **his word on the push** |
@@ -341,6 +342,42 @@ With a separate worktree, merge it back when the loop ends, converged or capped,
 `references/separate-worktree.md` describes, before the report. When the main checkout holds
 another ticket, ask him first: he may keep the worktree without a merge-back, recorded in
 `ledger.md`.
+
+**Naming round, every ticket.** The review lenses and their checkers refute naming as style,
+so sloppy names (`_ask_mercurio`, `EffectiveLicensingReader`) survive a converged loop and
+reach his review. Once the loop ends, converged or capped, and after any merge-back, run one
+naming round in the checkout holding the change, before the final gate, so the gate certifies
+the renamed tree:
+
+1. **Propose.** Dispatch two designers in one message, read-only, each writing its proposal to
+   its own file in `<run>`: the stack's code designer (`python-code-designer`,
+   `rust-code-designer`; for Vue or React a general-purpose agent told to load that stack's
+   code-style skill).
+   - `naming-types.md`: every class, protocol or trait, domain type and module the change
+     adds, judged against the language's code-style skill and the names the neighbouring
+     code uses. For each one that names its mechanism instead of its job, or only echoes the
+     library call it wraps: three alternatives, what each says and hides, a recommendation,
+     and whether its protocol, domain type and module should be renamed with it.
+   - `naming-functions.md`: every function, method, attribute, parameter, constant, fixture,
+     builder and fake the change adds, plus test names that misstate what they check, leaving
+     type names to the other designer. One row per name to change: what it actually does,
+     the proposed name, why. Flag names after who is called or how (`_ask_<service>`), vague
+     verbs, hidden side effects, predicates not phrased as predicates, and one concept under
+     two names. List the names checked and judged fine.
+   - Both end with the blast radius: each rename's files and occurrence count, so a fixer can
+     apply it mechanically.
+2. **Accept.** You decide; this is not one of his gates. Accept some or all, and amend a
+   proposal where a shorter or clearer name does the job. Record every accepted rename, every
+   rejected one and why, in `ledger.md`.
+3. **Apply.** One fixer, in the same mode as the loop's fixer, carrying the final mapping old
+   → new: a pure rename, no behaviour change, the same test count before and after, every
+   import and keyword call site updated, an untracked file renamed with plain `mv`. Its gate
+   adds one `rg` over every old name, which must come back empty. Log text and served docs
+   change only where they quote a renamed identifier.
+4. **Gate.** Run the working gate yourself, then the final gate as the pipeline says.
+
+The stage 8 report lists the renames applied and the ones you rejected, so he can overrule a
+rejection at his review.
 
 ### 8. Report — gate
 
