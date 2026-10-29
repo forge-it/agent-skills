@@ -47,7 +47,7 @@ Follow these steps **in order** when creating a new endpoint:
 **Rules:**
 
 - Paths identify **resource names only** — use nouns, never verbs.
-- Paths are **lowercase kebab-case** (`words-separated-by-dashes`).
+- Path segments are **camelCase** (`wordsJoinedLikeThis`, e.g. `supportedActions`, `vmReplicas`), the same casing as field names. This supersedes RFD0003's kebab-case (Architect directive, 2026-10-29). Existing kebab-case paths are not renamed only to follow this rule.
 - All APIs live under the base URL: `https://<host>/api`
 - Each service owns a top-level group: `/api/auth`, `/api/storage`, `/api/virtualization`, etc.
 - **No nested resource hierarchies** within a service. All resources are top-level inside their service group.
@@ -75,22 +75,22 @@ Ask: *"Can this entity be identified and queried independently of a parent?"*
 ```
 # WRONG — verbs in path
 /api/virtualization/vms/clone
-/api/protection/vms/replicas/<id>/move-storage
+/api/protection/vms/replicas/<id>/moveStorage
 
 # RIGHT — use POST with action in payload
 POST /api/virtualization/vms  →  {"action": "clone", "snapshotName": "..."}
 PATCH /api/virtualization/vms/<id>  →  {"action": "clone-convert"}
-PATCH /api/protection/vm-replicas/<id>/storage  →  {"poolName": "flash"}
+PATCH /api/protection/vmReplicas/<id>/storage  →  {"poolName": "flash"}
 ```
 
 ```
 # WRONG — slash as separator within a group
 /api/protection/vms/replicas
-/api/protection/jobs/categories-tree
+/api/protection/jobs/categoriesTree
 
-# RIGHT — kebab-case flat resources
-/api/protection/vm-replicas
-/api/protection/jobs-categories-tree
+# RIGHT — camelCase flat resources
+/api/protection/vmReplicas
+/api/protection/jobsCategoriesTree
 ```
 
 ### 2. Field Naming (CRITICAL)
@@ -155,7 +155,7 @@ PATCH /api/protection/vm-replicas/<id>/storage  →  {"poolName": "flash"}
 
 ```
 # WRONG — encoding a filter in the path
-GET /api/protection/jobs/count-ongoing
+GET /api/protection/jobs/countOngoing
 
 # RIGHT — filter as query parameter
 GET /api/protection/jobs/count?status=ongoing
@@ -267,7 +267,7 @@ All list endpoints **must** wrap results in `items` and include `pagination` met
 
 Before finalizing any endpoint, verify **every** item:
 
-- [ ] URL path uses **nouns only** and is **lowercase kebab-case**
+- [ ] URL path uses **nouns only** and its segments are **camelCase**
 - [ ] Resource is **flat** within its service group (not nested under another resource)
 - [ ] Sub-resources are used **only for state** of a parent resource
 - [ ] HTTP method matches the operation (GET=read, POST=create/action, PATCH=update, DELETE=remove)
@@ -291,7 +291,7 @@ Before finalizing any endpoint, verify **every** item:
 |---|---|---|---|
 | 1 | Verbs in URL paths | URLs identify resources, not actions | Use nouns only; encode actions in the request payload |
 | 2 | Nested resource hierarchies | Creates coupling and complex URLs | Keep resources flat: `/api/storage/snapshots/<id>` |
-| 3 | Slash as word separator | Slashes create hierarchy, not word boundaries | Use kebab-case: `vm-replicas`, not `vms/replicas` |
+| 3 | Slash as word separator | Slashes create hierarchy, not word boundaries | Use camelCase: `vmReplicas`, not `vms/replicas` |
 | 4 | Dynamic keys in JSON | Breaks schema validation and code generation | Use arrays of typed objects with static keys |
 | 5 | Resource ID in PATCH body | ID belongs in URL; body has only changed fields | `PATCH /resource/<id>` with body containing only updates |
 | 6 | Query args on POST/PATCH | Mutation parameters belong in the request body | Move to request body |
