@@ -377,8 +377,10 @@ the renamed tree:
 3. **Apply.** One fixer, in the same mode as the loop's fixer, carrying the final mapping old
    → new: a pure rename, no behaviour change, the same test count before and after, every
    import and keyword call site updated, an untracked file renamed with plain `mv`. Its gate
-   adds one `grep -rn` over every old name (`rg` is not installed), which must come back empty. Log text and served docs
-   change only where they quote a renamed identifier.
+   adds one `git -C <checkout> grep -nw --untracked -- <old name>` per old name, which must
+   come back empty: it covers tracked files and the change's new ones, and skips `.venv` and
+   the sibling worktrees under `.claude/worktrees/` (`rg` is not installed). Log text and
+   served docs change only where they quote a renamed identifier.
 4. **Gate.** Run the working gate yourself, then the final gate as the pipeline says.
 
 The stage 8 report lists the renames applied, the ones you rejected, and the ones that need
