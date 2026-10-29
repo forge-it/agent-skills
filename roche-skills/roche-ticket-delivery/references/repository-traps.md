@@ -19,12 +19,13 @@ orchestrator's Docker session (SKILL.md, *Working rules*): one session at a time
   `core/`, `crates/`, `libdnf5-adapter/`) that drives libdnf5 in process and serves a gRPC
   API (`package_management.v1`) over a Unix domain socket. Its layout is set out in
   `docs/layout.md`, its structure rules in `docs/testing.md` (*Structure rules*), and its
-  design in `docs/architecture.md` and RFD-001. rdnx has no `project_structure.md` and no
-  `CLAUDE.md`, so every Rust agent reads `docs/layout.md` as its `project_structure.md`,
-  whether or not its definition waits for a `CLAUDE.md` pointer. Say so in every brief.
+  design in `docs/architecture.md` and RFD-001. rdnx has a `CLAUDE.md` (with
+  `.claude/rules/rust.md` and `.claude/rules/workflow.md`) but no `project_structure.md`, so
+  every Rust agent reads `docs/layout.md` as its `project_structure.md`. Say so in every
+  brief.
 - **Agents:** `rust-implementor-expert-no-commit`, `rust-fixer-no-commit`,
-  `rust-test-writer`, `rust-issue-investigator`, `rust-code-reviewer` and
-  `rust-structure-and-style-guard`. Workers load **rust-code-style**, **rust-testing**,
+  `rust-test-writer`, `rust-issue-investigator`, `rust-code-reviewer`,
+  `rust-structure-and-style-guard` and, at stage 8, `rust-code-designer` for naming. Workers load **rust-code-style**, **rust-testing**,
   **rust-project-structure** and **rust-design-idioms**.
 - **Platform:** the target is `rockylinux:10.2` on x86_64. The vendored libdnf5 stack
   (`vendor/libdnf5-5.4.5.0/`) is x86_64 RPMs, and the local `rdnx-*` images are `amd64`.

@@ -47,7 +47,7 @@ Being long enough is not the bar. A name must say **what the thing is for**, so 
 - **Avoid words that read two ways.** `Share::Full` and `put_full` read as "the queue is full" when they mean "may use the whole budget". Pick the word that cannot be misread: `Headroom::MayUse`, `put_using_headroom`.
 - **A field or binding that holds a domain type is named after that type, in snake_case, and every sibling follows the same rule.** Don't shorten one sibling to a bare noun while another keeps its prefix. This doesn't apply to std or primitive types (`channel`, `receiver`, `join`).
 - **Name a flag as a flag.** A bare verb such as `stop` reads like a command. A shared `AtomicBool` that signals a request is named for its meaning and its kind: `stop_request_flag`.
-- **One to three words. Use four or more only in special cases.** If the exact name would be longer (`LifecycleEventLineHeadroom`, `LineRoomReservationOutcome`), keep the short name and finish the meaning in its `///` line.
+- **One to four words. Use five or six only in special cases.** When the exact name would need five or more words, or a shorter name with its `///` line reads better at the call site (`Headroom` over `LifecycleEventLineHeadroom`, `ReservationOutcome` over `LineRoomReservationOutcome`), keep the short name and finish the meaning in its `///` line.
 
 ```rust
 // Bad: the names say how the value is held, or nothing at all

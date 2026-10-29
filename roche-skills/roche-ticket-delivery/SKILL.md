@@ -45,6 +45,7 @@ definition. Pass `model` and `effort` explicitly on every dispatch:
 | Implementors, fixers, test writers | `sonnet`, `xhigh` |
 | Plan reviewers, code-review lenses, structure-and-style guards | `sonnet` at `medium`, or `haiku` at `max` when the review is simple. Say which in one line |
 | Stage 7 checkers (refuters) | `haiku`, `max`, always |
+| Stage 8 naming designers, one per crate | `sonnet`, `max` |
 | Gatherers, the planner, issue investigators, the stage 8 docs writer, the final-gate agent | what he names. Ask once at stage 1 and record it in `ledger.md` |
 
 A model or effort he asks for on a ticket wins over these defaults on every dispatch it
@@ -79,7 +80,7 @@ enforces. Run the gate as the worker's brief says.
 | 5 | Review the plan, max 2 rounds | `plan-review-rN-<lens>.md`, `plan.rN.md` | — |
 | 6 | Implement, in the worktree he picks | the dirty tree | **his worktree choice, before it starts** |
 | 7 | Review the code, max 3 rounds | `code-review-rN-<lens>.md` | — |
-| 8 | Report, tree left dirty | — | **his review** |
+| 8 | Naming proposals, docs, then the report; tree left dirty | `naming-<crate>.md` | **his review** |
 | 9 | Refactor or commit | commits | **his word** |
 | 10 | Push, create the MR, move to In Code Review | `mr.md` | **his word on the push** |
 | 11 | Merged: post-merge status, clean up | Jira comment | — |
@@ -479,6 +480,36 @@ over the whole diff against the base, named explicitly, so it never runs
 acceptance. Here it runs before his review, so every doc edit is in the tree he reads and
 nothing is edited after his word at stage 9.
 
+In the same message, dispatch the **naming designers**: one `rust-code-designer` per crate
+whose files the change touches, all at once, model `sonnet`, effort `max`. A crate is a
+workspace member (in rdnx: `app`, `core`, `libdnf5-adapter`, each `crates/<name>`), and it is
+touched when `git -C <checkout> diff <base> --name-only` or the untracked list holds a `.rs`
+file under it. They only read, so they run beside the docs writer. A change with no Rust
+skips them. Each brief carries the brief essentials and these lines, filled:
+
+```
+This is a naming review, not a feature design: return proposals, no implementation handoff.
+Read ~/src/agent-skills/roche-skills/roche-ticket-delivery/references/naming-guide.md first;
+its order of precedence and its list of names you do not change apply. Your crate is <crate path> in <checkout holding the
+change>, diffed against <base>. Run every git command as `git -C <checkout>`. The change set
+is the crate's files in `git diff <base>` plus every file that
+`git ls-files --others --exclude-standard` lists under it. Scan every name the change adds
+or renames there: modules and files, structs, enums and variants, traits, functions and
+methods, fields, parameters, locals, closure parameters, constants, type aliases, test
+names. Propose a rename for each one that breaks the guide. Raise a name the change did not
+touch only when the change makes it wrong, and say how. For each proposal give: path:line,
+the current name and its kind, two or three options each with how a call site reads, the
+guide rule id it applies (`T4`, `P6`, `C-CONV`), and for a short name the `///` line that
+completes it. Mark "needs his word" a rename that reaches the proto contract, the libdnf5
+bridge, an ADR, `vendor/`, a log event name or another crate's `pub` items. Finish
+with the names you checked and kept, one line per file. Never run cargo, just or docker.
+```
+
+The designers have no Write tool: save each final message verbatim to
+`<run>/naming-<crate>.md` as soon as it returns. Read the cited line of every proposal, and
+drop one whose name the change neither adds nor renames and that the change does not make
+wrong.
+
 Then give him **change-cycle-pipeline**'s operator report, every finding in plain words with
 its exact `file:line`. Its next action is his review, so it ends with a review guide for
 each repository the change touches. The guide tells him where to spend his attention, in
@@ -488,24 +519,25 @@ the order to read it:
 Review <repository name> in <absolute path of the checkout holding the change>
   <main worktree | linked worktree>, branch <branch>, against <base>
 
-Read closely: the behaviour change
-  1. <path:line> — <what changed there, and the question to check it against>
-  2. …
+Worth a close look
+  - <path:line> — <why, in a few words>
 Tests that pin it
   - <path:line> — <the behaviour the test proves, and the case it would miss, if any>
 Skim: mechanical or docs-only
   - <path, or a group: docs/gaps/0001–0015 (15 files)> — <what changed, in one line>
+Naming proposals
+  - <path:line> `<current>` (<kind>) → `<option>` | `<option>` — <rule id>: <in a few words>
 Your call
   - <path:line> — <a decision the agents could not make, or a trade-off they took>
 ```
 
-- *Read closely* holds the few places where a wrong line changes behaviour: new or changed
-  logic, a changed contract (types, proto, public API, error kinds), locking and
-  cancellation, error paths. Order them so each makes sense after the ones above it, usually
-  domain, then application, then adapters. The line is the hunk's, not the file's top.
-- Each entry carries a question he can answer by reading, such as "does every `match` on
-  `OperationState` handle `Cancelling`?", never "review the changes".
+- *Worth a close look* is short: at most three entries, one line each, for the spots where a
+  mistake would be easiest to miss or costliest to ship. The line is the hunk's, not the
+  file's top. A change with no such spot leaves the section out.
 - *Skim* puts files that changed the same way on one line. Mark a new file `(new)`.
+- *Naming proposals* lists every proposal you kept, grouped by crate, the recommended option
+  first, with "needs his word" where the designer marked it. The full proposals are in
+  `<run>/naming-<crate>.md`.
 - Leave out a section with nothing in it.
 
 Build it from `git -C <that path> diff <base>` and
@@ -517,7 +549,10 @@ print the status itself. The tree stays dirty. Then stop.
 ### 9. Refactor or commit — gate
 
 Refactors he asks for go to a fixer or implementor in the checkout holding the change, in the
-same mode as stage 8's writer, followed by the gate and a fresh stage 8 report.
+same mode as stage 8's writer, followed by the gate and a fresh stage 8 report. The renames
+he picks from the naming proposals are such a refactor: the fixer's brief names each one with
+the option he chose, and says to rename every use, test and doc that names it. The fresh
+report does not re-run the naming designers unless he asks.
 
 Commit only when he says so, and only in the repositories he names. When another repository
 looks ready too, say so in one line and wait. Make one commit per repository unless he says
@@ -654,7 +689,8 @@ ledger names. In stage 5 or 7, a round the ledger does not record as triaged is 
 Compare its files with the set the ledger names. Re-dispatch only the reviewers, or the
 checkers by their recorded number, whose file is missing, in one message, then triage the
 round. Never re-run one whose file
-exists.
+exists. In stage 8, re-dispatch only the naming designers whose `naming-<crate>.md` is
+missing.
 
 ## Ticket status
 
@@ -727,5 +763,6 @@ Every dispatch that touches a repository carries:
   its traps, its docs rules and its agents. When the brief may run Docker, also the
   subagent Docker lines under *Working rules*
 - for a dispatch that is not briefed to run Docker (gatherers, the planner, plan reviewers,
-  lenses, guards, checkers, the stage 8 writer): "Never run cargo, just or docker: they
+  lenses, guards, checkers, the stage 8 writer, the naming designers): "Never run cargo,
+  just or docker: they
   share Docker state with other sessions."
