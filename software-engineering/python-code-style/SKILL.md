@@ -4,7 +4,7 @@ description: Defines code style conventions for Python. Use whenever writing, re
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "1.2.0"
+  version: "1.3.0"
 ---
 
 # Python Code Style Skill
@@ -148,3 +148,32 @@ def read_activated_licensing(self) -> ActivatedDetails:
 ```
 
 A review flags every top-level non-route definition in a route module as a violation, whatever its size; Rule 9 does not make a one-liner acceptable here, it only says where the logic goes once moved.
+
+### 18. A Function Only One Class Uses Is That Class's Static Method (HIGH)
+
+A module-level function — private or not — whose only callers are the methods of one class belongs to that class as a `@staticmethod`. Left at the bottom of the module, it reads as shared code when it is one class's internal step, and the class's behaviour is split across two places. Move it into the class, keep its name (with the leading underscore when it is private), and call it through `self.` or the class name.
+
+```python
+# WRONG — stray functions only LastKnownLicensingProvider calls
+class LastKnownLicensingProvider:
+    def _fetch(self) -> LicensingAnswer:
+        return LicensingAnswer(socket_grant=_parse_socket_grant(raw["licenses"]))
+
+def _parse_socket_grant(licenses: list[Any]) -> SocketGrant | None: ...
+def _as_date(value: Any) -> date | None: ...
+
+# RIGHT — the class owns its steps
+class LastKnownLicensingProvider:
+    def _fetch(self) -> LicensingAnswer:
+        return LicensingAnswer(socket_grant=self._parse_socket_grant(raw["licenses"]))
+
+    @staticmethod
+    def _parse_socket_grant(licenses: list[Any]) -> SocketGrant | None: ...
+
+    @staticmethod
+    def _as_date(value: Any) -> date | None: ...
+```
+
+A function called from that class's other static methods counts as used only by the class. Tests calling it do not count as another user: they call it through the class.
+
+**Not applicable** when the function is used by two or more classes, or by module-level code outside a class (it stays module-level, Rule 12); when the module has no class; for a function passed as a default collaborator (`utc_today: Callable[[], date] = _current_utc_date`), which must exist before the class body; and in route modules, which Rule 17 governs.
