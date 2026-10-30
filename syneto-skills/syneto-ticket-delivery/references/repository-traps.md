@@ -82,9 +82,11 @@ up at a time: when the other is up and you did not start it, ask him before taki
   - Only `tests/locking/integration/` touches a store (MariaDB: `docker compose up -d
     mariadb`): Docker-backed. Every other category, `api/` and `assemblytests/` included, runs
     on `MagicMock` gateways and needs no store.
-- **Venv:** pins Python 3.10, and its locked `mariadb` builds from source, which needs MariaDB
-  Connector/C (`libmariadb-dev`, for `mariadb_config`); neither is on this machine. A venv
-  needs both installed first, then `poetry env use <path>`.
+- **Venv:** Python ~3.11 (pyproject; the code imports `StrEnum`, so a 3.10 venv fails at conftest import).
+  Rebuild: `uv venv .venv --python 3.11.17`, then `VIRTUAL_ENV=$PWD/.venv PATH=$PWD/.venv/bin:$PATH poetry install --no-root`
+  (poetry itself runs on 3.12, so `poetry env use` refuses). The locked `mariadb` builds against
+  `/usr/bin/mariadb_config`, installed since 2026-10-30. Regenerate `*_pb2.py` after a `.proto` edit the same way:
+  `VIRTUAL_ENV=$PWD/.venv PATH=$PWD/.venv/bin:$PATH ./compile.sh`.
 - **Separate worktree:** its `*_pb2.py` / `*_grpc.py` are gitignored, so a linked worktree
   must generate them first (`separate-worktree.md`).
 - **Traps:** no double-underscore attributes. Tests live in `tests/<domain>/<category>/`, plain
