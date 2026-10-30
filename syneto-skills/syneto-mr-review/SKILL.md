@@ -42,7 +42,8 @@ The scripts live in `scripts/` beside this file. Run them as `python3 -B` by abs
 (`-B` keeps Python from writing `__pycache__` into the skills repository); each has `--help`. A later session resumes from the run directory: `meta.json`, `reviewer-passes.md` and the
 ledgers carry the review, and `posted.json` says what is live. In stage 2b, resume at the first
 pass without a ledger; for a pass whose ledger exists, dispatch only the checkers whose verdict
-file is missing.
+file is missing. With no `reviewer-passes.md`, ask the stage 1 question before dispatching
+anything.
 
 ### 1. Set up
 

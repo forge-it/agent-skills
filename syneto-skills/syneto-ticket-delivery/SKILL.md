@@ -53,7 +53,7 @@ ticket wins over these defaults on every dispatch it covers, the checkers includ
 | 4 | Plan the chosen option | `plan.md` | — |
 | 5 | Review the plan, max 2 rounds | `plan-review-rN-<lens>.md`, `plan.rN.md` | — |
 | 6 | Implement, in the worktree he picks | the dirty tree | **his worktree choice, before it starts** |
-| 7 | Review the code, max 3 rounds per loop he picked, then the naming round | `code-review-rN-<lens>.md`, `code-review-reviewer-rN-<stack>.md`, `naming-<scope>.md` | — |
+| 7 | Review the code, max 3 rounds per loop he picked, then the naming round | `code-review-rN-<lens>.md`, `code-review-reviewer-rN-<repo>.md`, `naming-<scope>.md` | — |
 | 8 | Report, tree left dirty | — | **his review** |
 | 9 | Refactor or commit | commits | **his word** |
 | 10 | Push, create the MR, move to Review | `mr.md` | **his word on the push** |
@@ -141,7 +141,8 @@ Then ask, in **one** message, everything that applies:
   not there
 - which code review stage 7 runs: the lens loop, the reviewer loop, or both; offer the
   reviewer loop only when a repository in scope has a reviewer agent (stage 7), and name
-  the repositories it alone would leave unreviewed
+  the repositories it alone would leave unreviewed; when none has, record `lens loop`
+  without asking
 
 The tickets in scope are the ones he handed over plus the subtasks he confirms. Write
 `ticket.md` (verbatim) and `ledger.md`, his code review choice in it, then move every
@@ -167,7 +168,8 @@ tell him: never stash, reset or merge to get past it. Then make sure the reposit
 `.claude/worktrees/`, where every worktree of the run lives: when
 `git -C <repo> check-ignore -q .claude/worktrees/x` fails, add `.claude/worktrees/` to
 `<repo>/.git/info/exclude`, never to `.gitignore`. A repository that stage 2 adds to the
-scope gets the same sequence then.
+scope gets the same sequence then, and when it changes what the reviewer loop would cover,
+say so and ask the code review question again.
 
 **The deploy repo `~/Projects/central` gets no work branch.** The branch is the environment,
 and only `dev-on-prem` and `production-on-prem` are live. Run only these, on the environment
@@ -343,12 +345,13 @@ A finding whose fix touches a schema, a migration, a public API or a wire format
 pipeline's three-checker panel, majority wins: three checkers instead of one, in the same
 message, each with these lines, its own `<out>` and that finding.
 
-**Reviewer loop.** The lens is the reviewer agent of each stack the change touches
-(`python-code-reviewer`, `vue-code-reviewer`, `react-code-reviewer` or
-`rust-code-reviewer`), all in one message; a stack with none (central-api, central-iam, the
-deploy repo) gets no reviewer in this loop, and the report says so. Each is briefed read-only with the brief
-essentials, `<run>/plan.md`, the locked scope, the base, and its output
-`<run>/code-review-reviewer-rN-<stack>.md`. From round 2 it also gets the earlier rounds'
+**Reviewer loop.** The lens is one reviewer agent per repository the change touches, that
+repository's stack's (`python-code-reviewer`, `vue-code-reviewer`, `react-code-reviewer` or
+`rust-code-reviewer`), all in one message; a repository with none (central-api,
+central-iam, the deploy repo) gets no reviewer in this loop, and the report says so. Each
+is briefed read-only with the brief essentials, the pipeline's cycle brief,
+`<run>/plan.md`, the locked scope, the base, and its output
+`<run>/code-review-reviewer-rN-<repo>.md`. From round 2 it also gets the earlier rounds'
 reviewer and verdict files, and reports only what they do not name or what a fix did not
 close; with both loops, round 1 gets the lens loop's review and verdict files the same way.
 Its findings go to the same checkers, each writing
