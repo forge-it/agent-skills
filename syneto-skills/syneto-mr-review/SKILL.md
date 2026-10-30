@@ -4,7 +4,7 @@ description: Use when the operator asks to review a GitLab merge request on gitl
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.1.0"
+  version: "0.1.1"
 ---
 
 # Syneto MR Review
@@ -17,11 +17,12 @@ reviewer of record — every note and the Chat message go out under his name —
 leaves the session that he has not picked or approved.
 
 You orchestrate: set up, brief, verify, present, post. The fleet reviews, and every dispatch in
-this skill runs on `model: "sonnet"` (his standing choice). Load **agent-fleet-orchestration**
+this skill runs on `model: "sonnet"` (his standing choice), except the reviewer passes'
+checkers, which run on `model: "haiku"` at effort `max`. Load **agent-fleet-orchestration**
 once before the first dispatch; this skill already answers its intake gate — supervised, the
 spec is `ticket.md`, the base is `base_commit`, and the briefs in `references/lens-briefs.md`
 replace both the pipeline-variant choice and the code-implementation-review prompts — so the
-three gates below are the only stops.
+three gates below and the stage 1 question are the only stops.
 
 ## Stages
 
@@ -29,6 +30,7 @@ three gates below are the only stops.
 |---|---|---|---|
 | 1 | Set up the run | `~/.cache/mr-review/<repo>-<iid>/` | — |
 | 2 | Review fleet: seven Sonnet lenses in parallel | `ledger-NN-*.md` | — |
+| 2b | Reviewer passes, when he asked for them at stage 1: three in a row | `ledger-08-reviewer-pP.md`, `verdict-pP-N.md` | — |
 | 3 | Synthesize, then verify every Critical and Important yourself | `ledger-synthesized.md` | — |
 | 4 | Present the ledger | — | **his picks** |
 | 5 | Post the picked findings as review notes | `notes/`, `posted.json` | — |
@@ -37,8 +39,10 @@ three gates below are the only stops.
 
 The scripts live in `scripts/` beside this file. Run them as `python3 -B` by absolute path,
 `python3 -B /home/cristi/Projects/agent-skills/syneto-skills/syneto-mr-review/scripts/<name>.py`
-(`-B` keeps Python from writing `__pycache__` into the skills repository); each has `--help`. A later session resumes from the run directory: `meta.json` and the ledgers
-carry the review, and `posted.json` says what is live.
+(`-B` keeps Python from writing `__pycache__` into the skills repository); each has `--help`. A later session resumes from the run directory: `meta.json`, `reviewer-passes.md` and the
+ledgers carry the review, and `posted.json` says what is live. In stage 2b, resume at the first
+pass without a ledger; for a pass whose ledger exists, dispatch only the checkers whose verdict
+file is missing.
 
 ### 1. Set up
 
@@ -50,6 +54,9 @@ and keeps the notes.
 The run directory must be shared with the session: the lenses write their ledgers there and
 Chrome uploads the developer file from there. When `~/.cache/mr-review` is not among the
 session's working directories, ask him to run `/add-dir ~/.cache/mr-review`.
+
+Ask whether this review gets the reviewer passes (stage 2b), in the same message as the
+`/add-dir` request when there is one, and write his answer to `<run>/reviewer-passes.md`.
 
 Materialize the ticket into `<run>/ticket.md`, verbatim, with the Atlassian MCP's
 `getJiraIssue` (summary, description, comments, subtasks, links, as markdown). The server's
@@ -71,9 +78,18 @@ unclear.
 No virtualenv in the repository (common after a machine migration) makes it a static review:
 the briefs say so, and so does everything you present.
 
+### 2b. Reviewer passes
+
+Only when he asked for them. Once all seven ledgers exist, run three passes in a row, P = 1,
+2, 3, each with the pass and checker briefs in `references/lens-briefs.md`. A pass is one
+`{REVIEWER_AGENT}` hunting only what no earlier ledger or pass names; then one checker per
+finding of that pass, all in one message, `model: "haiku"`, effort `max`. The next pass starts
+once every checker of the previous one has written its verdict.
+
 ### 3. Synthesize and verify
 
-Once all seven ledgers exist, dispatch the synthesizer brief. Then read the cited lines of
+Once all seven ledgers exist, and the three reviewer passes with their verdicts when he
+asked for them, dispatch the synthesizer brief. Then read the cited lines of
 every Critical and Important finding yourself: the fleet is cheap, and a false positive posted
 on a colleague's MR costs him credibility.
 

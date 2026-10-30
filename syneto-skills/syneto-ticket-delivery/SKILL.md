@@ -10,7 +10,7 @@ description: >-
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.1.11"
+  version: "0.1.12"
 ---
 
 # Syneto Ticket Delivery
@@ -29,10 +29,10 @@ answers its intake gate, so do not ask it again:
 | Supervision | supervised |
 | Implementer | fleet |
 | Plan review | max 2 rounds; round 2 re-checks only what round 1 changed |
-| Code review | **change-cycle-pipeline** narrow loop, max 3 rounds, one `haiku` checker per finding at effort `max` (stage 7) |
-| Naming | one designer round after the review loop, every ticket: designers propose renames, you accept some or all, one fixer applies them (stage 7, *Naming round*) |
+| Code review | his choice at stage 1: the lens loop, the reviewer loop, or both, lens loop first; each is **change-cycle-pipeline**'s narrow loop, max 3 rounds, one `haiku` checker per finding at effort `max` (stage 7) |
+| Naming | one designer round after the review loops, every ticket: designers propose renames, you accept some or all, one fixer applies them (stage 7, *Naming round*) |
 | Operator gates | stages 3, 6, 8, 9, plus every push |
-| Gate cadence | at the end: every cycle is implemented in turn, then one review loop over their union (stage 7, one cap of 3), then one stage 8 report |
+| Gate cadence | at the end: every cycle is implemented in turn, then the review loop or loops he picked over their union (stage 7, a cap of 3 each), then one stage 8 report |
 | Worktree | his answer at stage 6: the main worktree, or a separate one merged back into it unless he keeps it without a merge-back; `-no-commit` workers either way, and the checkout holding the change ends dirty |
 
 Re-open one of these only when he changes it.
@@ -53,7 +53,7 @@ ticket wins over these defaults on every dispatch it covers, the checkers includ
 | 4 | Plan the chosen option | `plan.md` | — |
 | 5 | Review the plan, max 2 rounds | `plan-review-rN-<lens>.md`, `plan.rN.md` | — |
 | 6 | Implement, in the worktree he picks | the dirty tree | **his worktree choice, before it starts** |
-| 7 | Review the code, max 3 rounds, then the naming round | `code-review-rN-<lens>.md`, `naming-<scope>.md` | — |
+| 7 | Review the code, max 3 rounds per loop he picked, then the naming round | `code-review-rN-<lens>.md`, `code-review-reviewer-rN-<stack>.md`, `naming-<scope>.md` | — |
 | 8 | Report, tree left dirty | — | **his review** |
 | 9 | Refactor or commit | commits | **his word** |
 | 10 | Push, create the MR, move to Review | `mr.md` | **his word on the push** |
@@ -139,10 +139,13 @@ Then ask, in **one** message, everything that applies:
 - whether to create a missing venv, with what building it needs (the repository's section
   in `references/repository-traps.md`); never brief a worker with an interpreter that is
   not there
+- which code review stage 7 runs: the lens loop, the reviewer loop, or both; offer the
+  reviewer loop only when a repository in scope has a reviewer agent (stage 7), and name
+  the repositories it alone would leave unreviewed
 
 The tickets in scope are the ones he handed over plus the subtasks he confirms. Write
-`ticket.md` (verbatim) and `ledger.md`, then move every ticket in scope to **In Progress**
-(see *Ticket status*).
+`ticket.md` (verbatim) and `ledger.md`, his code review choice in it, then move every
+ticket in scope to **In Progress** (see *Ticket status*).
 
 Then cut the work branch in each repository, yourself, before any gatherer reads the code.
 **Always pull first.** Never branch from the local base without pulling, and never from
@@ -299,7 +302,14 @@ in parallel; inside one repository, one writer at a time.
 
 ### 7. Code review
 
-**change-cycle-pipeline**'s narrow loop, cap 3. Each lens carries its prompt verbatim with
+Run the loop or loops he picked at stage 1, each **change-cycle-pipeline**'s narrow loop
+with its own cap of 3 and the checkers below. With both, the lens loop runs first and the
+reviewer loop reviews the tree it left: the lens loop's end, converged or capped, starts the
+reviewer loop directly, the final gate runs once after the naming round, and a capped lens
+loop goes into the stage 8 report. Record each round in `ledger.md` as
+`7: lens round N …` or `7: reviewer round N …`.
+
+**Lens loop.** Each lens carries its prompt verbatim with
 `<X> =` `<run>/plan.md`, `<Y> =` `<run>/code-review-rN-<lens>.md` and `<Z> =` the base
 (left empty, it diffs against a guessed default branch). When a change adds or edits tests, dispatch that stack's
 structure-and-style guard (`python-`, `react-`, `vue-` or `rust-`) beside the lens in every
@@ -333,19 +343,31 @@ A finding whose fix touches a schema, a migration, a public API or a wire format
 pipeline's three-checker panel, majority wins: three checkers instead of one, in the same
 message, each with these lines, its own `<out>` and that finding.
 
+**Reviewer loop.** The lens is the reviewer agent of each stack the change touches
+(`python-code-reviewer`, `vue-code-reviewer`, `react-code-reviewer` or
+`rust-code-reviewer`), all in one message; a stack with none (central-api, central-iam, the
+deploy repo) gets no reviewer in this loop, and the report says so. Each is briefed read-only with the brief
+essentials, `<run>/plan.md`, the locked scope, the base, and its output
+`<run>/code-review-reviewer-rN-<stack>.md`. From round 2 it also gets the earlier rounds'
+reviewer and verdict files, and reports only what they do not name or what a fix did not
+close; with both loops, round 1 gets the lens loop's review and verdict files the same way.
+Its findings go to the same checkers, each writing
+`<run>/code-review-reviewer-rN-verdict-K.md`. A fully covered round with no confirmed
+finding ends the loop.
+
 A red gate is the pipeline's "send a fixer" step, with an investigator first: an issue
 investigator of the matching stack, briefed with the failing test id and the command that
 reproduces it, never your hunch. It runs alone in that tree and leaves `git status --short`
 as it found it. Then the fixer, carrying the investigator's root cause.
 
-With a separate worktree, merge it back when the loop ends, converged or capped, as
+With a separate worktree, merge it back when the last loop ends, converged or capped, as
 `references/separate-worktree.md` describes, before the report. When the main checkout holds
 another ticket, ask him first: he may keep the worktree without a merge-back, recorded in
 `ledger.md`.
 
 **Naming round, every ticket.** The review lenses and their checkers refute naming as style,
 so sloppy names (`_ask_mercurio`, `EffectiveLicensingReader`) survive a converged loop and
-reach his review. Once the loop ends, converged or capped, and after any merge-back, run one
+reach his review. Once the last loop ends, converged or capped, and after any merge-back, run one
 naming round in the checkout holding the change, before the final gate, so the gate certifies
 the renamed tree:
 
@@ -374,7 +396,7 @@ the renamed tree:
    proposal where a shorter or clearer name does the job. A rename marked "needs his word"
    is not yours to accept: it goes to the stage 8 report as a proposal. Record every
    accepted rename, every rejected one and why, in `ledger.md`.
-3. **Apply.** One fixer, in the same mode as the loop's fixer, carrying the final mapping old
+3. **Apply.** One fixer, in the same mode as the loops' fixer, carrying the final mapping old
    → new: a pure rename, no behaviour change, the same test count before and after, every
    import and keyword call site updated, an untracked file renamed with plain `mv`. Its gate
    adds one `git -C <checkout> grep -nw --untracked -- <old name>` per old name, which must

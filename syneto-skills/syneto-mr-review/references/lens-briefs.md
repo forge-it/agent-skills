@@ -13,8 +13,9 @@ preamble, then the lens section. Dispatch all seven in one message.
 | `{STYLE_SKILL}`, `{TEST_SKILL}`, `{ARCHITECTURE_LINE}`, `{REVIEWER_AGENT}` | from the stack table in SKILL.md |
 | `{REPO_FACTS}` | the repo-specific lines below that apply, else nothing |
 
-With no ticket, drop `({TICKET})` and the `Ticket:` line from the preamble, and tell lenses
-01, 05 and 07 to judge against the MR description alone.
+With no ticket, drop `({TICKET})` and the `Ticket:` line from the preamble, drop
+`Ticket: {RUN}/ticket.md.` and `the ticket and` from the checker brief, and tell lenses 01,
+05 and 07 to judge against the MR description alone.
 
 Repo facts worth handing to every lens:
 - Central repos (rest-api, central-api, central-backend): MariaDB reads go through ProxySQL to async replicas, so a read right after a write can be stale.
@@ -119,14 +120,32 @@ YOUR LENS: TICKET CONFORMANCE, MIGRATIONS, AND API CONTRACT.
 3. Contract breaks: removed paths, renamed wire keys, renamed commands or job types (messages queued under the old name at deploy time), consumers in other repositories, and whether the deploy order is safe.
 ```
 
-## Synthesizer — `general-purpose`, after all seven finish
+## 08 · Reviewer passes — `{REVIEWER_AGENT}`, NN `08`, SLUG `reviewer-p{P}`, PREFIX `R{P}`
+
+Only when he asked for them (stage 2b). `{P}` is the pass, 1 to 3. Pass the common preamble,
+then:
+
+```
+YOUR LENS: A FULL REVIEW BY YOUR OWN CHECKLIST, PASS {P} OF 3. Findings already raised are in {RUN}/ledger-0*.md (the seven lenses and the earlier passes), and the earlier passes' verdicts in {RUN}/verdict-p*.md. Read them first, then report only problems none of them names. Never re-raise one a verdict REFUTED.
+```
+
+## Checker — `general-purpose`, `model: "haiku"`, effort `max`, one per pass finding
+
+Fill `{ID}` with the finding's id (`R2-3`) and `{OUT}` with `{RUN}/verdict-p{P}-{N}.md`, N
+its number in the pass, then paste the finding in full below the brief.
+
+```
+You are a skeptic. Below is a claimed problem in GitLab MR !{IID} on {REPO}. Worktree on the MR head: {WT}; always use `git -C {WT}`. The change set is `git -C {WT} diff {BASE} HEAD`. Ticket: {RUN}/ticket.md. Try to REFUTE it against the actual code, the ticket and the neighbouring tests: does the cited code say what the finding claims, and does the problem actually follow? Other checkers are working in this worktree at the same time. READ-ONLY: never edit, stage, commit, or post to GitLab. {VENV_LINE} {REPO_FACTS} A finding about code the MR did not touch is REFUTED, and so is anything you cannot verify. Write to {OUT}: {ID}, the finding's title, the verdict (CONFIRMED or REFUTED), then at most three sentences of evidence with file:line citations.
+```
+
+## Synthesizer — `general-purpose`, after all seven finish, and the reviewer passes when they ran
 
 ```
 You synthesize the per-lens ledgers of GitLab MR !{IID} ({REPO}, {TICKET}) into ONE ledger. READ-ONLY on the code: never edit, stage, or commit in the repository.
 
-Inputs in {RUN}: ledger-01-logic.md … ledger-07-ticket-migration.md, ticket.md, mr-description.md; worktree {WT} on the MR head; base {BASE}. Use `git -C {WT}`.
+Inputs in {RUN}: ledger-01-logic.md … ledger-07-ticket-migration.md, any ledger-08-reviewer-p*.md with its verdict-p*.md files, ticket.md, mr-description.md; worktree {WT} on the MR head; base {BASE}. Use `git -C {WT}`.
 
-1. Read every ledger in full.
+1. Read every ledger in full. A reviewer-pass finding whose verdict file says REFUTED goes straight under "Dropped", with the verdict's reason.
 2. Verify every finding against the code: the cited line exists at the MR head and says what the quote says, and the claim follows from it. Fix wrong line numbers. Drop a finding (list it under "Dropped" with a one-line reason) when it is false, concerns only code the MR did not touch, or the code contradicts it. Add no findings of your own.
 3. Merge duplicates (the same underlying issue from several lenses) into one finding, keeping the highest justified severity and noting which lenses found it. Keep every location of a repeated problem in that one finding.
 4. Re-judge severity honestly. Critical: data loss, security, or broken production behaviour. Important: a real bug, or a contract or maintainability problem that should be fixed before merge. Minor: should be fixed, does not block. Nit: cosmetic.

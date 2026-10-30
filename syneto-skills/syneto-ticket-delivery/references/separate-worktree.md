@@ -56,7 +56,7 @@ and verifier gets the same with "read-only on `<worktree>`" in place of the bloc
 
 ## Merge back
 
-When the code review loop ends, converged or capped. An open finding travels in the
+When the last code review loop he picked ends, converged or capped. An open finding travels in the
 report, not in a worktree. The workers did not commit, so the merge is a patch, applied
 uncommitted to the main worktree's work branch:
 
