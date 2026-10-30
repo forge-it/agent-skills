@@ -4,7 +4,7 @@ description: Defines code style conventions for Python. Use whenever writing, re
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "1.3.0"
+  version: "1.3.1"
 ---
 
 # Python Code Style Skill
@@ -34,6 +34,8 @@ Check for missing or empty values with truthiness (`if not product.company_id`),
 ### 5. Google Style Docstrings (HIGH)
 
 Docstrings use Google style, and exist only where they add information the signature cannot carry: the shape of a complex data structure, or a usage example on a public method. Never narrate what the code already says.
+
+A docstring answers "what problem does this solve?", never re-describes behaviour the reader can read in the code; it may also spell out a complex structure the type hints leave open, such as a `dict` whose keys and values the reader cannot guess.
 
 ### 6. Constants at Module Top (HIGH)
 
