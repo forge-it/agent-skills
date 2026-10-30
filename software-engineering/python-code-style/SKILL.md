@@ -4,7 +4,7 @@ description: Defines code style conventions for Python. Use whenever writing, re
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "1.3.1"
+  version: "1.3.2"
 ---
 
 # Python Code Style Skill
@@ -33,9 +33,24 @@ Check for missing or empty values with truthiness (`if not product.company_id`),
 
 ### 5. Google Style Docstrings (HIGH)
 
-Docstrings use Google style, and exist only where they add information the signature cannot carry: the shape of a complex data structure, or a usage example on a public method. Never narrate what the code already says.
+Docstrings use Google style, and exist only where they add information the signature and the body cannot carry: the shape of a complex data structure, or a usage example on a public method. Never narrate what the code already says.
 
 A docstring answers "what problem does this solve?", never re-describes behaviour the reader can read in the code; it may also spell out a complex structure the type hints leave open, such as a `dict` whose keys and values the reader cannot guess.
+
+```python
+# Wrong: restates the two branches below it
+def read_reply_date(value: Any, reply_path: str) -> datetime | None:
+    """Reads a date of a Central reply: no value or an empty text is no date, a date with no offset is UTC."""
+    if value is None or value == "":
+        return None
+    ...
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+# Right: says why those branches exist, which the code cannot
+def read_reply_date(value: Any, reply_path: str) -> datetime | None:
+    """Central sends dates as ISO text that may be empty or carry no offset while meaning UTC;
+    this yields aware datetimes so they compare safely with `datetime.now(timezone.utc)`."""
+```
 
 ### 6. Constants at Module Top (HIGH)
 
