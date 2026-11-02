@@ -618,13 +618,14 @@ any order first. A ticket moves to **In Code Review** once every repository it c
 open MR. Record each URL in `ledger.md` and `mr.md`. Until then the ticket stays In Progress,
 and the report names the repository still without one.
 
-When the repository has a `.gitlab-ci.yml` on the pushed branch, arm one Monitor per pipeline
-the push started, each reporting jobs as they finish, and send an investigator on the first
-blocking failure. The ids come from
-`glab api "projects/<project path with every / as %2F>/pipelines?sha=<pushed sha>"` (rdnx:
-`projects/remix%2Fnifs%2Frdnx/...`, or its numeric id `605898`), repeated every 15 seconds
-until the list is not empty. After two minutes, tell him no pipeline started. Without a
-`.gitlab-ci.yml`, say in one line that the repository has no CI, and arm nothing.
+When the repository has a `.gitlab-ci.yml` on the pushed branch, watch every pipeline the
+push started with **ci-pipeline-watch**, resolved from the pushed sha (rdnx: project
+`remix%2Fnifs%2Frdnx`, or its numeric id `605898`). Without a `.gitlab-ci.yml`, say in one
+line that the repository has no CI, and arm nothing.
+
+glab's default host on this machine is gitlab.com, where every Roche project is a 404. Prefix
+each `glab api` call and the Monitor command with `GITLAB_HOST=code.roche.com`:
+`GITLAB_HOST=code.roche.com uv run --quiet --no-project ~/.claude/skills/ci-pipeline-watch/scripts/ci_watch.py gitlab remix/nifs/rdnx <pipeline-id>`.
 
 ### 11. Merged — post-merge status
 
