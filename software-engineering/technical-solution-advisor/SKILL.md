@@ -16,8 +16,9 @@ solution is optimal here, based on the evidence available. The verdict may adopt
 alternative, reject them all for a better one nobody proposed, or recommend from scratch when
 none were given.
 
-This skill reads files and runs non-mutating commands. It edits no file and writes no ticket,
-comment or ADR unless asked; the verdict is chat output.
+This skill reads files, runs non-mutating commands and may dispatch read-only explorers
+(Step 2). It edits no file and writes no ticket, comment or ADR unless asked; the verdict is
+chat output.
 
 Every verdict answers these questions:
 
@@ -71,6 +72,11 @@ a claim to check. Every claim the verdict rests on gets one label:
 - **verified**: read in the source or produced by a command, cited by file and line or output
 - **reported**: someone says so (the ticket, a reviewer, a summary) and it was not checked
 - **assumed**: inferred, not observed
+
+When the evidence spans many files, modules or repositories, dispatch read-only explorers (the
+Explore agent) on Sonnet 5.5 at `xhigh` effort, in parallel in one message: one question each,
+with the paths worth reading and a request for file-and-line citations. Their answers are
+reported until you spot-check the citations a pick rests on; then they are verified.
 
 Check a load-bearing claim that is only reported or assumed when the check is cheap (one file
 read, one command, one API call). When it is expensive: if the unknown separates the options, the
