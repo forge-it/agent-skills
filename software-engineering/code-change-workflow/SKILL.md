@@ -50,7 +50,7 @@ Pause before changing:
 
 When asking, present the smallest useful set of options with trade-offs and recommend one if the evidence supports it.
 
-If the decision opens into a genuine design conversation — multiple viable architectures, contested trade-offs, unstated deployment or scale context — switch to the technical-design-discussions skill, lock the decision there, then resume this workflow.
+If the decision opens into a genuine design conversation — multiple viable architectures, contested trade-offs, unstated deployment or scale context — switch to the technical-design-discussions skill, lock the decision there, then resume this workflow. One decision that needs a single verdict goes to technical-solution-advisor instead.
 
 ### Make Assumptions Explicit
 
