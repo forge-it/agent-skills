@@ -519,8 +519,6 @@ the order to read it:
 Review <repository name> in <absolute path of the checkout holding the change>
   <main worktree | linked worktree>, branch <branch>, against <base>
 
-Worth a close look
-  - <path:line> — <why, in a few words>
 Tests that pin it
   - <path:line> — <the behaviour the test proves, and the case it would miss, if any>
 Skim: mechanical or docs-only
@@ -531,9 +529,6 @@ Your call
   - <path:line> — <a decision the agents could not make, or a trade-off they took>
 ```
 
-- *Worth a close look* is short: at most three entries, one line each, for the spots where a
-  mistake would be easiest to miss or costliest to ship. The line is the hunk's, not the
-  file's top. A change with no such spot leaves the section out.
 - *Skim* puts files that changed the same way on one line. Mark a new file `(new)`.
 - *Naming proposals* lists every proposal you kept, grouped by crate, the recommended option
   first, with "needs his word" where the designer marked it. The full proposals are in
