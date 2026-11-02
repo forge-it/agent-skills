@@ -79,8 +79,9 @@ orchestrator's Docker session (SKILL.md, *Working rules*): one session at a time
   `libdnf5-adapter/tests/fixtures/generated/`) are git-ignored too, and the `*-fixtures`
   recipes rebuild them. A case that cannot run here goes into the stage 8 report as not
   run, never as passed.
-- **CI:** none yet: there is no `.gitlab-ci.yml`, and NIFS-13632 tracks the pipeline. Until
-  it lands, the local gate is the only check, and stage 8 must say it ran.
+- **CI:** `main` carries `.gitlab-ci.yml` since NIFS-13632 merged (2026-10-29, `de239ca`). A
+  branch cut from an older base has none until it takes `main` in, and then the local gate is
+  the only check: stage 8 says which applies and that the gate ran.
 - **Traps:** `docs/agents/` and `docs/handoffs/` are git-ignored orchestration artefacts:
   nothing a ticket delivers goes there. The README and `docs/` describe the service, so
   every change to behaviour or to the socket API is a docs change too.
