@@ -1,7 +1,7 @@
 # Lens and synthesizer briefs
 
 Fill the `{PLACEHOLDERS}` from `meta.json` and pass each brief whole: the common
-preamble, then the lens section. Dispatch all seven in one message.
+preamble, then the lens section. Dispatch all eight in one message.
 
 | Placeholder | Value |
 |---|---|
@@ -79,13 +79,25 @@ YOUR LENS: SINGLE RESPONSIBILITY of every new or changed module, class, and func
 Explain every design term in plain words the first time you use it: the reader treats unexplained "cohesion", "seam", or "layer inversion" as noise.
 ```
 
-## 04 · Style, naming, constants — `general-purpose`, NN `04`, SLUG `style-naming`, PREFIX `N04`
+## 04 · Style, nesting, constants — `general-purpose`, NN `04`, SLUG `style-constants`, PREFIX `N04`
 
 ```
-YOUR LENS: load the {STYLE_SKILL} skill and apply it to new and changed lines, production and test code. Concentrate on:
+YOUR LENS: load the {STYLE_SKILL} skill and apply it to new and changed lines, production and test code. Names belong to another lens: do not report them. Concentrate on:
 1. Inline string and number literals that should be named constants or enums: status and kind strings compared or written raw, repeated error messages and codes, route fragments, limits, magic numbers. Check whether an enum that the code should use already exists.
-2. Naming: leftovers of a rename that the MR started (old words on code that now means something new, or the reverse), names that lie about what the code does, vague names (data, info, handle, process), booleans not phrased as predicates, sibling modules or classes named inconsistently.
+2. Nesting that makes code hard to read. Count the blocks (if, for, while, with, try, match, a nested function or comprehension) around each new or changed line inside its function body. Three levels or more is a finding; so is an `else` after a branch that returns, raises, continues, or breaks, a happy path pushed to the right under a stack of checks, and a nested conditional expression. Give the flattened shape in the fix: guard clauses that return or raise early, `continue` at the top of a loop, a condition inverted or combined, or the inner block moved into a function named for what it does. Behaviour must stay the same, so say which branch each early exit replaces. Quote the function's first line and the deepest line, and give the depth.
 3. The skill's other rules.
+```
+
+## 08 · Naming — `general-purpose`, NN `08`, SLUG `naming`, PREFIX `C08`
+
+```
+YOUR LENS: NAMES. A name should tell the reader at the call site what a thing is for, without opening its definition; readable code starts there. Read the whole naming guide first, /home/cristi/Projects/agent-skills/syneto-skills/syneto-ticket-delivery/references/naming-guide.md, and judge by it: its team rules T1-T7, its principles P1-P6, and its casing, boolean, Python and python-ddd, test and other-stack sections. It is written for a naming round inside ticket delivery; in this review it reads as follows:
+- Judge every name the MR adds or renames: modules, packages, classes, functions, methods, parameters, attributes, locals, loop and lambda variables, constants, enum members, fixtures, builders, test names. A name the MR only uses, without introducing it, is out of scope.
+- Its "Names you do not propose to change" list covers names that already existed. A wire or stored name the MR itself introduces (a new column, JSON field, error code, job or event name, command or schema class) is judged like any other, and the entry says it is a wire or stored name: renaming it before merge is cheap, after deploy it is a migration or a contract break. "Needs his word" and "the orchestrator" do not apply here; the reviewer decides.
+- Grep the repository at the MR head for the same concept before proposing a name (T5): the name the codebase already uses wins over a better word.
+- Also flag leftovers of a rename the MR started (old words on code that now means something new, or the reverse), and two names for one concept or one name for two concepts within the change.
+- Names only: do not propose moving code, splitting classes, or new types. That belongs to other lenses.
+Cite the rule in every entry (T2, P1, PEP8). In the Recommended fix give the new name, and when it is longer than the current one, the shorter option it beats (T6). Severity: a name that lies about what the code does or hides a side effect (T3) is Important; a new wire or stored name that breaks T5 is Important; the rest is Minor, and casing alone is a Nit.
 ```
 
 ## 05 · Tests — `general-purpose`, NN `05`, SLUG `tests`, PREFIX `T05`
@@ -120,13 +132,13 @@ YOUR LENS: TICKET CONFORMANCE, MIGRATIONS, AND API CONTRACT.
 3. Contract breaks: removed paths, renamed wire keys, renamed commands or job types (messages queued under the old name at deploy time), consumers in other repositories, and whether the deploy order is safe.
 ```
 
-## 08 · Reviewer passes — `{REVIEWER_AGENT}`, NN `08`, SLUG `reviewer-p{P}`, PREFIX `R{P}`
+## 09 · Reviewer passes — `{REVIEWER_AGENT}`, NN `09`, SLUG `reviewer-p{P}`, PREFIX `R{P}`
 
 Only when he asked for them (stage 2b). `{P}` is the pass, 1 to 3. Pass the common preamble,
 then:
 
 ```
-YOUR LENS: A FULL REVIEW BY YOUR OWN CHECKLIST, PASS {P} OF 3. Findings already raised are in {RUN}/ledger-0*.md (the seven lenses and the earlier passes), and the earlier passes' verdicts in {RUN}/verdict-p*.md. Read them first, then report only problems none of them names. Never re-raise one a verdict REFUTED.
+YOUR LENS: A FULL REVIEW BY YOUR OWN CHECKLIST, PASS {P} OF 3. Findings already raised are in {RUN}/ledger-0*.md (the eight lenses and the earlier passes), and the earlier passes' verdicts in {RUN}/verdict-p*.md. Read them first, then report only problems none of them names. Never re-raise one a verdict REFUTED.
 ```
 
 ## Checker — `general-purpose`, `model: "haiku"`, effort `max`, one per pass finding
@@ -138,12 +150,12 @@ its number in the pass, then paste the finding in full below the brief.
 You are a skeptic. Below is a claimed problem in GitLab MR !{IID} on {REPO}. Worktree on the MR head: {WT}; always use `git -C {WT}`. The change set is `git -C {WT} diff {BASE} HEAD`. Ticket: {RUN}/ticket.md. Try to REFUTE it against the actual code, the ticket and the neighbouring tests: does the cited code say what the finding claims, and does the problem actually follow? Other checkers are working in this worktree at the same time. READ-ONLY: never edit, stage, commit, or post to GitLab. {VENV_LINE} {REPO_FACTS} A finding about code the MR did not touch is REFUTED, and so is anything you cannot verify. Write to {OUT}: {ID}, the finding's title, the verdict (CONFIRMED or REFUTED), then at most three sentences of evidence with file:line citations.
 ```
 
-## Synthesizer — `general-purpose`, after all seven finish, and the reviewer passes when they ran
+## Synthesizer — `general-purpose`, after all eight finish, and the reviewer passes when they ran
 
 ```
 You synthesize the per-lens ledgers of GitLab MR !{IID} ({REPO}, {TICKET}) into ONE ledger. READ-ONLY on the code: never edit, stage, or commit in the repository.
 
-Inputs in {RUN}: ledger-01-logic.md … ledger-07-ticket-migration.md, any ledger-08-reviewer-p*.md with its verdict-p*.md files, ticket.md, mr-description.md; worktree {WT} on the MR head; base {BASE}. Use `git -C {WT}`.
+Inputs in {RUN}: ledger-01-logic.md … ledger-08-naming.md, any ledger-09-reviewer-p*.md with its verdict-p*.md files, ticket.md, mr-description.md; worktree {WT} on the MR head; base {BASE}. Use `git -C {WT}`.
 
 1. Read every ledger in full. A reviewer-pass finding whose verdict file says REFUTED goes straight under "Dropped", with the verdict's reason.
 2. Verify every finding against the code: the cited line exists at the MR head and says what the quote says, and the claim follows from it. Fix wrong line numbers. Drop a finding (list it under "Dropped" with a one-line reason) when it is false, concerns only code the MR did not touch, or the code contradicts it. Add no findings of your own.
@@ -162,7 +174,7 @@ Headline: counts by severity, the lenses that ran, and whether tests were execut
 Then every finding in exactly this shape:
 
 ### Finding N — <Critical|Important|Minor|Nit> — <the problem in one short line>
-**Category:** exactly one of logic, performance, SRP, DDD, naming, constants/enums, style, tests, docs, ticket/contract, migration, security
+**Category:** exactly one of logic, performance, SRP, DDD, naming, constants/enums, nesting, style, tests, docs, ticket/contract, migration, security
 **Where:** `path:LINE` — `quoted source line` (plus any other locations)
 **Anchor:** `path:LINE`, the MR-head line the review note should sit on. Any line of any file will do: the posting script puts a line of a changed file inline (changed or not) and turns a line of an untouched file into a general note that names it, so never hedge toward a "nearest changed line". Write `general` only when no source line fits (the MR description, the ticket).
 **Found by:** <lenses>

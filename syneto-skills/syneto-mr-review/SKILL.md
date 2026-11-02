@@ -4,7 +4,7 @@ description: Use when the operator asks to review a GitLab merge request on gitl
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.1.1"
+  version: "0.2.0"
 ---
 
 # Syneto MR Review
@@ -29,8 +29,8 @@ three gates below and the stage 1 question are the only stops.
 | # | Stage | Writes | Gate |
 |---|---|---|---|
 | 1 | Set up the run | `~/.cache/mr-review/<repo>-<iid>/` | — |
-| 2 | Review fleet: seven Sonnet lenses in parallel | `ledger-NN-*.md` | — |
-| 2b | Reviewer passes, when he asked for them at stage 1: three in a row | `ledger-08-reviewer-pP.md`, `verdict-pP-N.md` | — |
+| 2 | Review fleet: eight Sonnet lenses in parallel | `ledger-NN-*.md` | — |
+| 2b | Reviewer passes, when he asked for them at stage 1: three in a row | `ledger-09-reviewer-pP.md`, `verdict-pP-N.md` | — |
 | 3 | Synthesize, then verify every Critical and Important yourself | `ledger-synthesized.md` | — |
 | 4 | Present the ledger | — | **his picks** |
 | 5 | Post the picked findings as review notes | `notes/`, `posted.json` | — |
@@ -68,7 +68,7 @@ live there and nowhere else. With no ticket key, ask him for the spec; with none
 
 ### 2. Review fleet
 
-Dispatch the seven lenses in `references/lens-briefs.md` in one message. Between them they
+Dispatch the eight lenses in `references/lens-briefs.md` in one message. Between them they
 cover his hunt list, and their shared preamble carries his scope rule: **new or changed code
 only**, never pre-existing code. A finding that breaks that rule is dropped in stage 3.
 
@@ -81,7 +81,7 @@ the briefs say so, and so does everything you present.
 
 ### 2b. Reviewer passes
 
-Only when he asked for them. Once all seven ledgers exist, run three passes in a row, P = 1,
+Only when he asked for them. Once all eight ledgers exist, run three passes in a row, P = 1,
 2, 3, each with the pass and checker briefs in `references/lens-briefs.md`. A pass is one
 `{REVIEWER_AGENT}` hunting only what no earlier ledger or pass names; then one checker per
 finding of that pass, all in one message, `model: "haiku"`, effort `max`. The next pass starts
@@ -89,7 +89,7 @@ once every checker of the previous one has written its verdict.
 
 ### 3. Synthesize and verify
 
-Once all seven ledgers exist, and the three reviewer passes with their verdicts when he
+Once all eight ledgers exist, and the three reviewer passes with their verdicts when he
 asked for them, dispatch the synthesizer brief. Then read the cited lines of
 every Critical and Important finding yourself: the fleet is cheap, and a false positive posted
 on a colleague's MR costs him credibility.
