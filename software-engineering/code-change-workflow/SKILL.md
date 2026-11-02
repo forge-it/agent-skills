@@ -1,6 +1,6 @@
 ---
 name: code-change-workflow
-description: "Execution discipline for tasks whose deliverable is an edit to an existing codebase — implementing a feature, fixing a bug or failing test, refactoring, or debugging with intent to fix. Use when about to write or modify code. Do NOT use when no files will change: assessing a plan or spec, weighing architectures, or answering questions about code is technical-design-discussions."
+description: "Execution discipline for tasks whose deliverable is an edit to an existing codebase — implementing a feature, fixing a bug or failing test, refactoring, or debugging with intent to fix. Use when about to write or modify code. Do NOT use when no files will change: assessing a plan or spec, weighing architectures, or answering questions about code is technical-design-discussions; a verdict on how to solve one ticket, bug or decision before any edit is technical-solution-advisor."
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
