@@ -596,17 +596,24 @@ its title, the description, and, once created, its URL.
   risk, and the ticket link (`https://navify.atlassian.net/browse/<KEY>`). When the ledger
   records a merge order, state it and why, in the same words in every MR of the ticket. It
   ends with the attribution line the session's reminder gives for pull request descriptions.
-- **the merge request:** create it yourself, targeting the base explicitly:
-  `glab mr create -R <group>/<repo> --source-branch <branch> --target-branch <base> --title "<title>" --description "$(cat <run>/mr-<repo>.md)" --squash-before-merge=true --yes`.
+- **the merge request:** create it yourself, targeting the base explicitly, with him as the
+  assignee and the same three reviewers, on every MR:
+  `glab mr create -R <group>/<repo> --source-branch <branch> --target-branch <base> --title "<title>" --description "$(cat <run>/mr-<repo>.md)" --squash-before-merge=true --assignee ciorteac --reviewer bercova1,solyoms,szabob2 --yes`.
+  `ciorteac` is him; the reviewers are Adrian Bercovici (`bercova1`), Sandor Zsolt Solyom
+  (`solyoms`) and Botond Szabo (`szabob2`).
   Read it back with `glab mr view <branch> -R <group>/<repo> -F json`: `target_branch` must
-  be `<base>`, `state` must be `opened` and `squash` must be `true`. Hand him its `web_url`.
+  be `<base>`, `state` must be `opened`, `squash` must be `true`, `assignees` must hold
+  `ciorteac` and `reviewers` must hold all three. Add any that is missing with
+  `glab mr update <branch> -R <group>/<repo> --assignee +ciorteac --reviewer +<username>`,
+  one `--reviewer` per missing reviewer, and read it back again. Hand him its `web_url`.
   When creation errors, check with `glab mr list -R <group>/<repo> --source-branch <branch>`
   before retrying: an
   error does not prove no MR was created. When an MR already exists for the branch (a
-  follow-up push), do not create another: hand over its `web_url`. Only when creation still
-  fails, hand him the form link
-  `https://code.roche.com/<group>/<repo>/-/merge_requests/new?merge_request%5Bsource_branch%5D=<branch>&merge_request%5Btarget_branch%5D=<base>`
-  and say why.
+  follow-up push), do not create another: run the same read-back on it, add any missing
+  assignee or reviewer, and hand over its `web_url`. Only when creation still fails, hand
+  him the form link
+  `https://code.roche.com/<group>/<repo>/-/merge_requests/new?merge_request%5Bsource_branch%5D=<branch>&merge_request%5Btarget_branch%5D=<base>`,
+  say why, and name the assignee and the three reviewers to set in the form.
 
 `<group>/<repo>` comes from `git -C <repo> remote get-url origin`. Hand him the MR URLs, with
 any order first. A ticket moves to **In Code Review** once every repository it covers has an
