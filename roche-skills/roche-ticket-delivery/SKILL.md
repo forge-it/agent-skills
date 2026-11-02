@@ -73,7 +73,7 @@ enforces. Run the gate as the worker's brief says.
 
 | # | Stage | Writes | Gate |
 |---|---|---|---|
-| 1 | Read the tickets, cut the branches, move them to In Progress | `ticket.md`, `ledger.md` | — |
+| 1 | Read the tickets, cut the branches, move them to In Progress and assign them to him | `ticket.md`, `ledger.md` | — |
 | 2 | Gather context, read-only | `context-NN-<topic>.md` | — |
 | 3 | Three options and a recommendation | `options.md` | **his choice** |
 | 4 | Plan the chosen option | `plan.md` | — |
@@ -241,8 +241,8 @@ continue on an existing remote branch, check it out with `--track` and pull it, 
 the `checkout -b`. Use the same branch name in every repository.
 
 Once the work branch is cut in every repository in scope, move every ticket in scope to
-**In Progress** (see *Ticket status*). While a repository stops on its status or its pull,
-the tickets stay where they are.
+**In Progress** and assign it to him (see *Ticket status*, *Assignee*). While a repository
+stops on its status or its pull, the tickets stay where they are.
 
 When the status is not empty, the pull refuses to fast-forward, or `rev-list` prints
 anything but `0` and `0`, stop and tell him. Never
@@ -696,7 +696,7 @@ missing.
 
 | When | Move to |
 |---|---|
-| Stage 1, once the work branch is cut in every repository in scope | In Progress |
+| Stage 1, once the work branch is cut in every repository in scope | In Progress, assigned to him |
 | Stage 10, every repository the ticket covers has an open MR | In Code Review |
 | Stage 11, every one of those MRs is merged | the post-merge status in `ledger.md` |
 
@@ -725,6 +725,22 @@ back after every move.
   past In Testing Dev.
 - Every Jira body (comment, description edit) is GitHub-flavoured Markdown with
   `contentFormat: "markdown"`, never wiki markup.
+
+### Assignee
+
+Every ticket moved to In Progress at stage 1 is assigned to him, the operator. Tickets often
+reach him unassigned, so never assume it is done.
+
+1. Get his `accountId` once per run with `atlassianUserInfo` and record it in `ledger.md`.
+2. Right after the In Progress move, read the ticket's `assignee`.
+3. Unassigned → set it with `editJiraIssue`, `fields: {"assignee": {"accountId": "<his id>"}}`.
+   Already him → leave it.
+4. Assigned to someone else → stop and ask him before reassigning; never take a colleague's
+   ticket on your own.
+5. Read the assignee back and record it in `ledger.md` next to the status.
+
+Do this for every ticket in scope, subtasks included. A parent outside the run's scope keeps
+its assignee. A ticket already at In Progress still gets steps 2–5.
 
 ## Brief essentials
 
