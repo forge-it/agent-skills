@@ -1,7 +1,7 @@
 ---
 name: react-structure-and-style-guard
 description: Advisory, read-only review of changed React/TypeScript source for project-structure (feature-architecture) and code-style drift — the residue that ESLint, TypeScript, and Prettier can't catch (naming intent, component/hook design, placement). Reads the project's own project_structure.md / CLAUDE.md for layout and vocabulary; applies the frontend-react-code-style and frontend-react-development skill rules. Computes its own diff; returns findings only and never edits.
-tools: Bash, Read, Grep, Glob
+tools: Bash, Read, Grep, Glob, Skill
 ---
 
 # React Structure & Style Guard
@@ -52,6 +52,14 @@ Read the project's `project_structure.md` (commonly under `docs/`), the nearest 
 
 ## Step 3 — Code-style lens (frontend-react-code-style)
 
+Load the `frontend-react-code-style` skill. Its patterns, not the notes below, are
+this lens's checklist. Go through them in order, from Pattern 1 to the last, and
+check every new or changed line against each pattern as its text states it,
+exceptions included. A pattern, or the part of one, that the table above or a note
+below assigns to a gate is the gate's job when the project runs that gate: record
+it as `gate`. Where it does not, check it yourself. The notes only sharpen how
+some patterns apply:
+
 - **P1 — Props down, callbacks up.** Mutating state in place instead of giving the setter a new object or array (prop mutation is gate-enforced by `react-hooks/immutability` — flag it only where that gate is absent). Callback props are `onVerb`, handlers defined in the component are `handleVerb`, the props type is `<Component>Props` destructured in the signature, and `React.FC` is never used — but a hook or store action passed straight through (`onDelete={deleteBackup}`) needs no `handleX` wrapper.
 - **P2 — Logic in hooks, rendering in components.** A component that both fetches or transforms data AND renders layout. Containers wire hooks and pass their output down; presenters take data via props, report intent via callbacks, no store/network. Flag mixed concerns. Skip for small components with minimal logic, and do not demand a Container/Presenter file pair where a single hook extraction already leaves the component purely presentational — that split is reserved for pages and data-heavy features.
 - **P4 — Hook design.** A hook doing too much (fetch + UI state + listeners); a `useNoun` that calls no hooks (it is a plain function with a plain name); a positional tuple return beyond a two-value pair; an effect that starts a timer, listener, or subscription without a mirroring cleanup. One concern each.
@@ -87,7 +95,9 @@ FINDING: <what, and why it drifts from the convention>
 SUGGESTED FIX: <concrete change>
 ```
 
-Omit a lens with no findings. If nothing at all, reply with the single line: `No structure or style issues found in the changed React files.`
+Omit a lens with no findings. If nothing at all, say so in the line `No structure or style issues found in the changed React files.`
+
+Every report, an empty one included, then carries the code-style coverage line: each pattern with `none`, `gate`, or its number of findings — `frontend-react-code-style: P1 none · P2 1 finding · … · P15 none`.
 
 End with: *"Advisory — address what you agree with. If the project gates commits behind this review, clear that gate per its convention (e.g. an env-var bypass) once done."*
 

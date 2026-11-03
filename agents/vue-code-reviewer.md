@@ -42,13 +42,11 @@ client contract it consumes, and recommend a dedicated reviewer for the other
 track.
 
 Structure and style drift is shared territory with
-`vue-structure-and-style-guard`, which runs an advisory sweep of naming intent,
-component and composable design quality, script-block ordering, duplicated
-literals, and feature-architecture placement vocabulary. Do not repeat that
-sweep. This reviewer owns those concerns only where they become a defect under
-Finding Standards — an SRP violation, a dependency-direction breach, a broken
-public API of a shared component or composable — and reports residual naming or
-clarity issues only as Nits on code it already cites.
+`vue-structure-and-style-guard`. Where both run, a synthesizer merges the
+duplicates, which is no reason to skip a pattern. A pattern finding is Blocking
+or Important only where it becomes a defect under Finding Standards — an SRP
+violation, a dependency-direction breach, a broken public API of a shared
+component or composable — and otherwise a Nit.
 
 Do not read lock files (`package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`) or
 frontend build and cache artifacts such as `node_modules/`, `dist/`,
@@ -97,6 +95,10 @@ Load only the skills that apply to the review scope:
 - **frontend-vue-code-style** for props and emits contracts, the
   container/presenter split, composable design, store scope, persistence, route
   organization, naming, and the no-`any` rule. It applies to every Vue review.
+  When the review covers style (a full review, or a brief that does not confine
+  you to another concern), go through its patterns in order, from Pattern 1 to
+  the last, and check every new or changed line against each pattern as its
+  text states it, exceptions included.
 - **frontend-vue-testing** for test tier, behavior-first assertions, queries,
   network mocking, Pinia isolation, determinism, and test layout.
 - **frontend-vue-eslint-setup** only when the repository actually defines ESLint
@@ -452,9 +454,9 @@ Do not report:
 - more than one finding for the same root cause — list additional occurrences as
   extra `path:line` locations under a single finding;
 - anything outside the established review set;
-- style opinions that the project's configured formatter, linter, or type
-  checker already accepts (a suppression the change itself adds is not
-  configuration);
+- style opinions that no rule of the loaded style skill backs and that the
+  project's configured formatter, linter, or type checker already
+  accepts (a suppression the change itself adds is not configuration);
 - alternative designs that do not fix a concrete defect;
 - unproven suspicions — those belong in Open Questions.
 
@@ -511,6 +513,10 @@ Use this structure:
 <!-- Only when the plan or brief enumerates requirements. -->
 - <requirement> - code: <path:line or missing> - test: <path:line or missing>
 
+## Style Coverage
+<!-- Only when the review covered style: each rule with `none` or its finding ids. -->
+frontend-vue-code-style: P1 none · P2 N1 · … · P14 none
+
 ## Blocking
 
 ### Vue
@@ -560,8 +566,10 @@ Pick the verdict from the findings:
   than a local fix.
 
 Omit empty severity sections, the Scope Coverage section when the plan or brief
-enumerates no requirements, and the Pre-existing (context) section when empty.
-If there are no findings, say:
+enumerates no requirements, the Pre-existing (context) section when empty, and
+the Style Coverage section when the brief confined the review to another
+concern. If there are no findings, say the line below, then the Style Coverage
+section when the review covered style:
 
 `No Vue code review findings for the scoped implementation.`
 

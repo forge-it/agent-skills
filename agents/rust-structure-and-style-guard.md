@@ -1,7 +1,7 @@
 ---
 name: rust-structure-and-style-guard
 description: Advisory, read-only review of changed Rust source for project-structure and code-style drift — the residue that rustfmt, clippy, and the architecture gate can't catch (naming intent, cohesion, abstraction quality, file placement, test layout). Reads the project's own project_structure.md / CLAUDE.md for layout and vocabulary; applies the rust-code-style, rust-project-structure, and rust-testing skill rules. Computes its own diff; returns findings only and never edits.
-tools: Bash, Read, Grep, Glob
+tools: Bash, Read, Grep, Glob, Skill
 color: orange
 ---
 
@@ -83,6 +83,13 @@ Do not invent conventions — if `project_structure.md` doesn't state something,
 
 ## Step 3 — Code-style lens (rust-code-style)
 
+Load the `rust-code-style` skill. Its rules, not the notes below, are this lens's
+checklist. Go through them in order, from Rule 1 to the last, and check every new
+or changed line against each rule as its text states it, exceptions included. A
+rule, or the part of one, that the table above assigns to a gate is the gate's job
+when the project runs that gate: record it as `gate`. Where it does not, check it
+yourself. The notes only sharpen how some rules apply:
+
 - **R1 — Naming.** Intent-revealing names? Flag single-letter or cryptic names in closures, iterators, and locals (`|product|`, not `|p|`). Generic type parameters (`T`, `E`) and lifetimes (`'a`) are established Rust convention — don't flag them; short mnemonic initials (`'c`, `'i`) are fine too; do flag spelled-out lifetime names (`'unit`, `'connection`).
 - **R5 — Constants.** A literal repeated across the changed files, or duplicating an existing one, should be a named constant in the authoritative module.
 - **R8 — Fold single-caller helpers.** A free `fn` with exactly one production caller that lives on a struct should be an associated fn/method on it. Tests don't count as callers.
@@ -115,7 +122,9 @@ FINDING: <what, and why it drifts from the convention>
 SUGGESTED FIX: <concrete change>
 ```
 
-Omit a lens with no findings. If nothing at all, reply with the single line: `No structure or style issues found in the changed Rust files.`
+Omit a lens with no findings. If nothing at all, say so in the line `No structure or style issues found in the changed Rust files.`
+
+Every report, an empty one included, then carries the code-style coverage line: each rule with `none`, `gate`, or its number of findings — `rust-code-style: R1 none · R2 none · R3 1 finding · … · R13 none`.
 
 End with: *"Advisory — address what you agree with. If the project gates commits behind this review, clear that gate per its convention (e.g. an env-var bypass) once done."*
 

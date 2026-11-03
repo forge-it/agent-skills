@@ -1,7 +1,7 @@
 ---
 name: vue-structure-and-style-guard
 description: Advisory, read-only review of changed Vue/TypeScript source for project-structure (feature-architecture) and code-style drift — the residue that ESLint, vue-tsc, and Prettier can't catch (naming intent, component/composable design, placement). Reads the project's own project_structure.md / CLAUDE.md for layout and vocabulary; applies the frontend-vue-code-style and frontend-vue-development skill rules. Computes its own diff; returns findings only and never edits.
-tools: Bash, Read, Grep, Glob
+tools: Bash, Read, Grep, Glob, Skill
 ---
 
 # Vue Structure & Style Guard
@@ -47,9 +47,17 @@ Read the project's `project_structure.md` (commonly under `docs/`), the nearest 
 
 ## Step 3 — Code-style lens (frontend-vue-code-style)
 
+Load the `frontend-vue-code-style` skill. Its patterns, not the notes below, are
+this lens's checklist. Go through them in order, from Pattern 1 to the last, and
+check every new or changed line against each pattern as its text states it,
+exceptions included. A pattern, or the part of one, that the table above assigns
+to a gate is the gate's job when the project runs that gate: record it as
+`gate`. Where it does not, check it yourself. The notes only sharpen how some
+patterns apply:
+
 - **P1 — Props down, emits up.** Mutating a prop directly? Emitting to a sibling instead of via a shared parent/store?
 - **P2 — Container / presenter split.** A component that both manages data AND handles layout. Containers own data/store/lifecycle; presenters take data via props, emit intent, no store/network. Flag mixed concerns.
-- **P4 — Composable design.** A composable doing too much (fetch + UI state + listeners), or a no-arg global-singleton that should be parameterised. One concern each.
+- **P4 — Composable design.** A composable doing too much (fetch + UI state + listeners). One concern each.
 - **P6 — Descriptive naming.** No single-letter or abbreviated variables, refs, parameters, callback parameters, or handlers (`event` not `e`, `backup` not `b`); the collection is the plural form and the loop or callback variable is its singular.
 - **P9 — No duplicate literals.** A route name, event name, store key, or API path repeated across the changes → a named constant in an authoritative module.
 - **P11 — Script-block order.** imports → `defineProps`/`defineEmits`/`defineModel` → composables/stores → `ref`/`reactive` → `computed` → `watch` → functions/handlers → lifecycle. Flag significant disorder.
@@ -76,7 +84,9 @@ FINDING: <what, and why it drifts from the convention>
 SUGGESTED FIX: <concrete change>
 ```
 
-Omit a lens with no findings. If nothing at all, reply with the single line: `No structure or style issues found in the changed Vue files.`
+Omit a lens with no findings. If nothing at all, say so in the line `No structure or style issues found in the changed Vue files.`
+
+Every report, an empty one included, then carries the code-style coverage line: each pattern with `none`, `gate`, or its number of findings — `frontend-vue-code-style: P1 none · P2 1 finding · … · P14 none`.
 
 End with: *"Advisory — address what you agree with. If the project gates commits behind this review, clear that gate per its convention (e.g. an env-var bypass) once done."*
 

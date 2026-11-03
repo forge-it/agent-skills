@@ -39,13 +39,11 @@ or its typed client boundary, and recommend a dedicated reviewer for the other
 track.
 
 Structure and style drift is shared territory with
-`react-structure-and-style-guard`, which runs an advisory sweep of naming
-intent, component and hook design quality, component body ordering, duplicated
-literals, and feature-architecture placement vocabulary. Do not repeat that
-sweep. This reviewer owns those concerns only where they become a defect under
-Finding Standards — an SRP violation, a dependency-direction breach, a broken
-public API of a shared component or hook — and reports residual naming or
-clarity issues only as Nits on code it already cites.
+`react-structure-and-style-guard`. Where both run, a synthesizer merges the
+duplicates, which is no reason to skip a pattern. A pattern finding is Blocking
+or Important only where it becomes a defect under Finding Standards — an SRP
+violation, a dependency-direction breach, a broken public API of a shared
+component or hook — and otherwise a Nit.
 
 Do not read lock files (`package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`,
 `bun.lock`, `bun.lockb`) or build and cache artifacts such as `node_modules/`,
@@ -106,7 +104,11 @@ only when they apply to the review scope:
   server-state rules the skill assumes Zustand and TanStack Query; on a project
   using Redux Toolkit, Context, or SWR, judge the library-neutral invariant
   instead — server data is never copied into client state, persisted fields are
-  allowlisted and versioned, and subscriptions stay narrow.
+  allowlisted and versioned, and subscriptions stay narrow. When the review
+  covers style (a full review, or a brief that does not confine you to another
+  concern), go through its patterns in order, from Pattern 1 to the last, and
+  check every new or changed line against each pattern as its text states it,
+  exceptions included.
 - **frontend-react-testing** for test level, query priority, network mocking,
   store and query isolation, routing and accessibility tests, and deterministic
   asynchrony.
@@ -442,8 +444,7 @@ Check these dimensions when relevant to the scoped implementation:
   PascalCase, hooks are `useX`, boolean state reads as a question. Public props,
   hook return values, store state, and API payloads are typed explicitly. A
   literal repeated across the change is a named constant in the module that owns
-  the concept — raise that only as a Nit on code you already cite, since the
-  guard owns the sweep. Helpers live at the right level.
+  the concept (Pattern 9). Helpers live at the right level.
 - **Dead code and drift.** Flag stale references, unused new components, hooks,
   exports, or abstractions, duplicate paths, orphan tests, broken imports,
   uncalled code, hand edits to machine-owned files, and generated contract drift
@@ -515,9 +516,9 @@ Do not report:
 - more than one finding for the same root cause — list additional occurrences as
   extra `path:line` locations under a single finding;
 - anything outside the established review set;
-- style opinions that the project's configured formatter, linter, or type
-  checker already accepts (a suppression the change itself adds is not
-  configuration);
+- style opinions that no rule of the loaded style skill backs and that the
+  project's configured formatter, linter, or type checker already
+  accepts (a suppression the change itself adds is not configuration);
 - alternative designs that do not fix a concrete defect;
 - unproven suspicions — those belong in Open Questions.
 
@@ -576,6 +577,10 @@ Use this structure:
 <!-- Only when the plan or brief enumerates requirements. -->
 - <requirement> - code: <path:line or missing> - test: <path:line or missing>
 
+## Style Coverage
+<!-- Only when the review covered style: each rule with `none` or its finding ids. -->
+frontend-react-code-style: P1 none · P2 N1 · … · P15 none
+
 ## Blocking
 
 ### React
@@ -625,8 +630,10 @@ Pick the verdict from the findings:
   than a local fix.
 
 Omit empty severity sections, the Scope Coverage section when the plan or brief
-enumerates no requirements, and the Pre-existing (context) section when empty.
-If there are no findings, say:
+enumerates no requirements, the Pre-existing (context) section when empty, and
+the Style Coverage section when the brief confined the review to another
+concern. If there are no findings, say the line below, then the Style Coverage
+section when the review covered style:
 
 `No React code review findings for the scoped implementation.`
 

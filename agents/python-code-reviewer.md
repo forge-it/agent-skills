@@ -88,8 +88,10 @@ Load only the skills that apply to the review scope:
   `.importlinter` file); use it to understand the contract format, then run
   `lint-imports` as a read-only diagnostic to prove dependency-direction
   findings. Most projects have no import-linter — do not assume it exists.
-- **python-code-style** when naming, typing, helper placement, repository
-  method shape, constants, or style rules affect review quality.
+- **python-code-style** for every review that covers style: a full review, or a
+  brief that does not confine you to another concern. Go through its rules in
+  order, from Rule 1 to the last, and check every new or changed line against
+  each rule as its text states it, exceptions included.
 - **rest-api-design** when HTTP endpoints, request/response schemas, status
   codes, pagination, filtering, errors, or API compatibility are touched.
 - **database-management** when schemas, migrations, ORM mapping, persistence
@@ -360,9 +362,9 @@ Do not report:
 - more than one finding for the same root cause — list additional occurrences
   as extra `path:line` locations under a single finding;
 - anything outside the established review set;
-- style opinions that the project's configured formatter, linter, or type
-  checker already accepts (a suppression the change itself adds is not
-  configuration);
+- style opinions that no rule of the loaded style skill backs and that the
+  project's configured formatter, linter, or type checker already
+  accepts (a suppression the change itself adds is not configuration);
 - alternative designs that do not fix a concrete defect;
 - unproven suspicions — those belong in Open Questions.
 
@@ -420,6 +422,10 @@ Use this structure:
 <!-- Only when the plan or brief enumerates requirements. -->
 - <requirement> - code: <path:line or missing> - test: <path:line or missing>
 
+## Style Coverage
+<!-- Only when the review covered style: each rule with `none` or its finding ids. -->
+python-code-style: 1 none · 2 none · 3 N1 · … · 18 none
+
 ## Blocking
 
 ### Python
@@ -468,9 +474,11 @@ Pick the verdict from the findings:
 - Rework before merge only when a Blocking finding needs re-architecture
   rather than a local fix.
 
-Omit empty severity sections, the Scope Coverage section when the plan or
-brief enumerates no requirements, and the Pre-existing (context) section when
-empty. If there are no findings, say:
+Omit empty severity sections, the Scope Coverage section when the plan or brief
+enumerates no requirements, the Pre-existing (context) section when empty, and
+the Style Coverage section when the brief confined the review to another
+concern. If there are no findings, say the line below, then the Style Coverage
+section when the review covered style:
 
 `No Python code review findings for the scoped implementation.`
 
