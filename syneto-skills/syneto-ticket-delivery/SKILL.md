@@ -10,7 +10,7 @@ description: >-
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.1.12"
+  version: "0.1.13"
 ---
 
 # Syneto Ticket Delivery
@@ -317,7 +317,7 @@ loop goes into the stage 8 report. Record each round in `ledger.md` as
 structure-and-style guard (`python-`, `react-`, `vue-` or `rust-`) beside the lens in every
 round: the runtime lens cannot see test-structure violations.
 
-**One checker per finding, on `haiku`.** This is the pipeline's verify step with the brief
+**One checker per finding, on `haiku`.** This is the pipeline's verify step with the briefs
 below in place of its own; its other rules (merge duplicates first, drop what an earlier
 round refuted) still hold. A checker holding several findings lets one verdict colour the
 next, while on `haiku` reading the same diff once per finding stays cheap, even at `max`
@@ -341,9 +341,25 @@ Write to <out>: the finding's title, the verdict, then at most three sentences o
 with file:line citations.
 ```
 
+A finding from a structure-and-style guard, or one that names a rule rather than a behaviour
+(python-code-style Rule N, python-testing principle N, frontend-vue-code-style Pattern N),
+gets these lines instead of the ones above, which would refute it as style preference:
+
+```
+You are a skeptic. Below is a claimed rule violation in the change in <repo>, diffed
+against <base>. Try to REFUTE it: load the skill the finding names, read the rule, and read
+<repo>/CLAUDE.md and AGENTS.md. CONFIRMED needs the cited lines to be added or changed by
+this change and to break the rule as its text states it, exceptions included, with no local
+convention in CLAUDE.md or AGENTS.md allowing them. REFUTED when the rule does not say that,
+the lines are not in the change, or a local convention allows them. Other checkers are
+working in this tree at the same time. Use only scoped read-only commands; never modify a
+file. Write to <out>: the finding's title, the verdict, then at most three sentences of
+evidence with file:line citations.
+```
+
 A finding whose fix touches a schema, a migration, a public API or a wire format gets the
 pipeline's three-checker panel, majority wins: three checkers instead of one, in the same
-message, each with these lines, its own `<out>` and that finding.
+message, each with the lines that fit it, its own `<out>` and that finding.
 
 **Reviewer loop.** The lens is one reviewer agent per repository the change touches, that
 repository's stack's (`python-code-reviewer`, `vue-code-reviewer`, `react-code-reviewer` or
@@ -368,8 +384,8 @@ With a separate worktree, merge it back when the last loop ends, converged or ca
 another ticket, ask him first: he may keep the worktree without a merge-back, recorded in
 `ledger.md`.
 
-**Naming round, every ticket.** The review lenses and their checkers refute naming as style,
-so sloppy names (`_ask_mercurio`, `EffectiveLicensingReader`) survive a converged loop and
+**Naming round, every ticket.** The review lenses and their checkers judge a name only
+against a rule's text, if at all, so sloppy names (`_ask_mercurio`, `EffectiveLicensingReader`) survive a converged loop and
 reach his review. Once the last loop ends, converged or capped, and after any merge-back, run one
 naming round in the checkout holding the change, before the final gate, so the gate certifies
 the renamed tree:
