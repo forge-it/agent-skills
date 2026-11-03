@@ -16,7 +16,7 @@ description: >-
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.4"
+  version: "0.0.5"
 ---
 
 # Change Cycle Pipeline
@@ -193,6 +193,22 @@ Hardening the plan never asked for is an observation, not a finding.
 
 **Style preference is always refuted** — nits never reach the fix step, so they
 cannot ping-pong across rounds.
+
+A finding that cites a rule of the project's code-style, testing or structure
+skill is not preference; every structure/style guard finding is one. Its
+verifier gets this brief in place of the skeptic brief, the finding pasted
+below it. The rule's text decides, not taste, so the verdict holds across rounds.
+
+```
+You are a skeptic. Below is a claimed rule violation in the change in
+<checkout>, diffed against <base>. Try to REFUTE it: load the skill the finding
+names, read the rule, and read the project's CLAUDE.md. CONFIRMED needs the
+cited lines to be added or changed in this cycle and to break the rule as its
+text states it, exceptions included, with no local convention in CLAUDE.md
+allowing them. REFUTED when the rule does not say that, the lines are not in the
+change, or a local convention allows them. Never modify a file. Report the
+verdict, then at most three sentences of evidence with file:line citations.
+```
 
 Escalate to a three-verifier panel, majority wins, when the fix would be
 expensive or hard to reverse — schema, migration, public API, wire format.
