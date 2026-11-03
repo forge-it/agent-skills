@@ -10,7 +10,7 @@ description: >-
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.1.13"
+  version: "0.1.14"
 ---
 
 # Syneto Ticket Delivery
@@ -53,7 +53,7 @@ ticket wins over these defaults on every dispatch it covers, the checkers includ
 | 4 | Plan the chosen option | `plan.md` | — |
 | 5 | Review the plan, max 2 rounds | `plan-review-rN-<lens>.md`, `plan.rN.md` | — |
 | 6 | Implement, in the worktree he picks | the dirty tree | **his worktree choice, before it starts** |
-| 7 | Review the code, max 3 rounds per loop he picked, then the naming round | `code-review-rN-<lens>.md`, `code-review-reviewer-rN-<repo>.md`, `naming-<scope>.md` | — |
+| 7 | Review the code, max 3 rounds per loop he picked, then the naming round | `code-review-rN-<lens>.md`, `code-review-rN-guard-<repo>.md`, `code-review-reviewer-rN-<repo>.md`, `naming-<scope>.md` | — |
 | 8 | Report, tree left dirty | — | **his review** |
 | 9 | Refactor or commit | commits | **his word** |
 | 10 | Push, create the MR, move to Review | `mr.md` | **his word on the push** |
@@ -313,9 +313,15 @@ loop goes into the stage 8 report. Record each round in `ledger.md` as
 
 **Lens loop.** Each lens carries its prompt verbatim with
 `<X> =` `<run>/plan.md`, `<Y> =` `<run>/code-review-rN-<lens>.md` and `<Z> =` the base
-(left empty, it diffs against a guessed default branch). When a change adds or edits tests, dispatch that stack's
-structure-and-style guard (`python-`, `react-`, `vue-` or `rust-`) beside the lens in every
-round: the runtime lens cannot see test-structure violations.
+(left empty, it diffs against a guessed default branch). Dispatch, for every repository the
+change touches, its stack's structure-and-style guard (`python-`, `react-`, `vue-` or
+`rust-`) beside the lens in every round: the runtime lens loads no style skill. The guard
+works out its own diff, so its brief carries these lines: "Run every git command as
+`git -C <checkout holding the change>`. In Step 1, use `<base>` in place of the
+`git symbolic-ref` expression; never guess the default branch. The change set is the union
+of Step 1's three lists, not the staged set." The guard has no Write tool: save its final
+message verbatim to `<run>/code-review-rN-guard-<repo>.md` yourself as soon as it returns,
+before triage.
 
 **One checker per finding, on `haiku`.** This is the pipeline's verify step with the briefs
 below in place of its own; its other rules (merge duplicates first, drop what an earlier
@@ -342,19 +348,21 @@ with file:line citations.
 ```
 
 A finding from a structure-and-style guard, or one that names a rule rather than a behaviour
-(python-code-style Rule N, python-testing principle N, frontend-vue-code-style Pattern N),
-gets these lines instead of the ones above, which would refute it as style preference:
+(python-code-style Rule N, python-testing principle N, frontend-vue-code-style Pattern N, a
+structural SRP violation), gets these lines instead of the ones above, which would refute it
+as style preference or for having no wrong behaviour:
 
 ```
 You are a skeptic. Below is a claimed rule violation in the change in <repo>, diffed
 against <base>. Try to REFUTE it: load the skill the finding names, read the rule, and read
-<repo>/CLAUDE.md and AGENTS.md. CONFIRMED needs the cited lines to be added or changed by
-this change and to break the rule as its text states it, exceptions included, with no local
-convention in CLAUDE.md or AGENTS.md allowing them. REFUTED when the rule does not say that,
-the lines are not in the change, or a local convention allows them. Other checkers are
-working in this tree at the same time. Use only scoped read-only commands; never modify a
-file. Write to <out>: the finding's title, the verdict, then at most three sentences of
-evidence with file:line citations.
+<repo>/CLAUDE.md and AGENTS.md. For an SRP finding the rule is: one job for each module,
+class and function, and a name that says that job. CONFIRMED needs the cited lines to be
+added or changed by this change and to break the rule as its text states it, exceptions
+included, with no local convention in CLAUDE.md or AGENTS.md allowing them. REFUTED when
+the rule does not say that, the lines are not in the change, or a local convention allows
+them. Other checkers are working in this tree at the same time. Use only scoped read-only
+commands; never modify a file. Write to <out>: the finding's title, the verdict, then at
+most three sentences of evidence with file:line citations.
 ```
 
 A finding whose fix touches a schema, a migration, a public API or a wire format gets the
