@@ -4,7 +4,7 @@ description: Use when the operator asks to review a GitLab merge request on code
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.1.0"
+  version: "0.1.1"
 ---
 
 # Roche MR Review

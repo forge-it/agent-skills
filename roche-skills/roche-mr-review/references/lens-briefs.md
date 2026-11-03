@@ -83,10 +83,10 @@ Explain every design term in plain words the first time you use it: the reader t
 ## 04 · Style, naming, constants — `general-purpose`, NN `04`, SLUG `style-naming`, PREFIX `N04`
 
 ```
-YOUR LENS: load the {STYLE_SKILL} skill and apply it to new and changed lines, production and test code. Concentrate on:
+YOUR LENS: load the {STYLE_SKILL} skill and apply it to new and changed lines, production and test code. Do all three:
 1. Inline string and number literals that should be named constants or enums: status and kind strings compared or written raw, repeated error messages and codes, paths, limits, magic numbers. Check whether an enum that the code should use already exists.
 2. Naming: leftovers of a rename that the MR started (old words on code that now means something new, or the reverse), names that lie about what the code does, vague names (data, info, handle, process), booleans not phrased as predicates, sibling modules or types named inconsistently.
-3. The skill's other rules.
+3. Every rule of the skill, in order from the first to the last: check each new or changed line against each rule as its text states it, exceptions included. End the "Checked and sound" list with a coverage line: every rule with `none` or the ids of its findings (`{STYLE_SKILL}: 1 none · 2 N04-1 · … · 13 none`).
 ```
 
 ## 05 · Tests — `general-purpose`, NN `05`, SLUG `tests`, PREFIX `T05`
