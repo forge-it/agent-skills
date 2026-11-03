@@ -15,7 +15,7 @@ description: >-
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.6"
+  version: "0.0.7"
 ---
 
 # Agent Fleet Orchestration
@@ -183,7 +183,7 @@ carries all three, plus the constraint the worker must not cross.
 | Write or extend test coverage for existing code | Test writer | `{rust,python}-test-writer`; frontend: an implementor or fixer with a tests-only brief |
 | Review an implementation against a brief or plan | Code reviewer | `{rust,python,vue,react}-code-reviewer` |
 | Run one review lens over a diff | Lens reviewer | a general-purpose agent carrying a prompt file from `/home/cristi/Projects/agent-skills/prompts/code-implementation-review/` verbatim |
-| Refute or confirm one finding | Verifier / skeptic | a general-purpose agent carrying the Stage 3 skeptic brief from that directory's `subagents/pipeline-<stack>.md` verbatim; for a finding that cites a skill rule, the rule-finding brief in change-cycle-pipeline's verify step instead |
+| Refute or confirm one finding | Verifier / skeptic | a general-purpose agent carrying the Stage 3 skeptic brief from that directory's `subagents/pipeline-<stack>.md` verbatim; for a finding that cites a skill rule or a structural SRP violation, the rule-finding brief in change-cycle-pipeline's verify step instead |
 | Certify that a converged cycle actually passes | Final gate | a fresh general-purpose agent, read-only, running the Brief's Acceptance commands and returning an evidence table — never the context that drove the loop |
 | Catch structure/style drift a linter can't (naming, cohesion, placement) | Structure/style guard | `{rust,python,vue,react}-structure-and-style-guard` |
 | Exhaustively audit a scoped tree against a rubric, especially SRP | Auditor (read-only) | `{rust,python}-code-auditor` |
