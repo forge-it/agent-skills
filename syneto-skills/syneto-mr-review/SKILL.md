@@ -4,7 +4,7 @@ description: Use when the operator asks to review a GitLab merge request on gitl
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.2.2"
+  version: "0.2.3"
 ---
 
 # Syneto MR Review

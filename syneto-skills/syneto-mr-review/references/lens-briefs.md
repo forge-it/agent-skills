@@ -103,13 +103,13 @@ Cite the rule in every entry (T2, P1, PEP8). In the Recommended fix give the new
 ## 05 · Tests — `general-purpose`, NN `05`, SLUG `tests`, PREFIX `T05`
 
 ```
-YOUR LENS: load the {TEST_SKILL} skill and apply it to new and changed tests only. Check:
+YOUR LENS: load the {TEST_SKILL} skill and apply it to new and changed tests only. Names, test names included, belong to lens 08: do not report them. Check:
 (a) coverage of every behaviour the ticket and the MR description promise, including the error paths and concurrency claims;
 (b) tests that assert the wrong thing, or nothing (tautologies, assertions only on mocks);
-(c) every rule of the skill, in order from the first to the last: check each new or changed test against each rule as its text states it, exceptions included. Whether or not the skill names them, also check placement and category, naming, arrange/act/assert shape, logic or loops inside tests, parallel safety and shared database rows, magic values that belong in constants or builders, and duplicated setup that belongs in a fixture or builder;
+(c) every rule of the skill, in order from the first to the last: check each new or changed test against each rule as its text states it, exceptions included. Whether or not the skill names them, also check placement and category, arrange/act/assert shape, logic or loops inside tests, parallel safety and shared database rows, magic values that belong in constants or builders, and duplicated setup that belongs in a fixture or builder;
 (d) test helpers, builders, and fakes that grew responsibilities.
 For a missing test, anchor the entry on the production line whose behaviour is untested, and name the test that should exist and what it asserts.
-End the "Checked and sound" list with a coverage line: every rule of the skill with `none` or the ids of its findings (`{TEST_SKILL}: 1 none · 2 T05-3 · …`).
+End the "Checked and sound" list with a coverage line: every rule of the skill with `none`, `lens 08` for a rule about names, or the ids of its findings (`{TEST_SKILL}: 1 none · 2 T05-3 · …`).
 ```
 
 ## 06 · Docs — `general-purpose`, NN `06`, SLUG `docs`, PREFIX `D06`
