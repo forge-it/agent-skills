@@ -11,7 +11,6 @@ metadata:
 
 - Create commits only when explicitly prompted.
 - Push only after explicit permission for that push operation.
-- Never add `Co-Authored-By:`, `Made-By:`, or any other trailer that attributes an AI tool to a commit.
 - Preserve user changes. Do not stage, revert, or rewrite unrelated work.
 - Do not use `git add .` or `git add -A` blindly. Stage only the intended paths or hunks.
 - Never use `git push --force`. Use `git push --force-with-lease` only after discussing the risk and receiving command-specific permission.
