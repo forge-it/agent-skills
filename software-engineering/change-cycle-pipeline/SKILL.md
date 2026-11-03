@@ -16,7 +16,7 @@ description: >-
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.5"
+  version: "0.0.6"
 ---
 
 # Change Cycle Pipeline
@@ -195,14 +195,18 @@ Hardening the plan never asked for is an observation, not a finding.
 cannot ping-pong across rounds.
 
 A finding that cites a rule of the project's code-style, testing or structure
-skill is not preference; every structure/style guard finding is one. Its
-verifier gets this brief in place of the skeptic brief, the finding pasted
-below it. The rule's text decides, not taste, so the verdict holds across rounds.
+skill is not preference; every structure/style guard finding is one, and so is a
+structural SRP violation, which the skeptic brief would refute for having no
+wrong behaviour. Its verifier gets this brief in place of the skeptic brief, the
+finding pasted below it. The rule's text decides, not taste, so the verdict
+holds across rounds.
 
 ```
 You are a skeptic. Below is a claimed rule violation in the change in
 <checkout>, diffed against <base>. Try to REFUTE it: load the skill the finding
-names, read the rule, and read the project's CLAUDE.md. CONFIRMED needs the
+names, read the rule, and read the project's CLAUDE.md. For an SRP finding the
+rule is: one job for each module, type and function, and a name that says that
+job. CONFIRMED needs the
 cited lines to be added or changed in this cycle and to break the rule as its
 text states it, exceptions included, with no local convention in CLAUDE.md
 allowing them. REFUTED when the rule does not say that, the lines are not in the
