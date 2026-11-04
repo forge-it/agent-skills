@@ -4,7 +4,7 @@ description: Use when the operator asks to review a GitLab merge request on gitl
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.2.3"
+  version: "0.3.0"
 ---
 
 # Syneto MR Review
@@ -14,7 +14,8 @@ metadata:
 Review one merge request the way Cristian reviews: a Sonnet fleet hunts, he decides which
 findings are worth the author's time, and only those reach GitLab and the author. He is the
 reviewer of record — every note and the Chat message go out under his name — so nothing
-leaves the session that he has not picked or approved.
+leaves the session that he has not picked. His picks are his one consent: once he has picked,
+post, build the developer file and send it over Chat without asking again.
 
 You orchestrate: set up, brief, verify, present, post. The fleet reviews, and every dispatch in
 this skill runs on `model: "sonnet"` (his standing choice), except the reviewer passes'
@@ -22,7 +23,7 @@ checkers, which run on `model: "haiku"` at effort `max`. Load **agent-fleet-orch
 once before the first dispatch; this skill already answers its intake gate — supervised, the
 spec is `ticket.md`, the base is `base_commit`, and the briefs in `references/lens-briefs.md`
 replace both the pipeline-variant choice and the code-implementation-review prompts — so the
-three gates below and the stage 1 question are the only stops.
+picks gate below and the stage 1 question are the only stops.
 
 ## Stages
 
@@ -34,8 +35,8 @@ three gates below and the stage 1 question are the only stops.
 | 3 | Synthesize, then verify every Critical and Important yourself | `ledger-synthesized.md` | — |
 | 4 | Present the ledger | — | **his picks** |
 | 5 | Post the picked findings as review notes | `notes/`, `posted.json` | — |
-| 6 | Refine the notes he asks about | — | **he is satisfied** |
-| 7 | Build the developer file, send it over Google Chat | `review-mr-<iid>.md`, `review-mr-<iid>.sent.md` | **his yes to the exact message** |
+| 6 | Refine the notes he asks about, whenever he asks | — | — |
+| 7 | Build the developer file, send it over Google Chat | `review-mr-<iid>.md`, `review-mr-<iid>.sent.md` | — |
 
 The scripts live in `scripts/` beside this file. Run them as `python3 -B` by absolute path,
 `python3 -B /home/cristi/Projects/agent-skills/syneto-skills/syneto-mr-review/scripts/<name>.py`
@@ -144,21 +145,23 @@ The gateway in front of gitlab.syneto.eu answers bodies that look like SQL injec
 HTML 403 instead of a GitLab error, for the preflight and for any manual `glab api` call alike.
 Known trigger: `time (`.
 
-Report a table of finding → where it landed (inline or general), any "possibly also"
-findings, and the MR link.
+Then go straight on to stage 7: do not stop to ask whether the notes are right or whether to
+send. The final report covers both: a table of finding → where it landed (inline or general),
+any "possibly also" findings, the MR link, and what was sent to whom.
 
-### 6. Refine — gate
+### 6. Refine — on request
 
-He reads the notes and asks for changes. Edit `notes/NN.md` and rerun `post_notes.py <run>
+Not a stop: run it only when he asks for changes, before or after the developer file went out. Edit `notes/NN.md` and rerun `post_notes.py <run>
 --post`; it updates those notes in place. When a change alters what a finding says rather than
 its wording, make the same change in `ledger-synthesized.md`, so the developer file agrees
 with GitLab.
 
-When he withdraws a note, delete it on GitLab (`glab api --hostname <hostname> --method DELETE
+When the file was already sent, rebuild it and send the developer the new file with a one-line
+"updated" message, the same way. When he withdraws a note, delete it on GitLab (`glab api --hostname <hostname> --method DELETE
 projects/<project_id>/merge_requests/<iid>/notes/<note_id>`, the id from `posted.json`), then
 drop its `posted.json` entry and its `notes/NN.md`: the developer file is built from `notes/`.
 
-### 7. Send the developer the review — gate
+### 7. Send the developer the review
 
 `build_final_markdown.py <run>` writes `review-mr-<iid>.md`: only the findings that have note
 files, taken from the synthesized ledger, renumbered 1..N, with Anchor and Found-by dropped. A
@@ -173,11 +176,10 @@ also posted as notes on the MR, the link.
 Salut <Prenume>, am făcut review la !<iid> (<SYN-key>). Ți-am atașat markdown-ul cu cele <N> puncte de rezolvat, le găsești și ca note pe MR: <MR link>
 ```
 
-Show him the recipient (Chat name and email), the exact text, and the attachment path, and
-wait for an explicit yes. An earlier request ("send it to the author when it's done") is not approval
-of a text he has not seen, and his yes covers that exact text only.
+Send it without asking: his picks at stage 4 cover the notes, this file, and this message.
+Follow the shape above exactly; the recipient is the MR author.
 
-Then, with the claude-in-chrome tools:
+With the claude-in-chrome tools:
 
 1. `tabs_context_mcp`. He runs Chrome on more than one machine: when the browser in use is not
    the one he expects, `list_connected_browsers` and let him choose.
@@ -190,15 +192,16 @@ Then, with the claude-in-chrome tools:
    sends) or Shift+Enter (Chat jumps the cursor to the start and the lines come out reversed),
    which is why the message is one line.
 5. Verify with `javascript_tool`: `[...document.querySelectorAll('div[contenteditable="true"]')].map(element => element.innerText.trim()).filter(Boolean)`
-   must equal the approved text, and the attachment chip must show the file name.
+   must equal the text you typed, and the attachment chip must show the file name.
 6. Click Send, take a screenshot, and confirm the message and the file appear in the thread.
    When he would rather send it himself, stop after step 5 and tell him it is ready.
 
 Once it is sent, copy the file to `review-mr-<iid>.sent.md`: a later rebuild overwrites
 `review-mr-<iid>.md`, and the copy keeps what the developer actually received.
 
-In auto mode the permission classifier may refuse to open the conversation. That is the gate
-working: tell him what was refused and wait for him to allow it.
+In auto mode the permission classifier may refuse to open the conversation, and the Chrome
+extension may not be connected at all. Either way the send cannot happen from here: tell him
+what blocked it and wait for him to allow it or reconnect, then send.
 
 When he closes the review, remove the worktree with `git -C <repository> worktree remove
 <run>/wt`. Keep the run directory: its notes and `posted.json` still allow later edits.
