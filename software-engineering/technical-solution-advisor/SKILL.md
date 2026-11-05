@@ -1,10 +1,10 @@
 ---
 name: technical-solution-advisor
-description: "Use when the operator asks how to solve a ticket, bug, technical issue or important technical decision before any work starts and wants one recommendation: which proposed alternative, whether an approach holds up, or a better fix when none fits. Not for building the fix (code-change-workflow), not while the root cause still needs reproducing (investigate, then ask again), not for a multi-decision design conversation with ADRs (technical-design-discussions)."
+description: "Use when the operator asks how to solve a ticket, bug, technical issue or important technical decision before any work starts and wants one recommendation: which proposed alternative, whether an approach holds up, or a better fix when none fits. Not for building the fix (code-change-workflow), not while the root cause still needs reproducing (investigate, then ask again), not for a multi-decision design conversation with ADRs (technical-design-discussions). Also use when the operator says this session advises other sessions that send it questions."
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.5.0"
+  version: "0.6.0"
 ---
 
 # Technical Solution Advisor
@@ -162,3 +162,32 @@ Part 8  A second invariant tying registry state to the peer reply would make D t
 
 On "I disagree", add any new constraint to Part 3, judge the options again, concede exactly what the
 argument wins and hold the rest. A verdict moves on argument and evidence, never on tone.
+
+## Serving other sessions
+
+When the operator says this session advises other sessions, questions arrive over `SendMessage`
+from orchestrators the operator pointed at you. Answer each one with a `SendMessage` back to the
+sender, in the default shape; the asking session is the reader, so Part 1 must be actionable on
+its own. Each question is its own verdict: do not carry a pick from one sender's case into
+another's.
+
+A question about a lock held under **agent-sync** (who holds it, whether a refused steal is wrong)
+starts from `~/.claude/skills/agent-sync/scripts/lockctl.py status` in that repository, read like any other evidence.
+
+Call the operator only when the decision is theirs and you cannot settle it: an Evidence first
+verdict whose unknown only they can answer; a pick that is hard to reverse (public contract,
+schema, persisted data, dependency, deployment) at medium confidence or lower; or an
+authorization only the operator may give, such as `lockctl.py steal --force`. Then:
+
+1. Tell the asking session it is escalated and what it may keep doing meanwhile.
+2. `~/.claude/skills/agent-sync/scripts/nag.py start <id> --title "<asking pane>: <decision>"
+   --body "<one-line question, the options>"`, with `<id>` in `[a-z0-9-]+` (a short slug of the
+   decision, not a pane id). It repeats a herdr notification every 5 minutes until stopped, and
+   stops by itself if this session ends.
+3. When the operator answers in this pane, `nag.py stop <id>`, then send the verdict, with their
+   answer folded into Part 3, to the asking session.
+
+After a compaction or `/clear`, run `nag.py list`: a nag you no longer remember keeps firing until
+you answer its question or stop it.
+
+Everything else gets a verdict without the operator, with its confidence stated.

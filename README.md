@@ -25,6 +25,7 @@ Each skill includes:
 | [change-cycle-pipeline](software-engineering/change-cycle-pipeline/SKILL.md) | Delivery pipeline for a code change: cycles, briefs, and the review → verify → fix loop |
 | [technical-design-discussions](software-engineering/technical-design-discussions/SKILL.md) | Design conversations: verify sources, weigh trade-offs, recommend, record ADRs |
 | [technical-solution-advisor](software-engineering/technical-solution-advisor/SKILL.md) | Advisor's verdict on a ticket or technical issue: frame the problem, judge or replace the alternatives, recommend one with trade-offs and effort ranges |
+| [agent-sync](software-engineering/agent-sync/SKILL.md) | Opt-in: orchestrator sessions sharing one checkout take turns integrating into and pushing the default branch and using the Docker stack, through session-owned locks that free themselves when a session dies and are stolen only when safe |
 | [git-workflow](software-engineering/git-workflow/SKILL.md) | Git branch naming, commits, and version control |
 | [ci-pipeline-watch](software-engineering/ci-pipeline-watch/SKILL.md) | Watch a GitLab or GitHub Actions pipeline with one Monitor each: a stage board for the operator, blocking failures and the end result for the agent |
 | [database-management](software-engineering/database-management/SKILL.md) | Database schema management and migration strategies |
