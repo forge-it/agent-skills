@@ -1,10 +1,10 @@
 ---
 name: technical-solution-advisor
 description: "Use when the operator asks how to solve a ticket, bug, technical issue or important technical decision before any work starts and wants one recommendation: which proposed alternative, whether an approach holds up, or a better fix when none fits. Not for building the fix (code-change-workflow), not while the root cause still needs reproducing (investigate, then ask again), not for a multi-decision design conversation with ADRs (technical-design-discussions). Also use when the operator says this session advises other sessions that send it questions."
-license: UNLICENSED
+license: MIT
 metadata:
-  author: Cristian
-  version: "0.6.0"
+  author: cristian.ciortea@syneto.eu
+  version: "0.7.0"
 ---
 
 # Technical Solution Advisor
@@ -172,20 +172,36 @@ its own. Each question is its own verdict: do not carry a pick from one sender's
 another's.
 
 A question about a lock held under **agent-sync** (who holds it, whether a refused steal is wrong)
-starts from `~/.claude/skills/agent-sync/scripts/lockctl.py status` in that repository, read like any other evidence.
+starts from `~/Projects/agent-skills/software-engineering/agent-sync/scripts/lockctl.py status` in
+that repository, read like any other evidence.
 
-Call the operator only when the decision is theirs and you cannot settle it: an Evidence first
-verdict whose unknown only they can answer; a pick that is hard to reverse (public contract,
-schema, persisted data, dependency, deployment) at medium confidence or lower; or an
-authorization only the operator may give, such as `lockctl.py steal --force`. Then:
+Call the operator when the asking session marks a question operator-level, and otherwise only
+when the decision is theirs and you cannot settle it: an Evidence first verdict whose unknown
+only they can answer; a pick that is hard to reverse (public contract, schema, persisted data,
+dependency, deployment) at medium confidence or lower; or an authorization only the operator may
+give, such as `lockctl.py steal --force`. Then:
 
 1. Tell the asking session it is escalated and what it may keep doing meanwhile.
-2. `~/.claude/skills/agent-sync/scripts/nag.py start <id> --title "<asking pane>: <decision>"
-   --body "<one-line question, the options>"`, with `<id>` in `[a-z0-9-]+` (a short slug of the
-   decision, not a pane id). It repeats a herdr notification every 5 minutes until stopped, and
-   stops by itself if this session ends.
+2. Nag the operator with the `nag` from `~/.bashrc`. A Claude Code shell does not load that
+   function, so run the script it wraps,
+   `~/Projects/agent-skills/software-engineering/agent-sync/scripts/nag.py` (`nag.py` below):
+
+   ```
+   nag.py start <id> --title "<asking session>: <ticket key>: <decision>" \
+     --body "Answer in <this session's name>: <one-line question, the options>"
+   ```
+
+   Session names are as `ListAgents` prints them, without any ` [ref]`. `<id>` is the asking
+   session's name lowercased, each run of characters other than `a-z0-9` turned into one `-`,
+   none at either end (`SYN-3392 licensing big` → `syn-3392-licensing-big`): an asking session
+   waits on one question at a time, so no other nag of yours holds that id. Leave
+   `<ticket key>: ` out when the question names no ticket or the asking session's name already
+   holds it. The body names this session because a herdr notification cannot take the operator
+   to a pane. The nag repeats every 5 minutes until stopped, and stops by itself if this session
+   ends.
 3. When the operator answers in this pane, `nag.py stop <id>`, then send the verdict, with their
-   answer folded into Part 3, to the asking session.
+   answer folded into Part 3, to the asking session. When the asking session reports they
+   answered there, `nag.py stop <id>` and send nothing more.
 
 After a compaction or `/clear`, run `nag.py list`: a nag you no longer remember keeps firing until
 you answer its question or stop it.
