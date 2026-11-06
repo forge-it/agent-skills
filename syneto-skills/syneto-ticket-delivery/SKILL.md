@@ -10,7 +10,7 @@ description: >-
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.1.14"
+  version: "0.1.15"
 ---
 
 # Syneto Ticket Delivery
@@ -31,6 +31,7 @@ answers its intake gate, so do not ask it again:
 | Plan review | max 2 rounds; round 2 re-checks only what round 1 changed |
 | Code review | his choice at stage 1: the lens loop, the reviewer loop, or both, lens loop first; each is **change-cycle-pipeline**'s narrow loop, max 3 rounds, one `haiku` checker per finding at effort `max` (stage 7) |
 | Naming | one designer round after the review loops, every ticket: designers propose renames, you accept some or all, one fixer applies them (stage 7, *Naming round*) |
+| Docs review | his choice at stage 1: none, or one `opus` reviewer at effort `low` per Markdown file the change adds or modifies, after the docs writer (stage 8) |
 | Operator gates | stages 3, 6, 8, 9, plus every push |
 | Gate cadence | at the end: every cycle is implemented in turn, then the review loop or loops he picked over their union (stage 7, a cap of 3 each), then one stage 8 report |
 | Worktree | his answer at stage 6: the main worktree, or a separate one merged back into it unless he keeps it without a merge-back; `-no-commit` workers either way, and the checkout holding the change ends dirty |
@@ -38,10 +39,11 @@ answers its intake gate, so do not ask it again:
 Re-open one of these only when he changes it.
 
 **Models.** Name no model on any dispatch but stage 7's checkers, which run on `haiku` at
-effort `max`: every other subagent lands on his Sonnet default, and
-agent-fleet-orchestration's Opus departures do not apply here. `opus` or `fable` only when
-he asks for it on this ticket, recorded in `ledger.md`. A model or effort he asks for on a
-ticket wins over these defaults on every dispatch it covers, the checkers included.
+effort `max`, and stage 8's docs reviewers, on `opus` at effort `low`: every other subagent
+lands on his Sonnet default, and agent-fleet-orchestration's Opus departures do not apply
+here. `opus` or `fable` elsewhere only when he asks for it on this ticket, recorded in
+`ledger.md`. A model or effort he asks for on a ticket wins over these defaults on every
+dispatch it covers, the checkers included.
 
 ## Stages
 
@@ -54,7 +56,7 @@ ticket wins over these defaults on every dispatch it covers, the checkers includ
 | 5 | Review the plan, max 2 rounds | `plan-review-rN-<lens>.md`, `plan.rN.md` | — |
 | 6 | Implement, in the worktree he picks | the dirty tree | **his worktree choice, before it starts** |
 | 7 | Review the code, max 3 rounds per loop he picked, then the naming round | `code-review-rN-<lens>.md`, `code-review-rN-guard-<repo>.md`, `code-review-reviewer-rN-<repo>.md`, `naming-<scope>.md` | — |
-| 8 | Report, tree left dirty | — | **his review** |
+| 8 | Report, tree left dirty | `docs-review-<repo>-K.md` | **his review** |
 | 9 | Refactor or commit | commits | **his word** |
 | 10 | Push, create the MR, move to Review | `mr.md` | **his word on the push** |
 | 11 | Merged: move to Done, clean up | Jira comment | — |
@@ -143,10 +145,11 @@ Then ask, in **one** message, everything that applies:
   reviewer loop only when a repository in scope has a reviewer agent (stage 7), and name
   the repositories it alone would leave unreviewed; when none has, record `lens loop`
   without asking
+- whether stage 8 runs the docs review (*Docs review* in stage 8)
 
 The tickets in scope are the ones he handed over plus the subtasks he confirms. Write
-`ticket.md` (verbatim) and `ledger.md`, his code review choice in it, then move every
-ticket in scope to **In Progress** (see *Ticket status*).
+`ticket.md` (verbatim) and `ledger.md`, his code review and docs review choices in it, then
+move every ticket in scope to **In Progress** (see *Ticket status*).
 
 Then cut the work branch in each repository, yourself, before any gatherer reads the code.
 **Always pull first.** Never branch from the local base without pulling, and never from
@@ -444,6 +447,33 @@ whole diff against the base named explicitly, so it never runs `git remote set-h
 review, so every doc edit is in the tree he reads and nothing is edited after his word at
 stage 9.
 
+**Docs review**, when he picked it at stage 1. Once the writer returns, list the Markdown
+files the change adds or modifies in each repository (in the deploy repo, HEAD is `<base>`
+throughout): `git -C <checkout> diff --name-only --diff-filter=AMR <base> -- '*.md'` plus
+`git -C <checkout> ls-files --others --exclude-standard -- '*.md'`.
+Dispatch one general-purpose reviewer per file, all in one message, each with model `opus`
+and effort `low`, `<out>` its own `<run>/docs-review-<repo>-K.md` (K numbers that
+repository's files), and these lines, filled:
+
+```
+You review one Markdown file of the change in <repo>: <path>, in <checkout>, diffed against
+<base>. Run every git command as `git -C <checkout>`. Read the file's diff
+(`git diff <base> -- <path>`, the whole file when it is untracked) and the file around it.
+Check each added or changed line against the code it describes and against the ticket's
+decisions in <run>/ticket.md, <run>/options.md, <run>/plan.md and <run>/ledger.md, a later
+decision overriding an earlier one: a claim the code does not bear out, a decision stated
+otherwise than it was taken, a wrong name, path, command or number. Report an unchanged
+line only when the change makes it wrong. Use only read-only commands, never a test, a build
+or Docker; never modify a file. Write to <out>: each finding with its <path>:line, what the
+line says, and what the code or the decision says instead, citing its file:line or ledger
+line; or `No findings.`
+```
+
+Record the dispatch in `ledger.md` as `8: docs review dispatched (<repo> 1 <path>, 2 <path>,
+...)`. Its findings go into the report with the others, each with its `file:line`; fixing one
+is a stage 9 refactor. A fresh stage 8 report runs the docs review again over the files the
+listing then gives, with a new ledger line, overwriting the earlier review files.
+
 Then give him **change-cycle-pipeline**'s operator report, every finding in plain words with
 its exact `file:line`. Its next action is his review, so it ends with this block for each
 repository the change touches:
@@ -587,7 +617,8 @@ When something differs, stop and tell him before any dispatch or transition. Sta
 the exception: moving to Done needs only `glab` and Jira, and the cleanup runs its own
 checks, so skip the branch and working-directory checks there. Then continue from the stage the ledger names. In stage 5 or 7, a round whose
 review files exist but that the ledger does not record as triaged is untriaged: triage it,
-never re-run it.
+never re-run it. In stage 8, re-dispatch only the docs reviewers whose file is missing from
+the set the ledger names.
 
 ## Ticket status
 
