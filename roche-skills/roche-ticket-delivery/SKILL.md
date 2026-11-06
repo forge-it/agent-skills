@@ -552,8 +552,6 @@ the order to read it:
 Review <repository name> in <absolute path of the checkout holding the change>
   <main worktree | linked worktree>, branch <branch>, against <base>
 
-Tests that pin it
-  - <path:line> — <the behaviour the test proves, and the case it would miss, if any>
 Skim: mechanical or docs-only
   - <path, or a group: docs/gaps/0001–0015 (15 files)> — <what changed, in one line>
 Naming proposals
