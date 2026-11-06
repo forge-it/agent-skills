@@ -29,9 +29,11 @@ under a lock shared with every other skill:
 
 - **Stack:** Rust. A workspace (`app/`, `core/`, `crates/`, `libdnf5-adapter/`) that drives
   libdnf5 in process and serves a gRPC API (`package_management.v1`) over a Unix socket.
-- **Structure document:** `docs/layout.md`. rdnx has no `CLAUDE.md` or
-  `project_structure.md`. The rules the gate enforces are in `docs/testing.md`
-  (*Structure rules*).
+- **Structure document:** `docs/layout.md`. rdnx has no `project_structure.md`. Its
+  `CLAUDE.md` is a short index; the coding rules, in three tiers (Gate, Default, Guidance,
+  where a Default deviation needs a `// why:` comment), are in `.claude/rules/rust.md`, and
+  the workflow rules in `.claude/rules/workflow.md`. The rules the gate enforces are in
+  `docs/testing.md` (*Structure rules*).
 - **Gate**, on `<run>/wt` with every path written absolute, under the Docker rule:
   1. `DOCKER_DEFAULT_PLATFORM=linux/amd64 just --justfile <run>/wt/justfile test-adapter-fixtures`, on every gate, a
      rerun after a push included: the adapter's integration tests read the git-ignored
@@ -50,11 +52,21 @@ under a lock shared with every other skill:
      `rdnx-target-mr-<iid>` is the review's own, so it never shares the main checkout's
      build cache. Never copy the recipe line itself: bash leaves its
      `{{justfile_directory()}}` unexpanded, and Docker rejects it.
+  Steps 1 and 2 depend on `prepare-artifactory-credentials`, which reads `ARTIFACTORY_*` from the
+  git-ignored `.env` that `set dotenv-load` loads from the justfile's directory; a fresh worktree
+  has none, so both fail with `ARTIFACTORY_HOST: Set ARTIFACTORY_HOST.` (seen 2026-11-05). When
+  the MR edits neither `docker/Dockerfile.builder` nor `rust-toolchain.toml` and the existing
+  `rdnx-builder:dev` is newer than their last change at the base, run step 1's body instead:
+  `DOCKER_DEFAULT_PLATFORM=linux/amd64 <run>/wt/libdnf5-adapter/tests/fixtures/build.sh` (no
+  network), skip step 2, and say so in `gate.md`. Otherwise ask him before copying credentials.
   The vendored libdnf5 RPMs are x86_64, so every Docker command needs
   `DOCKER_DEFAULT_PLATFORM=linux/amd64`. A cold run under emulation takes about a quarter of
   an hour. At close, also `docker volume rm rdnx-target-mr-<iid>`. The Docker suites
   (`just test-smoke-all` and the others) are not part of the review's gate.
 - **Facts for every lens:**
+  - The coding rules are in `.claude/rules/rust.md` (read it with `CLAUDE.md`): Tier 1 is
+    enforced by the gate, a Tier 2 deviation is fine only with a `// why:` comment, and
+    Tier 3 is advice, never more than Minor.
   - The gRPC proto `package_management.v1` is the public contract with REC: a removed or
     renumbered field, or a changed RPC, is a contract break.
   - The service drives libdnf5 through an FFI adapter (`libdnf5-adapter/`) and runs with
