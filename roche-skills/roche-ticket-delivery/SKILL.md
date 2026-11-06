@@ -10,7 +10,7 @@ description: >-
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.1.1"
+  version: "0.1.2"
 ---
 
 # Roche Ticket Delivery
@@ -517,7 +517,9 @@ wrong.
 **Docs review**, when he picked it at stage 1. Once the writer returns, list the Markdown
 files the change adds or modifies in each repository:
 `git -C <checkout> diff --name-only --diff-filter=AMR <base> -- '*.md'` plus
-`git -C <checkout> ls-files --others --exclude-standard -- '*.md'`. Dispatch one
+`git -C <checkout> ls-files --others --exclude-standard -- '*.md'`. Before the dispatch,
+make sure `ledger.md` records, in order, every decision he changed after `plan.md` was
+written: the reviewers learn his decisions from the run files alone. Dispatch one
 general-purpose reviewer per file, all in one message, each with model `opus` and effort
 `low`, `<out>` its own `<run>/docs-review-<repo>-K.md` (K numbers that repository's files),
 and these lines, filled:
