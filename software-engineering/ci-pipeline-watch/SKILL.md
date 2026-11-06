@@ -9,7 +9,7 @@ description: >-
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.2.0"
+  version: "0.3.0"
 ---
 
 # CI Pipeline Watch
@@ -70,8 +70,12 @@ The GitLab project goes in as the plain path or the numeric id (`%2F` is accepte
 Two pipelines are two Monitors, armed in one message; a single loop over several pipelines
 sits silent on a failure until the slowest one ends. When you arm, say one line per pipeline,
 `watching <repo> pipeline <id> on <ref>: <url>`, then end your turn or carry on with other
-work: the events come to you. If he says the details view shows no board, arm with
-`--board stdout`; board redraws then wake you too, and you send nothing for them.
+work: the events come to you.
+
+Arm the command as written, with no `2>&1` and no other redirection, even though Monitor's
+own guidance suggests one for other commands. Merging stderr into stdout would turn every
+board redraw into a notification. If a merge does happen, the script notices it and draws no
+board, so you still receive only the events below.
 
 The script polls every 30 seconds and exits when the pipeline ends. Its stdout lines are the
 complete list of what you will receive:
@@ -162,6 +166,8 @@ warnings printed after the real failure. When the report is empty, read the trac
 
 - One combined loop over several pipelines, or a `run_in_background` Bash that exits only at
   the end: a failure stays hidden until everything finishes.
+- Appending `2>&1` to the Monitor command: the board then arrives as a notification every
+  minute, and each one gets a "still running" reply.
 - Resolving the pipeline by branch instead of by commit.
 - Reporting a GitHub `continue-on-error` job as a blocking failure.
 - Reading a `↳` job's url as a job id.

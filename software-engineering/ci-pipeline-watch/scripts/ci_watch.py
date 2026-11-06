@@ -16,6 +16,9 @@ Two output streams with two readers:
           --redraw seconds so the running times stay fresh. The Monitor's details view shows
           it, so the operator follows the progress there; the agent is not woken.
 
+When stderr is merged into stdout (a `2>&1` on the Monitor command), the board is not drawn:
+every redraw would otherwise wake the agent. A terminal is exempt, so a manual run shows it.
+
 Run it with `uv run --quiet --no-project ci_watch.py ...`: the dependency block above gives
 it click without touching any project's virtualenv.
 
@@ -540,13 +543,6 @@ def watch_options(command):
             help="Seconds between board redraws while a job runs; a changed job state always redraws.",
         ),
         click.option(
-            "--board",
-            type=click.Choice(["stderr", "stdout"]),
-            default="stderr",
-            show_default=True,
-            help="Stream for the stage board. stdout makes every redraw a Monitor event.",
-        ),
-        click.option(
             "--width",
             type=click.IntRange(min=40),
             default=100,
@@ -559,8 +555,20 @@ def watch_options(command):
     return command
 
 
-def stream(board: str) -> TextIO:
-    return sys.stdout if board == "stdout" else sys.stderr
+def merged_into_stdout(stream: TextIO) -> bool:
+    """True when `stream` writes to the very pipe or file stdout writes to, as after a `2>&1`."""
+    try:
+        if sys.stdout.isatty():
+            return False
+        out, other = os.fstat(sys.stdout.fileno()), os.fstat(stream.fileno())
+    except (OSError, ValueError):
+        return False
+    return (out.st_dev, out.st_ino) == (other.st_dev, other.st_ino)
+
+
+def board_stream() -> TextIO:
+    """stderr, unless it is merged into stdout: then the board goes nowhere, so no redraw wakes the agent."""
+    return open(os.devnull, "w") if merged_into_stdout(sys.stderr) else sys.stderr
 
 
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
@@ -572,18 +580,18 @@ def cli() -> None:
 @click.argument("project")
 @click.argument("pipeline_id", type=click.IntRange(min=1))
 @watch_options
-def gitlab(project: str, pipeline_id: int, every: int, redraw: int, board: str, width: int) -> None:
+def gitlab(project: str, pipeline_id: int, every: int, redraw: int, width: int) -> None:
     """Watch GitLab pipeline PIPELINE_ID of PROJECT (numeric id, or the path group/repo)."""
-    sys.exit(run_watch(gitlab_fetch, "gitlab", project, str(pipeline_id), every=every, board=stream(board), width=width, redraw=redraw))
+    sys.exit(run_watch(gitlab_fetch, "gitlab", project, str(pipeline_id), every=every, board=board_stream(), width=width, redraw=redraw))
 
 
 @cli.command()
 @click.argument("repo")
 @click.argument("run_id", type=click.IntRange(min=1))
 @watch_options
-def github(repo: str, run_id: int, every: int, redraw: int, board: str, width: int) -> None:
+def github(repo: str, run_id: int, every: int, redraw: int, width: int) -> None:
     """Watch GitHub Actions run RUN_ID of REPO (owner/repo)."""
-    sys.exit(run_watch(github_fetch, "github", repo, str(run_id), every=every, board=stream(board), width=width, redraw=redraw))
+    sys.exit(run_watch(github_fetch, "github", repo, str(run_id), every=every, board=board_stream(), width=width, redraw=redraw))
 
 
 if __name__ == "__main__":
