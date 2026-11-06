@@ -6,10 +6,10 @@ description: >-
   default branch, either merging and pushing it directly or through pull requests the operator
   reviews, and using a shared resource such as the Docker stack for integration tests. Never
   self-select it; a project that does not name it works without it.
-license: UNLICENSED
+license: MIT
 metadata:
-  author: Cristian
-  version: "0.2.0"
+  author: cristian.ciortea@syneto.eu
+  version: "0.2.1"
 ---
 
 # Agent Sync
@@ -24,7 +24,8 @@ adds no session: the coordination lives in two scripts every session calls.
 | `scripts/lockctl.py` | named locks per repository: who holds them, waiting, releasing, safe stealing |
 | `scripts/nag.py` | repeated herdr notification until the operator answers |
 
-Call them by absolute path (`~/.claude/skills/agent-sync/scripts/lockctl.py`). Lock state lives
+Call them by absolute path
+(`~/Projects/agent-skills/software-engineering/agent-sync/scripts/lockctl.py`). Lock state lives
 in `<git-common-dir>/agent-sync/`, so every worktree of the repository sees the same locks, and
 nothing is tracked or written into the working tree. Each subcommand's `--help` says what it
 prints. Exit 75 means busy (held by someone else, the wait ran out, a steal refused, a nag id
@@ -215,7 +216,7 @@ A worker gets the exact command in its brief, reset included, and runs it with
 `run_in_background`:
 
 ```
-~/.claude/skills/agent-sync/scripts/lockctl.py run stack --wait 9m --purpose "<branch> suite" -- \
+~/Projects/agent-skills/software-engineering/agent-sync/scripts/lockctl.py run stack --wait 9m --purpose "<branch> suite" -- \
   sh -c '<reset> && <bring up> && <suite>'
 ```
 
