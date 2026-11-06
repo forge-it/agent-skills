@@ -10,7 +10,7 @@ description: >-
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.1.0"
+  version: "0.1.1"
 ---
 
 # Roche Ticket Delivery
@@ -31,6 +31,7 @@ answers its intake gate, so do not ask it again:
 | Implementer | fleet |
 | Plan review | max 2 rounds; round 2 re-checks only what round 1 changed |
 | Code review | **change-cycle-pipeline** narrow loop, max 3 rounds, one `haiku` checker per finding at effort `max` (stage 7) |
+| Docs review | his choice at stage 1: none, or one `opus` reviewer at effort `low` per Markdown file the change adds or modifies, after the docs writer (stage 8) |
 | Operator gates | stages 3, 6, 8, 9, plus every push |
 | Gate cadence | at the end: every cycle is implemented in turn, then one review loop over their union (stage 7, one cap of 3), then one stage 8 report |
 | Worktree | his answer at stage 6: the main worktree, or a separate one merged back into it unless he keeps it without a merge-back. Workers are `-no-commit` either way, and the checkout holding the change ends dirty |
@@ -46,6 +47,7 @@ definition. Pass `model` and `effort` explicitly on every dispatch:
 | Plan reviewers, code-review lenses, structure-and-style guards | `sonnet` at `medium`, or `haiku` at `max` when the review is simple. Say which in one line |
 | Stage 7 checkers (refuters) | `haiku`, `max`, always |
 | Stage 8 naming designers, one per crate | `sonnet`, `max` |
+| Stage 8 docs reviewers, one per Markdown file, when he picked the docs review | `opus`, `low` |
 | Gatherers, the planner, issue investigators, the stage 8 docs writer, the final-gate agent | what he names. Ask once at stage 1 and record it in `ledger.md` |
 
 A model or effort he asks for on a ticket wins over these defaults on every dispatch it
@@ -80,7 +82,7 @@ enforces. Run the gate as the worker's brief says.
 | 5 | Review the plan, max 2 rounds | `plan-review-rN-<lens>.md`, `plan.rN.md` | — |
 | 6 | Implement, in the worktree he picks | the dirty tree | **his worktree choice, before it starts** |
 | 7 | Review the code, max 3 rounds | `code-review-rN-<lens>.md` | — |
-| 8 | Naming proposals, docs, then the report; tree left dirty | `naming-<crate>.md` | **his review** |
+| 8 | Naming proposals, docs, then the report; tree left dirty | `naming-<crate>.md`, `docs-review-<repo>-K.md` | **his review** |
 | 9 | Refactor or commit | commits | **his word** |
 | 10 | Push, create the MR, move to In Code Review | `mr.md` | **his word on the push** |
 | 11 | Merged: post-merge status, clean up | Jira comment | — |
@@ -94,6 +96,7 @@ ticket is a subtask of one story, else the first ticket's key.
 - each ticket's issue type and its post-merge status (see *Ticket status*)
 - the models he named for gatherers, the planner, investigators, the stage 8 docs writer
   and the final-gate agent, and any model or effort he set for this ticket
+- whether stage 8 runs the docs review
 - container names he chose to keep when the Docker check found them (see *Working rules*)
 - the worktree choice, once made
 - the checkout holding the change, and its `git status --short --untracked-files=all`
@@ -216,6 +219,7 @@ Then ask, in **one** message, everything that applies:
 - whether to continue on an existing remote branch for the key, or cut a new one
 - the model and effort for gatherers, the planner, investigators, the stage 8 docs writer
   and the final-gate agent
+- whether stage 8 runs the docs review (*Docs review* in stage 8)
 - the branch prefix and post-merge status, for any type the table above does not cover or
   when the tickets in scope differ in type, and the post-merge status for a Bug
 
@@ -510,6 +514,33 @@ The designers have no Write tool: save each final message verbatim to
 drop one whose name the change neither adds nor renames and that the change does not make
 wrong.
 
+**Docs review**, when he picked it at stage 1. Once the writer returns, list the Markdown
+files the change adds or modifies in each repository:
+`git -C <checkout> diff --name-only --diff-filter=AMR <base> -- '*.md'` plus
+`git -C <checkout> ls-files --others --exclude-standard -- '*.md'`. Dispatch one
+general-purpose reviewer per file, all in one message, each with model `opus` and effort
+`low`, `<out>` its own `<run>/docs-review-<repo>-K.md` (K numbers that repository's files),
+and these lines, filled:
+
+```
+You review one Markdown file of the change in <repo>: <path>, in <checkout>, diffed against
+<base>. Run every git command as `git -C <checkout>`. Read the file's diff
+(`git diff <base> -- <path>`, the whole file when it is untracked) and the file around it.
+Check each added or changed line against the code it describes and against the ticket's
+decisions in <run>/ticket.md, <run>/options.md, <run>/plan.md and <run>/ledger.md, a later
+decision overriding an earlier one: a claim the code does not bear out, a decision stated
+otherwise than it was taken, a wrong name, path, command or number. Report an unchanged
+line only when the change makes it wrong. Use only read-only commands, never a test, a build
+or Docker; never modify a file. Write to <out>: each finding with its <path>:line, what the
+line says, and what the code or the decision says instead, citing its file:line or ledger
+line; or `No findings.`
+```
+
+Record the dispatch in `ledger.md` as `8: docs review dispatched (<repo> 1 <path>, 2 <path>,
+...)`. Its findings go into the report with the others, each with its `file:line`; fixing one
+is a stage 9 refactor. A fresh stage 8 report runs the docs review again over the files the
+listing then gives, with a new ledger line, overwriting the earlier review files.
+
 Then give him **change-cycle-pipeline**'s operator report, every finding in plain words with
 its exact `file:line`. Its next action is his review, so it ends with a review guide for
 each repository the change touches. The guide tells him where to spend his attention, in
@@ -693,7 +724,7 @@ Compare its files with the set the ledger names. Re-dispatch only the reviewers,
 checkers by their recorded number, whose file is missing, in one message, then triage the
 round. Never re-run one whose file
 exists. In stage 8, re-dispatch only the naming designers whose `naming-<crate>.md` is
-missing.
+missing, and the docs reviewers whose file is missing from the set the ledger names.
 
 ## Ticket status
 
@@ -782,6 +813,5 @@ Every dispatch that touches a repository carries:
   its traps, its docs rules and its agents. When the brief may run Docker, also the
   subagent Docker lines under *Working rules*
 - for a dispatch that is not briefed to run Docker (gatherers, the planner, plan reviewers,
-  lenses, guards, checkers, the stage 8 writer, the naming designers): "Never run cargo,
-  just or docker: they
-  share Docker state with other sessions."
+  lenses, guards, checkers, the stage 8 writer, the naming designers, the docs reviewers):
+  "Never run cargo, just or docker: they share Docker state with other sessions."
