@@ -10,7 +10,7 @@ description: >-
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.1.15"
+  version: "0.1.16"
 ---
 
 # Syneto Ticket Delivery
@@ -450,10 +450,12 @@ stage 9.
 **Docs review**, when he picked it at stage 1. Once the writer returns, list the Markdown
 files the change adds or modifies in each repository (in the deploy repo, HEAD is `<base>`
 throughout): `git -C <checkout> diff --name-only --diff-filter=AMR <base> -- '*.md'` plus
-`git -C <checkout> ls-files --others --exclude-standard -- '*.md'`.
-Dispatch one general-purpose reviewer per file, all in one message, each with model `opus`
-and effort `low`, `<out>` its own `<run>/docs-review-<repo>-K.md` (K numbers that
-repository's files), and these lines, filled:
+`git -C <checkout> ls-files --others --exclude-standard -- '*.md'`. Before the dispatch,
+make sure `ledger.md` records, in order, every decision he changed after `plan.md` was
+written: the reviewers learn his decisions from the run files alone. Dispatch one
+general-purpose reviewer per file, all in one message, each with model `opus` and effort
+`low`, `<out>` its own `<run>/docs-review-<repo>-K.md` (K numbers that repository's files),
+and these lines, filled:
 
 ```
 You review one Markdown file of the change in <repo>: <path>, in <checkout>, diffed against
