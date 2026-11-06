@@ -5,7 +5,7 @@ argument-hint: "<advisor session name>"
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.1.3"
+  version: "0.1.4"
 ---
 
 # Ask the advisor
@@ -25,20 +25,10 @@ repository and branch), the question, the options you see and your recommendatio
 **Operator-level questions go on to the operator.** A question is operator-level when the
 decision belongs to the operator, not the advisor: scope or requirements they have not settled,
 an approval or gate that a skill or their instructions reserve for them, a trade-off that is
-theirs. Tell the advisor in the message that it is operator-level: it must nag the operator with
-the `nag` from `~/.bashrc` until they answer, then stop it and relay the answer here. In a
-Claude Code shell that function is not loaded, so give the advisor the script's two commands,
-filled in. `nag.py` accepts only lowercase letters, digits and dashes as the id: use this
-session's name lowercased, each run of other characters turned into one `-`, none at either end
-(`SYN-3392 licensing big` → `syn-3392-licensing-big`). Without a ticket, or when the session's
-name already holds its key, leave `<ticket key>: ` out of the title.
-
-```
-~/Projects/agent-skills/software-engineering/agent-sync/scripts/nag.py start <nag id> \
-  --title "<this session's name>: <ticket key>: <the question in a few words>"
-~/Projects/agent-skills/software-engineering/agent-sync/scripts/nag.py stop <nag id>
-```
+theirs. Mark it operator-level in the message, so the advisor nags the operator with the `nag`
+from `~/.bashrc` until they answer (its `technical-solution-advisor` skill says how), then
+relays the answer here.
 
 Either way, end your turn and wait: the advisor's reply arrives as a cross-session message. Do
 not go ahead on a guess or work around the question. If the operator answers here instead, tell
-the advisor so it stops the nag.
+the advisor so it stops the nag, and go on with their answer.
