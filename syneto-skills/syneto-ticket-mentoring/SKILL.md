@@ -8,11 +8,11 @@ description: >-
   profile. Not for a ticket Cristian works himself (syneto-ticket-delivery) and not for
   teaching a topic with no ticket attached (teach-schematic). Syneto-specific: assumes the SYN
   Jira board through the Atlassian MCP, repositories under /home/cristi/Projects, glab
-  authenticated to gitlab.syneto.eu, and the learner's directory ~/Projects/mentoring.
+  authenticated to gitlab.syneto.eu, and the learner's directory ~/.cache-mentoring.
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.1.0"
+  version: "0.1.1"
 ---
 
 # Syneto Ticket Mentoring
@@ -37,14 +37,14 @@ work he has to learn to do.
 parts of it by reference, never by copy. In those parts its operator ("he", "his word", "ask
 him") is the junior, with three exceptions: the tester at Testing is Cristian, the
 escalations under *Guardrails* go to Cristian, and only Cristian overrules a needs-testing
-call. Its run directory `<run>` is `~/Projects/mentoring/tickets/<KEY>/`.
+call. Its run directory `<run>` is `~/.cache-mentoring/tickets/<KEY>/`.
 
 ## The mentoring directory
 
-Everything durable lives in `~/Projects/mentoring/`, a git repository of the junior's:
+Everything durable lives in `~/.cache-mentoring/`, a git repository of the junior's:
 
 ```text
-~/Projects/mentoring/
+~/.cache-mentoring/
   CLAUDE.md          who works here; tickets here use syneto-ticket-mentoring
   profile.md         the learner model: the one file read at every session start
   glossary.md        one line per term, defined once
@@ -55,7 +55,7 @@ Everything durable lives in `~/Projects/mentoring/`, a git repository of the jun
                      tasks.md, review-*.md, mr.md, mr-<repo>.md, retro.md
 ```
 
-The junior starts Claude Code in this directory and `/add-dir`s the repositories a ticket
+The junior runs `mkdir -p ~/.cache-mentoring` once, then starts Claude Code in it and `/add-dir`s the repositories a ticket
 needs. On the first session, when `profile.md` is missing: ask his name, `git init` it,
 write `CLAUDE.md` (two lines), `profile.md` (`references/learner-profile.md`), an empty
 `glossary.md` and `study-notes.md`, and commit. Every later change to it is a commit, in the
@@ -86,7 +86,7 @@ ticket's own key, a subtask's included: one run per ticket.
 |---|---|---|---|
 | A. Read the ticket | 1 | Fetch the ticket | He restates the problem and the acceptance criteria |
 | B. Find the code | 2 | Search, draw this ticket's slice | He predicts which layer changes |
-| C. Approach | 3 | Two approaches, a choice, a Jira comment | His reason for the choice |
+| C. Approach | 3 | Two approaches, a choice | His reason for the choice |
 | D. Tasks | 4–5 | 3 to 7 tasks, each ending on a green gate | He explains tasks back |
 | E. Build, test first | 6 | Red, predict, green, gate, per task | He predicts each run (a check) |
 | F. Review | 7 | His review, then a read-only reviewer | His verdict on each finding |
@@ -141,13 +141,8 @@ second ticket on.
 At most two genuinely different approaches: files touched, what each fixes and leaves, size,
 risk. When only one is viable, say so and why. At Levels 0 and 1 you present them and he picks
 with a reason; from Level 2 he proposes and you critique. Write the choice and the locked
-scope (what is in, what is out) to `approach.md`.
-
-Then post a Jira comment on the ticket (Markdown, `contentFormat: "markdown"`), at most eight
-lines: the approach, the files, what is out of scope. Continue without waiting: it is
-Cristian's early warning, not a gate. The Atlassian MCP posts as Cristian, so every Jira
-comment this session writes, here and in the senior's stages, ends with
-`mentoring session, <junior>`.
+scope (what is in, what is out) to `approach.md`. No Jira comment: Cristian checks the
+solution at the MR review.
 
 ### D. Tasks
 
@@ -225,14 +220,16 @@ ledger. Comments answered before the merge are still read at J.
 
 When he says the MR merged, or `glab` shows it: follow the senior's stage 11 for the Jira
 moves, the closing comment and the cleanup with its `sha` check, but not its last step:
-`complete` goes into the ledger only after step 3 below. Then:
+`complete` goes into the ledger only at step 5 below. Then:
 
 1. Read Cristian's review comments on the MR (`glab mr view <branch> -R <group>/<repo> -c`)
    and fold them into the profile (`references/learner-profile.md`).
 2. Write `tickets/<KEY>/retro.md`: what he did by hand, what he prompted, what he learned,
    what Cristian corrected, the time it took.
 3. From `study-notes.md`, name in one line what the next ticket is likely to meet.
-4. Write `complete` in the ledger, or `pending: Testing` when *Ticket status* says so, and
+4. When the profile now meets the next level's entry criteria, suggest the level in one line
+   (*Who holds the pen*); his answer, if any, is its own profile commit.
+5. Write `complete` in the ledger, or `pending: Testing` when *Ticket status* says so, and
    commit.
 
 ## Who holds the pen
@@ -272,8 +269,11 @@ Entry criteria, every concept id from `references/curriculum.md`:
 - **L3:** `cc.prompt-pattern`, `cc.failure-modes`, `ddd.repository-port`,
   `eng.scope-discipline` mastered; two tickets in a row with no ✗ row at stage G.
 
-Raise the level when its criteria are met, commit it, and say so in the next MR's mentoring
-section. Cristian lowers or raises it by editing `profile.md`.
+The level changes only on a word. When a level's criteria are met, suggest it to the junior
+in one line at the end of a ticket ("ready to take the next level on the next ticket?"). On
+his yes, or when he says Cristian agreed to a change, edit `level` and `level_since` in
+`profile.md` and commit. Never announce a level in the MR. Cristian may also edit the file
+himself.
 
 ## Teaching
 
@@ -359,7 +359,7 @@ as its output line. When you were wrong, say so and redraw.
 
 ## Resuming
 
-Open `~/Projects/mentoring/tickets/<KEY>/ledger.md` for the key he names, else the only ledger
+Open `~/.cache-mentoring/tickets/<KEY>/ledger.md` for the key he names, else the only ledger
 without `complete`, else ask him. Re-verify as the senior's *Resuming* does (branch and dirty
 files, Jira status, the repository among the working directories), stop on a difference, then
 continue from the stage the ledger names. Read the profile first, as every session does.

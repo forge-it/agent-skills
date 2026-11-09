@@ -8,9 +8,7 @@ under the session cap; whatever the cap defers is met at the concept's next inst
 ticket or the next) or **J** (later tickets, when one touches it) — the act that proves it
 (introduced → practised).
 
-The areas are in the order a rest-api ticket meets them. His first tickets are in rest-api
-(its layers are the architecture to learn, and its unit tier runs without Docker), then
-central-backend (not DDD: the contrast is a lesson). Never the deploy repo.
+The areas are in the order a rest-api ticket meets them.
 
 ## sh. Terminal and machine
 

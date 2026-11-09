@@ -10,7 +10,7 @@ followed by a space and `(`.
 ```text
 ## Mentoring
 
-Level 1, Tester · session 7 · new this ticket: pytest.fixture, ddd.repository-port
+Session 7 · new this ticket: pytest.fixture, ddd.repository-port
 
 | File | Written by | Explained back |
 |---|---|---|
@@ -20,16 +20,15 @@ Level 1, Tester · session 7 · new this ticket: pytest.fixture, ddd.repository-
 
 Stuck: ddd.repository-port — put SQL in the domain twice; a word from you would help.
 Questions for your review: why does the fake repository not need `commit()`?
-Docker tiers: integration, mentor-run at Level 1: passed / not run.
-Level change: none; L2 still needs pyw.naming mastered.
+Docker tiers: integration, mentor-run: passed / not run.
 ```
 
 - **Written by:** `junior, by hand`, `junior, via prompt` (the coder subagent from his prompt),
   `mentor, in session`, or `written by Claude, not explained back` when he skipped it with
   "just do it".
 - **Explained back:** `yes`, `partly: <the gap>`, or `no` (a hunk still ✗ at stage G).
-- Name every concept still `stuck`, his open questions, every test tier not run, and any level
-  change with its criteria. Leave out what is fine.
+- Name every concept still `stuck`, his open questions and every test tier not run. Leave
+  out what is fine, and any level change: that is between the junior and Cristian.
 
 ## Reading the review back (stage J)
 

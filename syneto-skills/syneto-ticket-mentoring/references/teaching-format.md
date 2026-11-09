@@ -73,7 +73,7 @@ say so and give the developer habit that replaces it.
 | Fill in | His first tests at Level 1 | A skeleton with `...` at the assert or the arrange; the next one without |
 | Spot the finding | Stage F, on the real diff | Never plant a bug in repository code |
 | Retrieval question | A `rusty` concept, when the step needs it | `AskUserQuestion`, 2 to 4 options, the distractors are the misconceptions he could hold; "Other" covers "no idea" |
-| Kata | Only when a concept blocks the task and the ticket's instance is too tangled to learn on (async, fixtures, the unit of work) | `~/Projects/mentoring/exercises/<id>/`, run with the repository's venv from outside the repository, at most 15 minutes; a planted bug is labelled as one |
+| Kata | Only when a concept blocks the task and the ticket's instance is too tangled to learn on (async, fixtures, the unit of work) | `~/.cache-mentoring/exercises/<id>/`, run with the repository's venv from outside the repository, at most 15 minutes; a planted bug is labelled as one |
 
 Skip a check when he just explained the concept correctly unprompted, or got the last two
 related checks right. A check is most often an act (predict, write the test, explain the

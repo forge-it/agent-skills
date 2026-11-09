@@ -1,6 +1,6 @@
 # The learner profile
 
-`~/Projects/mentoring/profile.md` is the learner model. It is read in full at every session
+`~/.cache-mentoring/profile.md` is the learner model. It is read in full at every session
 start and is the only thing that decides whether a concept gets a lesson, a reminder, a
 question or nothing (SKILL.md, *Teaching*). It is Markdown so Cristian can correct it in an
 editor, and a fixed-column table so it parses reliably.
@@ -55,7 +55,7 @@ You, at three moments, editing rows in place (never regenerate the file, so a li
 edited by hand survives):
 
 1. Right after a check or an attempt: the row, then a commit.
-2. At stage J, the ticket closed: `seen`, evidence, the level when its criteria are met.
+2. At stage J, the ticket closed: `seen`, evidence; a level only on a word (SKILL.md, *Who holds the pen*).
 3. At stage J, reading Cristian's review comments on the MR: a comment that names a wrong
    belief or a missed rule fills `misconception` and demotes that concept to `practised`; a
    comment that only asks for a change is evidence, not a demotion. Quote the comment's
@@ -65,7 +65,7 @@ Commit subject shapes, so `git log` reads as his growth record:
 
 ```text
 profile: pytest.fixture introduced → practised (SYN-3115)
-profile: level 1 → 2 (criteria met: pytest.fixture, ddd.layers mastered)
+profile: level 1 → 2 (his yes; criteria met: pytest.fixture, ddd.layers mastered)
 handbook: pytest.fixture
 glossary: fixture, conftest
 study-notes: py.async-await deferred (SYN-3115)
@@ -76,7 +76,7 @@ retro: SYN-3115
 
 ## Cristian's view
 
-He reads `git -C ~/Projects/mentoring log -p profile.md`, or edits the file: a state, the
+He reads `git -C ~/.cache-mentoring log -p profile.md`, or edits the file: a state, the
 level, a misconception. Treat any edit of his as the truth, even when it contradicts your
 evidence.
 
