@@ -569,8 +569,9 @@ change if it is still uncommitted (his word for the push covers that commit), pu
 command shown, and watch its pipeline with **ci-pipeline-watch**.
 
 Once every code repository a ticket covers is merged and its deploy branch, if it has one,
-is pushed, move the ticket to **Done** without asking, subtasks
-before their parent. Comment on each: per repository, the commit that landed
+is pushed, close the ticket without asking, subtasks before their parent. A Subtask moves to
+**Done**. A Story, Bug or Epic follows the workflow in Ticket status: to **Testing** when it
+needs testing, else straight to **Done**. Comment on each: per repository, the commit that landed
 (`squash_commit_sha` when that output's `squash` is true, else `merge_commit_sha`; squash is
 chosen per MR, so read it every time) and its `target_branch`, then the acceptance criteria
 as a checklist. Fetch nothing into his checkout for this. Comment on tickets; never edit a
@@ -628,7 +629,7 @@ the set the ledger names.
 |---|---|
 | Stage 1, he hands you the tickets | In Progress |
 | Stage 10, every code repository the ticket covers has an open MR | Review |
-| Stage 11, every one of those MRs is merged and any deploy branch is pushed | Done |
+| Stage 11, every one of those MRs is merged and any deploy branch is pushed | Subtask: Done. Story, Bug, Epic: Testing, or Done when it needs no testing |
 
 Never reuse a transition id: fetch `getTransitionsForJiraIssue` for each issue **at its
 current status** and match the target status by name, because a wrong id succeeds into a
@@ -639,6 +640,22 @@ Done on a Subtask). Read the status back after every move.
   versions is set: set the version that corresponds to the base (stage 1) with
   `editJiraIssue` first. When no version matches, ask him.
 - From Review, a Subtask has "Review OK" → Done; prefer it after a merge.
+- Stories, Bugs and Epics run Ready → In Progress → (Review) → Testing → Acceptance → Done
+  (VPE, 2026-11-06). From New Item they reach In Progress only through Ready. Subtasks keep
+  their own workflow.
+- A Story, Bug or Epic **needs testing** when it changes what someone can see or use: a
+  screen, an API response, an email, a job's result, a machine's behaviour. A refactor, a
+  rename, docs, CI or tests alone need none. Say which in the closing comment, with the
+  reason in one line; he can overrule it.
+- Moving to Testing requires **Fixed in build** (`customfield_10178`, free text), set with
+  `editJiraIssue` before the transition. For Central it is `<central minor>.<iid>`: the
+  pipeline number of the **infra/central** `dev-on-prem` deploy pipeline that put the last
+  of the ticket's merges on dev, e.g. `2.10.9249`
+  (`glab api --hostname gitlab.syneto.eu "projects/68/pipelines?ref=dev-on-prem&per_page=10"`,
+  the first success after the post-merge pipeline). Never a service repo's own pipeline
+  number. One value per ticket. For a SynetoOS ticket, ask him which build to write.
+- Testing → Acceptance → Done belongs to the tester (he usually tests his own work). Stop at
+  Testing and say in the report that the ticket waits for his test on dev.
 - A parent moves to Review or Done only once every one of its subtasks, including any
   outside this run, is at that status or past it; until then it stays In Progress, and the
   report names the subtask holding it.
