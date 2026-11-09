@@ -7,7 +7,8 @@ and he would learn it wrong.
 
 ## Sources, in order of trust
 
-1. **The code**, at the line you quote.
+1. **The code**, at the line you quote, and import-linter's count of its imports
+   (`visual-tools.md`).
 2. **The repository's `CLAUDE.md`, `AGENTS.md` and `docs/decisions/`**: rest-api's `CLAUDE.md`
    names its layer packages (`api`, `application`, `domain`, `adapters`, `infrastructure`,
    `presentation`), the unit of work to use, and the ADRs to read before touching an area.
@@ -16,7 +17,9 @@ and he would learn it wrong.
 4. Your own knowledge of the frameworks (FastAPI, SQLAlchemy, pytest), checked against the
    versions in `poetry.lock`.
 
-When two disagree, the higher one wins, and you say so.
+When two disagree, the higher one wins, and you say so. The docs describe the intended
+layers and the import graph the real ones: when those differ, he hears both and which is
+which.
 
 ## How it grows
 
@@ -27,9 +30,9 @@ When two disagree, the higher one wins, and you say so.
   diagram of that repository, with the dependency direction and one sentence per layer.
 - **`ddd.repository-family`**, when a ticket crosses a repository boundary, or a symptom lives
   in another repository: draw the Central repositories involved and who calls whom, only the
-  edges you verified (an HTTP client, a queue name, a gRPC stub, each with `file:line`). Add it to
-  `handbook/architecture-central.html`, creating it the first time: self-contained, a diagram
-  per verified edge set, each edge with its source line, and a "verified on <date>" footer.
+  edges you verified (an HTTP client, a queue name, a gRPC stub, each with `file:line`). Add them to
+  the architecture map artifact, at the address `visual-tools.md` gives: each edge with its
+  source line, and the "verified <date>" updated.
 - **When a session finds the map wrong**: fix the page, say "the map was wrong" at the top of
   the next explanation, and redraw.
 

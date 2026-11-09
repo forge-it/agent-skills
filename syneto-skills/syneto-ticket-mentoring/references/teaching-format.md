@@ -88,10 +88,8 @@ These turn into his personal handbook; written once, corrected when wrong, point
   and `file:line` it came from, and the command or snippet he will need again.
 - **`glossary.md`**: `term — one line — handbook/<id>.md`, alphabetical.
 - **`study-notes.md`**: `- [ ] <id> — why it came up — <KEY> — <date>`; ticked when taught.
-- **One HTML page:** `handbook/architecture-central.html`, the Central repository map, when
-  `ddd.repository-family` comes up (`architecture-map.md`). Self-contained, local, opened with
-  `xdg-open`, never published: it describes company code. Any other page only when he asks for
-  one.
+- **Artifacts and tool pictures:** `visual-tools.md` says when and how; their URLs and paths
+  go in the handbook page of the concept they teach.
 
 ## Not produced
 

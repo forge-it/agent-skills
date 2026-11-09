@@ -12,7 +12,7 @@ description: >-
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.1.1"
+  version: "0.1.2"
 ---
 
 # Syneto Ticket Mentoring
@@ -51,6 +51,7 @@ Everything durable lives in `~/.cache-mentoring/`, a git repository of the junio
   study-notes.md     deferred concepts: id, why it came up, ticket, date
   handbook/<id>.md   one page per concept introduced, written once, pointed to after
   exercises/<id>/    katas, his solution beside them
+  visuals/           tool output, git-ignored except README.md (visual-tools.md)
   tickets/<KEY>/     the run: ticket.md, ledger.md, context.md, approach.md,
                      tasks.md, review-*.md, mr.md, mr-<repo>.md, retro.md
 ```
@@ -58,7 +59,8 @@ Everything durable lives in `~/.cache-mentoring/`, a git repository of the junio
 The junior runs `mkdir -p ~/.cache-mentoring` once, then starts Claude Code in it and `/add-dir`s the repositories a ticket
 needs. On the first session, when `profile.md` is missing: ask his name, `git init` it,
 write `CLAUDE.md` (two lines), `profile.md` (`references/learner-profile.md`), an empty
-`glossary.md` and `study-notes.md`, and commit. Every later change to it is a commit, in the
+`glossary.md` and `study-notes.md`, a `.gitignore` per `references/visual-tools.md`, and
+commit. Every later change to it is a commit, in the
 shape `references/learner-profile.md` gives. Cristian reads it with `git log -p` and corrects
 by editing: his edit is the truth.
 
@@ -300,6 +302,9 @@ For each concept a step touches:
 | rusty | One retrieval question at the moment the concept is needed, never as an opening quiz |
 | stuck | One more worked example on this ticket's instance, then move on; the MR's mentoring section names it |
 
+Pictures of what is really there (the git graph, the import graph, artifacts built from
+their output) come from `references/visual-tools.md`, which says which tool fits which concept
+and level.
 Formats, the hint ladder, the answer-response table and the exercise types are in
 `references/teaching-format.md`; the states and their promotion rules in
 `references/learner-profile.md`; the concepts in `references/curriculum.md`.
@@ -328,6 +333,8 @@ committed that he cannot explain: stage G enforces it.
 - A gate command that rewrites files (plain `ruff check`, `make style` or `make lint` in
   syneto-diana, `pre_commit run` in central-backend other than its `flake8 --files` form).
 - Docker outside the senior's lock rule; remove a lock this session did not take.
+- git-sim's hosted pages (`references/visual-tools.md`), `git-sim wire-agents` or
+  `git-sim aliases`: they rewrite agent configurations and git's global config.
 - Commit before stage G passes and without his word; push without his word; merge an MR;
   move a ticket past Review before its MR merged; edit a Jira description.
 
