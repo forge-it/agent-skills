@@ -57,6 +57,7 @@ They live in `syneto-skills/`, which is the directory `~/.claude/skills` points 
 | [syneto-release-notes-scoped](syneto-skills/syneto-release-notes-scoped/SKILL.md) | Central release notes restricted to operator-named repositories; fleet-wide discovery still guards the pair and surfaces what the scope omits |
 | [syneto-release-promote](syneto-skills/syneto-release-promote/SKILL.md) | Ship an accepted release: preflight the fleet, merge dev into prod, push |
 | [syneto-ticket-delivery](syneto-skills/syneto-ticket-delivery/SKILL.md) | Take a SYN ticket from hand-over to merged: fleet context, three options, a reviewed plan, fleet implementation and review, with his four gates and the ticket status moves |
+| [syneto-ticket-mentoring](syneto-skills/syneto-ticket-mentoring/SKILL.md) | The junior's sibling of ticket delivery: one mentor, one learner, the ticket as syllabus; a git-tracked learner profile decides what is taught, the junior's share grows over four levels, and the MR carries an understanding ledger for Cristian's review |
 | [syneto-mr-review](syneto-skills/syneto-mr-review/SKILL.md) | Review a gitlab.syneto.eu merge request with a Sonnet fleet; the operator picks the findings, and only those become review notes and the file sent to the author over Google Chat |
 
 ### Roche
