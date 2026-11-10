@@ -17,7 +17,6 @@ says the stack has it.
 | `{STRUCTURE_DOC}` | the structure document the repository's entry names, else `CLAUDE.md` |
 | `{STYLE_SKILL}`, `{TEST_SKILL}`, `{ARCHITECTURE_LINE}`, `{REVIEWER_AGENT}` | from the stack table in SKILL.md |
 | `{REPO_FACTS}` | the repository entry's *Facts for every lens* lines, else nothing |
-| `{AUTHOR_LINE}` | lens 09 only. When he has said which language the author comes from (record it in `meta-notes.md`) → `The author is an experienced <language> developer learning Rust: map each idiom to the <language> idea they already know when that helps (for C++: RAII ↔ Drop, std::optional ↔ Option, exceptions ↔ Result and ?, std::call_once ↔ OnceLock, copy-by-default ↔ move-by-default).` · otherwise → `Write for a developer who knows Rust's basics but not its idioms.` |
 
 With no ticket, drop `({TICKET})` and the `Ticket:` line from the preamble, tell lenses 01
 and 05 to judge against the MR description alone, and tell lens 07 to skip its ticket table
@@ -143,7 +142,7 @@ Rust stack only. Learning feedback for the author, not a bug hunt. In the preamb
 header, replace `<Critical|Important|Minor|Nit>` with `<Minor|Nit>`.
 
 ```
-YOUR LENS: RUST IDIOMS. Load the rust-design-idioms and rust-code-style skills. On new and changed lines, production and tests, find code that is correct but reads like another language written in Rust syntax, where an idiomatic Rust construct would be clearer, safer or shorter. {AUTHOR_LINE}
+YOUR LENS: RUST IDIOMS. Load the rust-design-idioms and rust-code-style skills. On new and changed lines, production and tests, find code that is correct but reads like another language written in Rust syntax, where an idiomatic Rust construct would be clearer, safer or shorter. Write it as learning feedback for an experienced C++ developer learning Rust, whoever the author is: map each idiom to the C++ idea they already know when that helps (RAII ↔ Drop, std::optional ↔ Option, exceptions ↔ Result and ?, std::call_once ↔ OnceLock, copy-by-default ↔ move-by-default).
 Examples of what to look for (not a checklist to force-fit):
 - manual index loops and byte-offset arithmetic where iterators, slices, `char_indices`, `split_at`, `str::floor_char_boundary` or other std methods already do the job;
 - sentinel values, bool flags or out-parameters where `Option`, `Result` or an enum would say it in the type;

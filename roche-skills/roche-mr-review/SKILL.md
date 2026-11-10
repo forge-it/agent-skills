@@ -4,7 +4,7 @@ description: Use when the operator asks to review a GitLab merge request on code
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.2.0"
+  version: "0.2.1"
 ---
 
 # Roche MR Review
@@ -122,8 +122,7 @@ cover his hunt list, and their shared preamble carries his scope rule: **new or 
 only**, never pre-existing code. A finding that breaks that rule is dropped in stage 4.
 
 Fill the briefs from the repository's entry: its stack row (from the stack table below), its
-structure document, and its facts. Lens 09's `{AUTHOR_LINE}` uses the author's previous
-language when he has named it.
+structure document, and its facts.
 
 ### 4. Synthesize, refute, verify
 
@@ -216,8 +215,8 @@ point at other places as `path:line`. A note for an *Uncertain* finding says in 
 Description, in one plain sentence, what could not be confirmed.
 
 A rust-idiom note, or a merged note carrying an idiom explanation, is learning feedback: at
-most two short paragraphs explaining the idiom (with analogies to the author's previous
-language where they help), then the before/after snippet. A Nit is a few lines.
+most two short paragraphs explaining the idiom (with C++ analogies where they help), then
+the before/after snippet. A Nit is a few lines.
 
 Run `post_notes.py <run>`, a dry run that prints where each note will land and preflights
 every body against GitLab's markdown endpoint. Read the plan, then run
