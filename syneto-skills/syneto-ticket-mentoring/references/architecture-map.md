@@ -26,7 +26,7 @@ which.
 - **Stage B of every ticket**: draw only this ticket's slice, from the route or entry point to
   the store and back, every box a real module with its `file:line`. Mark the part the ticket
   changes with `▲`.
-- **A layer's first appearance** (new → introduced): its handbook page holds the full layer
+- **`ddd.layers`'s first meeting**: its handbook page holds the full layer
   diagram of that repository, with the dependency direction and one sentence per layer.
 - **`ddd.repository-family`**, when a ticket crosses a repository boundary, or a symptom lives
   in another repository: draw the Central repositories involved and who calls whom, only the

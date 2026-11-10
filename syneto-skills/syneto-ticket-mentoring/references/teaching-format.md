@@ -12,7 +12,7 @@ How an explanation, a check and a piece of material look. When to teach at all i
 - **Show control flow explicitly:** who calls whom, who waits, the moment a call returns and
   what it returns. A value never moves between boxes without an arrow.
 - **Define before use, once.** A term he may not know gets one to three lines, mapped to what
-  he knows from QA, before it appears, and a line in `glossary.md`. After that, "see glossary:
+  he knows from QA, before it appears, and a line in `glossary.md`, unless the glossary already has it. After that, "see glossary:
   fixture". "What is X?" from him means you assumed too much: define it and continue.
 - **State consequences concretely:** not "it fails" but "the request returns 500 and the
   product stays unlicensed".

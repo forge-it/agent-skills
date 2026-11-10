@@ -3,9 +3,7 @@
 The concepts a junior meets on Syneto tickets, as stable ids for `profile.md`. This is a map,
 not a course: nothing here is taught until a ticket needs it.
 
-Each line: `id` — what it means — **P** (first ticket: met at the step that first needs it,
-under the session cap; whatever the cap defers is met at the concept's next instance, on this
-ticket or the next) or **J** (later tickets, when one touches it) — the act that proves it
+Each line: `id` — what it means — **P** (first ticket, at the step that first needs it) or **J** (later tickets, when one touches it) — the act that proves it
 (introduced → practised).
 
 The areas are in the order a rest-api ticket meets them.
@@ -133,5 +131,5 @@ He verified vendors' claims for a living: generated code is a claim.
 
 ## Added by sessions
 
-Concepts a session needed that this file lacked, one line each in the format above, with the
-ticket that added it. Fold them into their area when this file is next edited.
+Concepts sessions added live in `~/.cache-mentoring/curriculum-added.md`; Cristian folds
+them in here.

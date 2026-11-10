@@ -3,7 +3,7 @@
 The merge request is Cristian's mentoring gate: he reads what the junior understood beside
 what changed. The description is the senior's stage 10 description (what changed and why, how
 it was tested, the risk, the ticket link), dev to dev, and then this section. Write it with
-the junior at stage I from the stage G grades. It goes through the same WAF line check as the
+the junior at stage I from `understanding.md`. It goes through the same WAF line check as the
 rest of the description, and the template avoids the shapes that check blocks: never a word
 followed by a space and `(`.
 
@@ -32,13 +32,16 @@ Docker tiers: integration, mentor-run: passed / not run.
 
 ## Reading the review back (stage J)
 
-After the merge, read Cristian's notes:
+Read Cristian's notes, in a review round and again after the merge:
 
 ```text
-glab mr view <branch> -R <group>/<repo> -c
+glab mr view <branch> -R <group>/<repo> --comments -P 100
 ```
 
-For each comment: did it name a wrong belief or a missed rule (demote and fill
-`misconception`), confirm something (evidence), or answer one of his questions (a
+The long flag, on purpose: this machine's `rtk` hook drops the comments from `-c` and still
+exits 0. The `comments:` count in the header must match the number of notes you read.
+
+For each comment: did it name a wrong belief or a missed rule (fill `misconception`; the
+state per `learner-profile.md`'s table), confirm something (evidence), or answer one of his questions (a
 `study-notes.md` tick or a glossary line)? Apply it per `learner-profile.md`, and note in
 `retro.md` what Cristian corrected.

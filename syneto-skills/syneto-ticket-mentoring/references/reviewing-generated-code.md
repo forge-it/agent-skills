@@ -16,8 +16,8 @@ A prompt for code holds, in this order:
    is the schema.
 6. **"Do not commit."**
 
-At Level 1 you show your own prompt for the first task; from the second task he writes the
-prompt and you write the code from it, after naming at most one missing constraint. From
+At Level 1 you show your own prompt for his first task at that level; after that the
+*Teaching* table decides, so he writes the prompt and you write the code from it, after naming at most one missing constraint. From
 Level 2 his prompt goes to the coder subagent, with the same one-constraint rule: the rest he
 learns from the review.
 
@@ -27,8 +27,9 @@ His prompt goes verbatim, followed by these lines, to `python-implementor-expert
 (or the implementor `repository-traps.md` names for the repository):
 
 ```text
-You work in <repo>, the main checkout, on branch <branch>; nobody else edits it while you
-work. Run every git command as `git -C <repo>`. Use <repo>/.venv/bin/python. Git is
+You work in <checkout>, on branch <branch>; nobody else edits it while you work. Edit files
+only under it. Run every git command as `git -C <checkout>`. Use <repo>/.venv/bin/python, the
+main checkout's interpreter, from <checkout>. Git is
 read-only for you except the files you edit: no commit, stash, fetch, pull, checkout or
 reset. The gate is: <gate command from repository-traps.md>. Report the files you changed
 and the gate's result line.
@@ -44,7 +45,7 @@ Each failure mode comes with the one check that catches it: a QA person reviews 
 
 | Failure mode | The check |
 |---|---|
-| Invented API or wrong signature | `<repo>/.venv/bin/python -c "import <module>; help(<module>.<name>)"`, or grep the repository for the definition and quote its `file:line` |
+| Invented API or wrong signature | From the directory the tests run in, `<repo>/.venv/bin/python -c "import <module>; help(<module>.<name>)"`, or grep the repository for the definition and quote its `file:line` |
 | Wrong assumption about the codebase | For every call into existing code, open the callee: does it do what the new code assumes? |
 | Over-engineering | Compare the diff with the acceptance criteria: a class, helper, option or layer the ticket did not ask for is a question |
 | A test that tests nothing | **Break it on purpose**: undo the production change, run the test, it must go red |
@@ -76,7 +77,7 @@ Open the skill while reviewing, cite its rule number as the skill spells it, and
 
 ## Stage G, the walkthrough (`cc.never-commit-unexplained`)
 
-Show the diff against the base one hunk at a time, untracked files in full. For each hunk he
+Show the diff against the ledger's `fork` one hunk at a time, untracked files in full. For each hunk he
 answers two things: what it does, and why the ticket needs it. Grade silently:
 
 | Grade | Meaning | You |
@@ -86,6 +87,6 @@ answers two things: what it does, and why the ticket needs it. Grade silently:
 | ✗ | Wrong or "no idea" | His model beside the real one; ask again later in the session |
 
 A hunk still ✗ at the end is removed when the ticket does not need it; otherwise it ships
-recorded as "not explained back" in the MR's ledger. The gate passes when no ✗ row is left
-and the remaining exceptions are recorded. One walkthrough per ticket replaces every other
+recorded as "not explained back" in `understanding.md`. The gate passes when every hunk is
+explained or recorded. One walkthrough per ticket replaces every other
 check in this stage.
