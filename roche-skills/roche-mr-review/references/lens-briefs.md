@@ -138,24 +138,21 @@ When the repository's facts name project-specific hazards, check those too.
 
 ## 09 · Rust idioms — `general-purpose`, NN `09`, SLUG `rust-idioms`, PREFIX `R09`
 
-Rust stack only. Learning feedback for the author, not a bug hunt. In the preamble's entry
-header, replace `<Critical|Important|Minor|Nit>` with `<Minor|Nit>`.
+Rust stack only. Learning feedback for the author, not a bug hunt.
 
 ```
-YOUR LENS: RUST IDIOMS. Load the rust-design-idioms and rust-code-style skills. On new and changed lines, production and tests, find code that is correct but reads like another language written in Rust syntax, where an idiomatic Rust construct would be clearer, safer or shorter. Write it as learning feedback for an experienced C++ developer learning Rust, whoever the author is: map each idiom to the C++ idea they already know when that helps (RAII ↔ Drop, std::optional ↔ Option, exceptions ↔ Result and ?, std::call_once ↔ OnceLock, copy-by-default ↔ move-by-default).
+YOUR LENS: RUST IDIOMS. Load the rust-design-idioms and rust-code-style skills. On new and changed lines, production and tests, find code that is correct but reads like another language written in Rust syntax, where an idiomatic Rust construct would be clearer, safer or shorter. Write it as learning feedback for an experienced C++ developer learning Rust: map each idiom to the C++ idea they already know when that helps (RAII ↔ Drop, std::optional ↔ Option, exceptions ↔ Result and ?, std::call_once ↔ OnceLock, copy-by-default ↔ move-by-default).
 Examples of what to look for (not a checklist to force-fit):
 - manual index loops and byte-offset arithmetic where iterators, slices, `char_indices`, `split_at`, `str::floor_char_boundary` or other std methods already do the job;
-- sentinel values, bool flags or out-parameters where `Option`, `Result` or an enum would say it in the type;
+- sentinel values, bool flags or out-parameters where `Option`, `Result`, an enum or a newtype would say it in the type;
 - manual cleanup or "remember to call X" code where a guard type with `Drop` does it on every path, panics included;
 - shared or global state built by hand where `OnceLock`/`LazyLock`, or passing ownership, would do; `Mutex` lock results and poisoning handled unclearly; `Cell`/`RefCell` where a plain `mut` binding would do;
-- `as` casts that can truncate where `T::try_from` says so; needless `clone`, `Box`, `Arc`, `to_string`; `&String`/`&Vec<T>` parameters instead of `&str`/`&[T]`; `mem::forget` where `ManuallyDrop` says the intent;
-- `match` ladders where `?`, `let … else`, `if let`, `matches!`, `map_or` or `unwrap_or_else` read better; mutable accumulators where an expression would do;
-- `impl` blocks, traits and visibility (`pub` vs `pub(crate)`) used as one class-with-everything instead of small focused types;
-- tests: `#[should_panic]` vs `catch_unwind`, `expect("…")` messages, std test helpers the author may not know.
-Leave alone what other checks already cover: naming, constants and the style skill's rules (another lens has them), and anything rustfmt or clippy reports. The repository's own coding rules (its facts above say where they are) win over a generic idiom: never suggest what they forbid, and never suggest `unsafe`.
+- needless `Box`, `Arc` or `to_string`; `mem::forget` where `ManuallyDrop` says the intent; mutable accumulators where an expression would do;
+- tests: `#[should_panic]` vs `catch_unwind`, std test helpers the author may not know.
+Where the repository's rules or {STRUCTURE_DOC} state a preference (a named helper over a long iterator chain, a clarifying `.clone()`, `pub(crate)` by default, a comment before `RefCell` or `Mutex`), follow it and do not report the idiom; skip any line that carries a `// why:` comment. Load rust-code-style to see which rules lens 04 already checks, and skip those; skip what rustfmt or clippy reports. Never suggest `unsafe`.
 For each entry: Description says what the code does now and explains the Rust concept behind the better form, in at most two short paragraphs; Recommended fix is a short before/after snippet; Impact says what the idiom buys (clarity, a bug class the compiler then rules out, less code). A Nit stays a few lines. When the snippet changes ownership or borrowing and you are not sure it compiles, end Recommended fix with `Compiles: unsure — <why>`.
-Severity: Minor at most, Nit for taste. Write production-code entries before test-code entries. A real bug you notice goes in as Minor with "possible bug — for the logic lens" in its title.
-In "Checked and sound", also list two to six things the author already did idiomatically well.
+Severity: an idiom is Minor at most, Nit for taste. Write at most eight idiom entries, strongest first, production code before test code. A real bug you notice goes in with its true severity and a plain title; the synthesizer files it under logic.
+Inside "Checked and sound", add a list headed `Done well (Rust idioms)`: up to six things the author did idiomatically, each with `path:line`.
 ```
 
 ## Synthesizer — `general-purpose`, after every lens finishes
@@ -168,8 +165,8 @@ Inputs in {RUN}: every ledger-NN-*.md (01 logic … 08 safety-security, and 09 r
 1. Read every ledger in full.
 2. Verify every finding against the code: the cited line exists at the MR head and says what the quote says, and the claim follows from it. Fix wrong line numbers. Drop a finding (list it under "Dropped" with a one-line reason) when it is false, concerns only code the MR did not touch (a doc the change made false counts as touched, even when the MR left its file alone), or the code contradicts it. Add no findings of your own.
 3. Merge duplicates (the same underlying issue from several lenses) into one finding, keeping the highest justified severity and noting which lenses found it. Keep every location of a repeated problem in that one finding. When a rust-idioms finding merges with another lens's finding, the merged finding takes the other lens's category and keeps the idiom explanation and snippet.
-4. Re-judge severity honestly. Critical: data loss, security, or broken production behaviour. Important: a real bug, or a contract or maintainability problem that should be fixed before merge. Minor: should be fixed, does not block. Nit: cosmetic. A rust-idiom finding stays Minor or Nit.
-5. Number the findings {FIRST}..N: Critical, then Important, Minor, Nit, and by corroboration within a severity.
+4. Re-judge severity honestly. Critical: data loss, security, or broken production behaviour. Important: a real bug, or a contract or maintainability problem that should be fixed before merge. Minor: should be fixed, does not block. Nit: cosmetic. A rust-idiom finding stays Minor or Nit; a real bug that lens 09 found goes under category logic at its true severity.
+5. Number the findings {FIRST}..N: Critical, then Important, Minor, Nit, by corroboration within a severity, and production-code findings before test-code findings among equals.
 6. Never refer to another finding by its number: findings get renumbered when a subset is sent on. If two are related, repeat the one fact the reader needs.
 
 Write {RUN}/ledger-synthesized.md:

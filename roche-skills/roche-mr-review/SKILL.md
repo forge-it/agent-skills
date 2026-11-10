@@ -4,7 +4,7 @@ description: Use when the operator asks to review a GitLab merge request on code
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.2.1"
+  version: "0.2.2"
 ---
 
 # Roche MR Review
@@ -153,9 +153,10 @@ present it as uncertain, and add the line `**Uncertain:** <why>` to it in
 `ledger-synthesized.md`. Otherwise a REFUTED finding moves to the ledger's *Dropped* section
 with the refuter's reason, and a LOWER one takes the severity the refuter shows.
 
-Lens 09 findings are Minor or Nit, so no refuter sees them. Before presenting, read every
-rust-idiom finding whose fix ends `Compiles: unsure`: keep it when the snippet is sound, and
-otherwise fix the snippet or add an *Uncertain* line saying what the compiler may reject.
+A finding only lens 09 found is Minor or Nit, so no refuter sees it. Before presenting, read
+every finding whose fix ends `Compiles: unsure`: when the snippet is sound, delete that line;
+otherwise fix the snippet, or add an *Uncertain* line saying what the compiler may reject and
+delete the `Compiles` line.
 
 Then read the cited lines of every surviving Critical and Important finding yourself, and, on
 a later round, the citation in every posted finding's *On the new head* line: the fleet is
@@ -173,7 +174,8 @@ Show the Critical and Important findings in full (Finding N — Severity — tit
 Description, Recommended fix), then one table row per Minor and Nit (number, severity,
 category, title, anchor), one line per Critical or Important finding the refuters dropped
 (title and the refuter's reason, so he can disagree), the ledger path, the gate result, and
-the static-review caveat when it applies. Every finding keeps its exact `file:line` and
+the static-review caveat when it applies, and, when lens 09 ran, its *Done well (Rust idioms)*
+list (it reaches the author only if he asks for it as a general note). Every finding keeps its exact `file:line` and
 quoted line, explained in plain words; he rejects unexplained jargon. Record in
 `meta-notes.md` that this round's ledger was presented. Then stop.
 
@@ -185,7 +187,8 @@ architecture when he said SRP) is not posted: name it in the post report as "pos
 in that class" and let him add it.
 
 A class or category pick never includes a posted, a declined-earlier or an *Uncertain*
-finding: those are posted only when he names their number. A posted finding is never posted
+finding: those are posted only when he names their number. A severity-class pick leaves out
+rust-idiom findings too; he picks those by category or number. A posted finding is never posted
 again: its number in his answer names its thread (stage 7).
 
 ### 6. Post
@@ -214,7 +217,7 @@ out of GitLab: no lens names, no "found by", no "Finding N". The developer has n
 point at other places as `path:line`. A note for an *Uncertain* finding says in its
 Description, in one plain sentence, what could not be confirmed.
 
-A rust-idiom note, or a merged note carrying an idiom explanation, is learning feedback: at
+A rust-idiom note, or a note for a merged finding that carries an idiom explanation, is learning feedback: at
 most two short paragraphs explaining the idiom (with C++ analogies where they help), then
 the before/after snippet. A Nit is a few lines.
 
@@ -276,4 +279,4 @@ still allow later edits.
 | Rust | rust-code-style | rust-testing | Load rust-design-principles (single responsibility), rust-hexagonal-architecture and rust-project-structure: dependencies point inward, ports hold traits only. Where the repository's structure document says otherwise, it wins. | rust-code-reviewer | yes |
 
 For any other stack, ask him which skills and reviewer agent apply, and add a row once he
-agrees.
+agrees, with `yes` or `no` in the Lens 09 column.
