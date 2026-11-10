@@ -2,7 +2,8 @@
 
 Fill the `{PLACEHOLDERS}` from `meta.json` and the repository's entry in
 `repository-facts.md`, and pass each brief whole: the common preamble, then the lens section.
-Dispatch all eight lenses in one message.
+Dispatch every lens in one message: 01 to 08 always, and 09 when the stack row in SKILL.md
+says the stack has it.
 
 | Placeholder | Value |
 |---|---|
@@ -16,6 +17,7 @@ Dispatch all eight lenses in one message.
 | `{STRUCTURE_DOC}` | the structure document the repository's entry names, else `CLAUDE.md` |
 | `{STYLE_SKILL}`, `{TEST_SKILL}`, `{ARCHITECTURE_LINE}`, `{REVIEWER_AGENT}` | from the stack table in SKILL.md |
 | `{REPO_FACTS}` | the repository entry's *Facts for every lens* lines, else nothing |
+| `{AUTHOR_LINE}` | lens 09 only. When he has said which language the author comes from (record it in `meta-notes.md`) → `The author is an experienced <language> developer learning Rust: map each idiom to the <language> idea they already know when that helps (for C++: RAII ↔ Drop, std::optional ↔ Option, exceptions ↔ Result and ?, std::call_once ↔ OnceLock, copy-by-default ↔ move-by-default).` · otherwise → `Write for a developer who knows Rust's basics but not its idioms.` |
 
 With no ticket, drop `({TICKET})` and the `Ticket:` line from the preamble, tell lenses 01
 and 05 to judge against the MR description alone, and tell lens 07 to skip its ticket table
@@ -135,17 +137,39 @@ YOUR LENS: SAFETY AND SECURITY of new and changed code.
 When the repository's facts name project-specific hazards, check those too.
 ```
 
-## Synthesizer — `general-purpose`, after all eight finish
+## 09 · Rust idioms — `general-purpose`, NN `09`, SLUG `rust-idioms`, PREFIX `R09`
+
+Rust stack only. Learning feedback for the author, not a bug hunt. In the preamble's entry
+header, replace `<Critical|Important|Minor|Nit>` with `<Minor|Nit>`.
+
+```
+YOUR LENS: RUST IDIOMS. Load the rust-design-idioms and rust-code-style skills. On new and changed lines, production and tests, find code that is correct but reads like another language written in Rust syntax, where an idiomatic Rust construct would be clearer, safer or shorter. {AUTHOR_LINE}
+Examples of what to look for (not a checklist to force-fit):
+- manual index loops and byte-offset arithmetic where iterators, slices, `char_indices`, `split_at`, `str::floor_char_boundary` or other std methods already do the job;
+- sentinel values, bool flags or out-parameters where `Option`, `Result` or an enum would say it in the type;
+- manual cleanup or "remember to call X" code where a guard type with `Drop` does it on every path, panics included;
+- shared or global state built by hand where `OnceLock`/`LazyLock`, or passing ownership, would do; `Mutex` lock results and poisoning handled unclearly; `Cell`/`RefCell` where a plain `mut` binding would do;
+- `as` casts that can truncate where `T::try_from` says so; needless `clone`, `Box`, `Arc`, `to_string`; `&String`/`&Vec<T>` parameters instead of `&str`/`&[T]`; `mem::forget` where `ManuallyDrop` says the intent;
+- `match` ladders where `?`, `let … else`, `if let`, `matches!`, `map_or` or `unwrap_or_else` read better; mutable accumulators where an expression would do;
+- `impl` blocks, traits and visibility (`pub` vs `pub(crate)`) used as one class-with-everything instead of small focused types;
+- tests: `#[should_panic]` vs `catch_unwind`, `expect("…")` messages, std test helpers the author may not know.
+Leave alone what other checks already cover: naming, constants and the style skill's rules (another lens has them), and anything rustfmt or clippy reports. The repository's own coding rules (its facts above say where they are) win over a generic idiom: never suggest what they forbid, and never suggest `unsafe`.
+For each entry: Description says what the code does now and explains the Rust concept behind the better form, in at most two short paragraphs; Recommended fix is a short before/after snippet; Impact says what the idiom buys (clarity, a bug class the compiler then rules out, less code). A Nit stays a few lines. When the snippet changes ownership or borrowing and you are not sure it compiles, end Recommended fix with `Compiles: unsure — <why>`.
+Severity: Minor at most, Nit for taste. Write production-code entries before test-code entries. A real bug you notice goes in as Minor with "possible bug — for the logic lens" in its title.
+In "Checked and sound", also list two to six things the author already did idiomatically well.
+```
+
+## Synthesizer — `general-purpose`, after every lens finishes
 
 ```
 You synthesize the per-lens ledgers of GitLab MR !{IID} ({REPO}, {TICKET}) into ONE ledger. READ-ONLY on the code: never edit, stage, or commit in the repository. Never run cargo, just, docker or any build or test, and do not dispatch subagents.
 
-Inputs in {RUN}: ledger-01-logic.md … ledger-08-safety-security.md, ticket.md, mr-description.md, gate.md when it exists; worktree {WT} on the MR head; base {BASE}. Use `git -C {WT}`.
+Inputs in {RUN}: every ledger-NN-*.md (01 logic … 08 safety-security, and 09 rust-idioms when it ran), ticket.md, mr-description.md, gate.md when it exists; worktree {WT} on the MR head; base {BASE}. Use `git -C {WT}`.
 
 1. Read every ledger in full.
 2. Verify every finding against the code: the cited line exists at the MR head and says what the quote says, and the claim follows from it. Fix wrong line numbers. Drop a finding (list it under "Dropped" with a one-line reason) when it is false, concerns only code the MR did not touch (a doc the change made false counts as touched, even when the MR left its file alone), or the code contradicts it. Add no findings of your own.
-3. Merge duplicates (the same underlying issue from several lenses) into one finding, keeping the highest justified severity and noting which lenses found it. Keep every location of a repeated problem in that one finding.
-4. Re-judge severity honestly. Critical: data loss, security, or broken production behaviour. Important: a real bug, or a contract or maintainability problem that should be fixed before merge. Minor: should be fixed, does not block. Nit: cosmetic.
+3. Merge duplicates (the same underlying issue from several lenses) into one finding, keeping the highest justified severity and noting which lenses found it. Keep every location of a repeated problem in that one finding. When a rust-idioms finding merges with another lens's finding, the merged finding takes the other lens's category and keeps the idiom explanation and snippet.
+4. Re-judge severity honestly. Critical: data loss, security, or broken production behaviour. Important: a real bug, or a contract or maintainability problem that should be fixed before merge. Minor: should be fixed, does not block. Nit: cosmetic. A rust-idiom finding stays Minor or Nit.
 5. Number the findings {FIRST}..N: Critical, then Important, Minor, Nit, and by corroboration within a severity.
 6. Never refer to another finding by its number: findings get renumbered when a subset is sent on. If two are related, repeat the one fact the reader needs.
 
@@ -159,7 +183,7 @@ Headline: counts by severity, the lenses that ran (and any that did not), and th
 Then every finding in exactly this shape:
 
 ### Finding N — <Critical|Important|Minor|Nit> — <the problem in one short line>
-**Category:** exactly one of logic, performance, SRP, architecture, naming, constants/enums, style, tests, docs, ticket/contract, migration, safety, security
+**Category:** exactly one of logic, performance, SRP, architecture, naming, constants/enums, style, tests, docs, ticket/contract, migration, safety, security, rust-idiom
 **Where:** `path:LINE` — `quoted source line` (plus any other locations)
 **Anchor:** `path:LINE`, the MR-head line the review note should sit on. Any line of any file will do: the posting script puts a line of a changed file inline (changed or not) and turns a line of an untouched file into a general note that names it, so never hedge toward a "nearest changed line". Write `general` only when no source line fits (the MR description, the ticket).
 **Found by:** <lenses>
@@ -167,7 +191,7 @@ Then every finding in exactly this shape:
 **Description:** plain, human-readable English with no unexplained jargon, including the input or state that triggers it
 **Recommended fix:** concrete
 
-Then "## Dropped" (one line each: lens id, title, reason) and "## Checked and sound" (merged and deduplicated, short).
+Then "## Dropped" (one line each: lens id, title, reason) and "## Checked and sound" (merged and deduplicated, short; when lens 09 ran, end it with a "Done well (Rust idioms)" sub-list from its ledger).
 
 On a later round ({PREVIOUS_LEDGER} is given), add "## Posted in earlier rounds": copy verbatim every `### Finding N` of {PREVIOUS_LEDGER} that has a file in {RUN}/notes/, without any *On the new head* line it already carries, and end each with one line `**On the new head:** fixed — <citation>` or `**On the new head:** still present — <path:line>`. A finding from this round's lenses that is the same problem as a posted one is not a new finding: give it no number, cite its new location in that posted finding's *On the new head* line, and list it under "Dropped" as "already posted as Finding N". A finding from this round's lenses that is the same problem as a finding of {PREVIOUS_LEDGER} outside its Dropped section, with no file in {RUN}/notes/ (he saw it and did not pick it) is numbered like any new finding, and ends with one more line: `**Declined earlier:** round <R>, Finding <its number there>`, where R is the N of {PREVIOUS_LEDGER}. When that earlier finding already ends with a *Declined earlier* line, copy that line instead.
 

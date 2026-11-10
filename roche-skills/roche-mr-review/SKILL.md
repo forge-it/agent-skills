@@ -4,7 +4,7 @@ description: Use when the operator asks to review a GitLab merge request on code
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.1.2"
+  version: "0.2.0"
 ---
 
 # Roche MR Review
@@ -28,7 +28,7 @@ definition. Pass `model` and `effort` explicitly on every dispatch:
 
 | Role | Model and effort |
 |---|---|
-| The eight lenses, the synthesizer | `sonnet` at `medium` |
+| The lenses, the synthesizer | `sonnet` at `medium` |
 | Refuters (stage 4) | `haiku` at `max`, always |
 
 A model or effort he asks for on this review wins over these. Record it in `meta-notes.md`
@@ -40,7 +40,7 @@ in the run directory.
 |---|---|---|---|
 | 1 | Set up the run | `~/.cache/roche-mr-review/<repo>-<iid>/` | — |
 | 2 | Run the repository's gate on the MR head | `gate.md` | — |
-| 3 | Review fleet: eight lenses in parallel | `ledger-NN-*.md` | — |
+| 3 | Review fleet: eight lenses in parallel, nine on a Rust stack | `ledger-NN-*.md` | — |
 | 4 | Synthesize, refute every Critical and Important, verify the survivors yourself | `ledger-synthesized.md`, `refute-K.md` | — |
 | 5 | Present the ledger | — | **his picks** |
 | 6 | Post the picked findings as review notes | `notes/`, `posted.json` | — |
@@ -116,18 +116,21 @@ in `gate.md`: the review is static, and everything you present says so.
 
 ### 3. Review fleet
 
-Dispatch the eight lenses in `references/lens-briefs.md` in one message. Between them they
+Dispatch the lenses in `references/lens-briefs.md` in one message: 01 to 08 always, plus 09
+(Rust idioms, learning feedback for the author) when the stack row says so. Between them they
 cover his hunt list, and their shared preamble carries his scope rule: **new or changed code
 only**, never pre-existing code. A finding that breaks that rule is dropped in stage 4.
 
 Fill the briefs from the repository's entry: its stack row (from the stack table below), its
-structure document, and its facts.
+structure document, and its facts. Lens 09's `{AUTHOR_LINE}` uses the author's previous
+language when he has named it.
 
 ### 4. Synthesize, refute, verify
 
-Once all eight ledgers exist, dispatch the synthesizer brief. When a lens died or wrote no
-ledger, move any partial ledger it left to `ledger-NN-<slug>.md.partial` (rust-code-reviewer
-will not write over an existing file) and re-dispatch that lens once before the synthesizer.
+Once every dispatched lens has its ledger, dispatch the synthesizer brief. When a lens died
+or wrote no ledger, move any partial ledger it left to `ledger-NN-<slug>.md.partial`
+(rust-code-reviewer will not write over an existing file) and re-dispatch that lens once
+before the synthesizer.
 When it fails again, the synthesizer runs without it and the headline names the missing lens.
 
 Then dispatch one refuter per Critical and Important finding numbered `{FIRST}` or above in
@@ -150,6 +153,10 @@ an FFI lifetime: things a refuter cannot build or run), keep the finding at its 
 present it as uncertain, and add the line `**Uncertain:** <why>` to it in
 `ledger-synthesized.md`. Otherwise a REFUTED finding moves to the ledger's *Dropped* section
 with the refuter's reason, and a LOWER one takes the severity the refuter shows.
+
+Lens 09 findings are Minor or Nit, so no refuter sees them. Before presenting, read every
+rust-idiom finding whose fix ends `Compiles: unsure`: keep it when the snippet is sound, and
+otherwise fix the snippet or add an *Uncertain* line saying what the compiler may reject.
 
 Then read the cited lines of every surviving Critical and Important finding yourself, and, on
 a later round, the citation in every posted finding's *On the new head* line: the fleet is
@@ -208,6 +215,10 @@ out of GitLab: no lens names, no "found by", no "Finding N". The developer has n
 point at other places as `path:line`. A note for an *Uncertain* finding says in its
 Description, in one plain sentence, what could not be confirmed.
 
+A rust-idiom note, or a merged note carrying an idiom explanation, is learning feedback: at
+most two short paragraphs explaining the idiom (with analogies to the author's previous
+language where they help), then the before/after snippet. A Nit is a few lines.
+
 Run `post_notes.py <run>`, a dry run that prints where each note will land and preflights
 every body against GitLab's markdown endpoint. Read the plan, then run
 `post_notes.py <run> --post`. Any line of a file the MR changes lands inline, added or
@@ -261,9 +272,9 @@ still allow later edits.
 
 ## Stack table
 
-| Stack | `{STYLE_SKILL}` | `{TEST_SKILL}` | `{ARCHITECTURE_LINE}` for lens 03 | `{REVIEWER_AGENT}` |
-|---|---|---|---|---|
-| Rust | rust-code-style | rust-testing | Load rust-design-principles (single responsibility), rust-hexagonal-architecture and rust-project-structure: dependencies point inward, ports hold traits only. Where the repository's structure document says otherwise, it wins. | rust-code-reviewer |
+| Stack | `{STYLE_SKILL}` | `{TEST_SKILL}` | `{ARCHITECTURE_LINE}` for lens 03 | `{REVIEWER_AGENT}` | Lens 09 |
+|---|---|---|---|---|---|
+| Rust | rust-code-style | rust-testing | Load rust-design-principles (single responsibility), rust-hexagonal-architecture and rust-project-structure: dependencies point inward, ports hold traits only. Where the repository's structure document says otherwise, it wins. | rust-code-reviewer | yes |
 
 For any other stack, ask him which skills and reviewer agent apply, and add a row once he
 agrees.
