@@ -109,9 +109,12 @@ a. <a deliverable> — <why>                                         at most 3 l
 4 WHAT WE DID
 <the one concrete thing the change is about (a rule, a command, a signature, a payload),
  before → after, at most 4 lines with └─ glosses; left out when there is no such thing>
-<the new behaviour as at most 6 steps, each with its expected result (→ works ✔,
- → refused ✔, → same as before ✔); each step names the file that carries it, once, in
- parentheses>
+<the new behaviour as at most 6 steps, one condition each: <situation in plain words,
+ exact name in parentheses> → <result>, the result one of → works ✔, → refused ✔,
+ → same as before ✔; each step names the file where the behaviour lives, once, in
+ parentheses. A step that accepts or refuses values says what each value is and what
+ real callers send today ("REC only installs noarch packages → still installed ✔");
+ when nobody looked that up, it says "(not checked: <what>)">
 unchanged: <what a reader would expect to change and does not>
 
 ──── for the review ────
@@ -175,10 +178,17 @@ unchanged: the REC-like image and its eight other scenarios keep the any-argumen
 - **Write for an outsider.** The reader knows programming, not this repo, its tests or its
   domain. Say what a flag, file or term does: "another install directory", not
   `--installroot`. Before counting, reread the message as that reader: each word they would
-  have to ask about gets plain words or a gloss.
+  have to ask about gets plain words or a gloss. A word that means two things in this
+  change (a setting's value, and a property of what the setting applies to, like `noarch`)
+  is defined both ways once, in the first half, before any step uses it. One step never
+  joins two conditions with "or" when the word differs between them.
 - **HOW IT WORKS** draws the system as its real users run it: production, not the test
-  harness or the repo layout, which belong in WHAT WE DID. For a tooling change the users
-  are the developers: draw what they run and what it calls.
+  harness or the repo layout, which belong in WHAT WE DID. There a test appears as what it
+  proves; how it is built (child processes, fixtures, helpers) stays out, and a step that
+  cites a test names the test that proves it, never its helper. When the way a test is
+  built could mislead the reviewer (the repository's first `#[ignore]` test, a test that
+  re-runs itself), that is an AGENT CALLS line. For a tooling change the users are the
+  developers: draw what they run and what it calls.
 - **Code names.** In the first half, a name the reader will meet in the code or docs (a
   scenario, flag, function, error code, file, doc id, or a domain term the code uses)
   appears once, right after its plain words: "a new test scenario, `pinned`
