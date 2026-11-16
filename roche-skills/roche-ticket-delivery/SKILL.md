@@ -46,7 +46,8 @@ definition. Pass `model` and `effort` explicitly on every dispatch:
 | Implementors, fixers, test writers | `sonnet`, `xhigh` |
 | Plan reviewers, code-review lenses, structure-and-style guards | `sonnet` at `medium`, or `haiku` at `max` when the review is simple. Say which in one line |
 | Stage 7 checkers (refuters) | `haiku`, `max`, always |
-| Stage 8 naming designers, one per crate | `sonnet`, `max` |
+| Stage 8 naming designers, one per crate, and one for shell files | `opus`, `medium` |
+| Stage 8 naming cold readers, one per designer | `haiku`, `max` |
 | Stage 8 docs reviewers, one per Markdown file, when he picked the docs review | `opus`, `low` |
 | Gatherers, the planner, issue investigators, the stage 8 docs writer, the final-gate agent | what he names. Ask once at stage 1 and record it in `ledger.md` |
 
@@ -57,8 +58,8 @@ change-cycle-pipeline's "fail the cycle" in those rows: a second failed dispatch
 task (no result, no required handoff, or the same gate still red) means you take the task
 over, under the Docker lock, in the checkout holding the change. The stage 8 report says you
 did. Before you write, load the skills that the repository's *Agents* line in
-`references/repository-traps.md` names for workers, read `docs/layout.md` as its
-`project_structure.md`, and `docs/testing.md` (*Structure rules*) for the rules its gate
+`references/repository-traps.md` names for workers, read `references/naming-guide.md`,
+`docs/layout.md` as its `project_structure.md`, and `docs/testing.md` (*Structure rules*) for the rules its gate
 enforces. Run the gate as the worker's brief says.
 
 ## Where things are
@@ -82,7 +83,7 @@ enforces. Run the gate as the worker's brief says.
 | 5 | Review the plan, max 2 rounds | `plan-review-rN-<lens>.md`, `plan.rN.md` | — |
 | 6 | Implement, in the worktree he picks | the dirty tree | **his worktree choice, before it starts** |
 | 7 | Review the code, max 3 rounds | `code-review-rN-<lens>.md` | — |
-| 8 | Naming proposals, docs, then the report; tree left dirty | `naming-<crate>.md`, `docs-review-<repo>-K.md` | **his review** |
+| 8 | Naming review and renames, docs, then the report; tree left dirty | `naming-<repo>-<crate>.md`, `naming-apply-<repo>.md`, `docs-review-<repo>-K.md` | **his review** |
 | 9 | Refactor or commit | commits | **his word** |
 | 10 | Push, create the MR, move to In Code Review | `mr.md` | **his word on the push** |
 | 11 | Merged: post-merge status, clean up | Jira comment | — |
@@ -476,43 +477,111 @@ the work branch is checked out in the main checkout, stop and ask him.
 
 ### 8. Report — gate
 
-First dispatch a writer in the checkout holding the change: Mode D in the main worktree, or
-Mode B in a linked worktree he kept without a merge-back. Tell it to load **reconcile-docs**
-over the whole diff against the base, named explicitly, so it never runs
-`git remote set-head`. Brief it with the repository's *Docs* lines from
-`references/repository-traps.md`. **change-cycle-pipeline** runs this step after his
-acceptance. Here it runs before his review, so every doc edit is in the tree he reads and
-nothing is edited after his word at stage 9.
+Names are settled before anything that mentions them is written: the naming review and its
+rename pass come first, then the docs writer, then the report. A change with no Rust and no
+shell skips the naming review and starts at the docs writer. Name every run file with the
+repository, as the docs review files do: `<repo>` below is the repository's name.
 
-In the same message, dispatch the **naming designers**: one `rust-code-designer` per crate
-whose files the change touches, all at once, model `sonnet`, effort `max`. A crate is a
-workspace member (in rdnx: `app`, `core`, `libdnf5-adapter`, each `crates/<name>`), and it is
-touched when `git -C <checkout> diff <base> --name-only` or the untracked list holds a `.rs`
-file under it. They only read, so they run beside the docs writer. A change with no Rust
-skips them. Each brief carries the brief essentials and these lines, filled:
+**Naming review.** Dispatch one `rust-code-designer` per crate whose files the change
+touches, all at once, model `opus`, effort `medium`. A crate is a workspace member (in rdnx:
+`app`, `core`, `libdnf5-adapter`, each `crates/<name>`), and it is touched when
+`git -C <checkout> diff <base> --name-only` or the untracked list holds a `.rs` file under
+it. When the change touches shell scripts (a `.sh` file, or a file with a shebang line, in
+either list), add one designer for them under the crate name `shell`, and list those files
+in its brief; tell it that they are shell, that the guide's *Shell* section governs, and
+that its Rust-only instructions do not apply. They only read. Record
+`8: naming designers dispatched (<repo> <crate>, ...)` in `ledger.md`. Each brief carries the
+brief essentials and these lines, filled:
 
 ```
-This is a naming review, not a feature design: return proposals, no implementation handoff.
+This is a naming review, not a feature design. These lines override your agent definition's
+output format: return only what is asked here, no implementation handoff.
 Read ~/src/agent-skills/roche-skills/roche-ticket-delivery/references/naming-guide.md first;
-its order of precedence and its list of names you do not change apply. Your crate is <crate path> in <checkout holding the
-change>, diffed against <base>. Run every git command as `git -C <checkout>`. The change set
-is the crate's files in `git diff <base>` plus every file that
-`git ls-files --others --exclude-standard` lists under it. Scan every name the change adds
-or renames there: modules and files, structs, enums and variants, traits, functions and
-methods, fields, parameters, locals, closure parameters, constants, type aliases, test
-names. Propose a rename for each one that breaks the guide. Raise a name the change did not
-touch only when the change makes it wrong, and say how. For each proposal give: path:line,
-the current name and its kind, two or three options each with how a call site reads, the
-guide rule id it applies (`T4`, `P6`, `C-CONV`), and for a short name the `///` line that
-completes it. Mark "needs his word" a rename that reaches the proto contract, the libdnf5
-bridge, an ADR, `vendor/`, a log event name or another crate's `pub` items. Finish
-with the names you checked and kept, one line per file. Never run cargo, just or docker.
+its order of precedence, its scope rule and its list of names you do not change apply. Your
+files are <crate path, or the shell files> in <checkout holding the change>, diffed against
+<base>. Run every git command as `git -C <checkout>`. They are the files in `git diff <base>`
+under it plus every file `git ls-files --others --exclude-standard` lists under it. Plain
+`git grep` skips untracked files: add `--untracked`.
+First list every single-letter binding in them, naming the pattern you searched with: each
+is a row. Then list each domain word the change introduces or repurposes, with every place
+it appears and what it means there.
+Then return one table with a row for every name in scope, none left out: modules and files,
+structs, enums and variants, traits, functions and methods, fields, parameters, locals,
+closure parameters, constants, type aliases, test names. Columns: path:line; name, written
+`Type::member` for a variant, field or method; kind, which is `bool field`, `bool param`,
+`bool local` or `predicate` for a bool; "reads as", one sentence saying what the name holds,
+decides or does for its caller, written from the name and its type, not from the doc line;
+verdict `ok` or `rename`; for a `rename` the guide rule id (`T4`, `P6`, `C-CONV`, `BOOL`),
+two or three options each with how a call site reads, one marked recommended, and for a
+short name the `///` line that completes it. Run the guide's checks on every row, bools and
+test names included. A row whose "reads as" you could only write by opening the body is a
+`rename`. Mark "needs his word" a rename that reaches the proto contract, the libdnf5
+bridge, an ADR, `vendor/`, a log event name, or a `pub` item of another crate that already
+exists at <base>. End with `Rows: N` and the files the rows cover. Never run cargo, just or
+docker.
 ```
 
 The designers have no Write tool: save each final message verbatim to
-`<run>/naming-<crate>.md` as soon as it returns. Read the cited line of every proposal, and
-drop one whose name the change neither adds nor renames and that the change does not make
-wrong.
+`<run>/naming-<repo>-<crate>.md` as soon as it returns. Every file of the change set must
+appear in some table; re-dispatch a designer whose table misses one.
+
+Then dispatch one **cold reader** per designer, all in one message: a general-purpose
+agent, model `haiku`, effort `max`. Build its input yourself, `<run>/naming-names-<repo>-<crate>.md`,
+with a shell loop over the table's path:line and name cells that appends the declaring
+source line (`sed -n '<line>p' <checkout>/<path>`). A file or module row carries its path
+only. Nothing else goes in: no verdict, no reading, no doc comment. Its lines, paths filled
+and `<out>` its own `<run>/naming-cold-<repo>-<crate>.md`:
+
+```
+You are a cold reader. <run>/naming-names-<repo>-<crate>.md holds one name per line with the
+one source line that declares it. That line is all you may use: open no file, run no
+command, modify nothing, and write only <out>. For each line write: the name, one sentence
+on what it holds, decides or does, then the question you would still have to ask before
+using it in code ("what failed?", "evicted from where?"), or `none`. Never answer your own
+question to make a name look clear. End the line with `clear` when the question is `none`,
+else `guess`.
+```
+
+**Triage.** Record `8: naming triaged (<repo>)` when done. Read the cited line of every
+`rename` row, and drop one that the guide's scope rule excludes. Merge the designers'
+domain-word lists across crates and check each word for two meanings. Compare each cold
+reading with the designer's "reads as": a different subject or meaning counts as `guess`.
+Take every `guess` name that the designer marked `ok`, and every `ok` row whose kind says
+bool, and run the guide's checks and T2's "what is X?" test on it yourself, skipping a name
+that T3 sanctions. A name that fails becomes a `rename` row with two or three options, one
+recommended. Then write `<run>/naming-apply-<repo>.md`: every row to apply, as path:line,
+current name, recommended name. A row is applied when it has a recommended option, is not
+"needs his word", and either cites `T1`, `T4`, `T5`, `P1`, `P2`, `P3`, `P5`, `C-CASE`,
+`C-CONV`, `C-GETTER` or `BOOL`, or cites `T2` or `T3` and the cold reader marked its name
+`guess`: two readers agree that the name is unclear. Every other row stays in its
+`naming-<repo>-<crate>.md` for when he asks. A name a designer kept, `ok`, is where a miss
+hides: never pass it on unchecked.
+
+**Rename pass**, once per repository, when `naming-apply-<repo>.md` has rows. The tree is
+the only copy of the change, so first save a checkpoint as `references/separate-worktree.md`
+does: `git -C <checkout> add -N <each new file>`, then
+`git -C <checkout> diff --binary HEAD > <run>/pre-rename-<repo>.patch`. Record
+`8: renames dispatched (<repo> N rows)`. One fixer (`rust-fixer-no-commit`, per
+*Models*) in the checkout holding the change, Mode D in the main worktree or Mode B in a
+linked worktree he kept without a merge-back, running the gate under your Docker lock. Its
+brief adds: "Apply exactly the rows of <file>. Change names and add `///` lines; change no
+behaviour and move no code. Rename every use, test and existing doc that names the item, and
+every binding that T4 names after a renamed type. Skip a row whose new name is already
+taken, or whose old name no longer exists, and say so. A shell row is applied only when
+`bash -n <file>` still passes and no other use of the old name remains
+(`git grep --untracked -n`)." When the fixer returns, a diff of the tree against the checkpoint
+(`git -C <checkout> diff HEAD`, compared with `<run>/pre-rename-<repo>.patch`) must show only
+renamed tokens and `///` lines; anything else is a fixer error, so send it back. When the gate is still red after the takeover rule, put it in
+the report as an open finding, with the failing command and the rows applied, and go on. Never
+revert with `checkout`, `reset` or `stash`. Record `8: renames applied (<repo> N of M rows)`.
+
+**Docs writer.** Once the rename pass is green, or at once when there was none, dispatch a
+writer in the same checkout: Mode D in the main worktree, or Mode B in a linked worktree he
+kept without a merge-back. Tell it to load **reconcile-docs** over the whole diff against the
+base, named explicitly, so it never runs `git remote set-head`. Brief it with the
+repository's *Docs* lines from `references/repository-traps.md`. **change-cycle-pipeline**
+runs this step after his acceptance. Here it runs before his review, so every doc edit is in
+the tree he reads and nothing is edited after his word at stage 9.
 
 **Docs review**, when he picked it at stage 1. Once the writer returns, list the Markdown
 files the change adds or modifies in each repository:
@@ -554,7 +623,7 @@ Review <repository name> in <absolute path of the checkout holding the change>
 
 Nothing follows them: no file list (skim, read closely or any other grouping), no naming
 proposals, no "your call" list, no closing line about commits or what he can say next. The
-naming proposals stay in `<run>/naming-<crate>.md` for when he asks. Check the path and branch
+naming proposals stay in `<run>/naming-<repo>-<crate>.md` for when he asks. Check the path and branch
 with `git -C <that path> status --short --branch` before you name them; never print the
 status itself. The tree stays dirty. Then stop.
 
@@ -562,8 +631,9 @@ status itself. The tree stays dirty. Then stop.
 
 Refactors he asks for go to a fixer or implementor in the checkout holding the change, in the
 same mode as stage 8's writer, followed by the gate and a fresh stage 8 report. The renames
-he picks from the naming proposals are such a refactor: the fixer's brief names each one with
-the option he chose, and says to rename every use, test and doc that names it. The fresh
+he picks from the naming proposals left in `naming-<repo>-<crate>.md` are such a refactor: the
+fixer's brief names each one with the option he chose (the recommended one when he says
+"apply them all"), and says to rename every use, test and doc that names it. The fresh
 report does not re-run the naming designers unless he asks.
 
 Commit only when he says so, and only in the repositories he names. When another repository
@@ -709,8 +779,14 @@ ledger names. In stage 5 or 7, a round the ledger does not record as triaged is 
 Compare its files with the set the ledger names. Re-dispatch only the reviewers, or the
 checkers by their recorded number, whose file is missing, in one message, then triage the
 round. Never re-run one whose file
-exists. In stage 8, re-dispatch only the naming designers whose `naming-<crate>.md` is
-missing, and the docs reviewers whose file is missing from the set the ledger names.
+exists. In stage 8, re-dispatch only the naming designers whose `naming-<repo>-<crate>.md` is
+missing, the cold readers whose `naming-cold-<repo>-<crate>.md` is missing, and the docs
+reviewers whose file is missing from the set the ledger names. Skip the triage when the
+ledger records it. A rename pass the ledger records as dispatched but not applied: when
+`git -C <checkout> diff --binary HEAD` equals `<run>/pre-rename-<repo>.patch` it never
+started; any difference means it is partly done. Either way dispatch it again with the same
+`naming-apply-<repo>.md`, whose brief already says to skip a row whose old name no longer
+exists.
 
 ## Ticket status
 
@@ -795,9 +871,16 @@ Every dispatch that touches a repository carries:
   or enter a worktree' and 'other worktrees are off-limits': create it only for a check at
   another revision, never edit in it, and remove it before you report."
 - the `model` and `effort` from *Models*
+- for a dispatch that writes Rust or shell, or code into a plan (planner, implementor, fixer,
+  test writer): "Before you name anything, read
+  ~/src/agent-skills/roche-skills/roche-ticket-delivery/references/naming-guide.md and apply
+  it to every name you add. A new bool or generically named field gets a `///` line saying
+  what it means. When a name in the plan breaks the guide, use the guide's name and say so in
+  your handoff: that is not a deviation from the plan."
 - that repository's section of `references/repository-traps.md` beside this file: its gate,
   its traps, its docs rules and its agents. When the brief may run Docker, also the
   subagent Docker lines under *Working rules*
 - for a dispatch that is not briefed to run Docker (gatherers, the planner, plan reviewers,
-  lenses, guards, checkers, the stage 8 writer, the naming designers, the docs reviewers):
+  lenses, guards, checkers, the stage 8 writer, the naming designers and cold readers, the
+  docs reviewers):
   "Never run cargo, just or docker: they share Docker state with other sessions."

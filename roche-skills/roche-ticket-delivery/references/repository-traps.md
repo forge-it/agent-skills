@@ -92,6 +92,9 @@ orchestrator's Docker session (SKILL.md, *Working rules*): one session at a time
   - Argue a design choice on technical grounds only. Never write business or staffing
     context into a technical doc, such as why Rust was chosen as a matter of company
     policy.
+  - A note or any other doc cites code by symbol (`EventLog::push`), never by `file:line`:
+    the next edit or rename shifts the line and the citation goes stale. When the change shifts a `file:line`
+    citation that a doc already holds, replace it with the symbol.
   - `docs/gaps/` is a register. A code gap found during a ticket that is out of the locked
     scope gets an entry there and nothing else: "Registered only; it will be solved later
     as a ticket." Never fix it in this ticket, never offer to. Do not cite gap entries as

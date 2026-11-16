@@ -1,7 +1,9 @@
 # Naming things in Rust
 
-The reference for stage 8's naming designers. A name should say what a thing is to its caller,
-and the type system carries part of that load.
+The reference for stage 8's naming designers, and for every planner, implementor and fixer that
+writes a name. A name should say what a thing is to its caller, and the type system carries
+part of that load. **Writers:** apply Casing, the Principles, the Booleans rules, the Team
+rules and Shell to every name you write; the rest is for reviewers.
 
 - **Names only.** Stage 8 reviews names. Do not propose moving code, adding types, or turning a
   trait into an enum. The design advice below explains why a name is wrong; it is not a task.
@@ -9,6 +11,21 @@ and the type system carries part of that load.
   `P1`-`P6`, and the API Guidelines items keep their own `C-` ids.
 - **When rules disagree:** the repository's gates and `docs/layout.md` first, then the Team
   rules, then the rest of this guide.
+
+## Scope: which names a review covers
+
+A review reads the names in the files the change touches. A name that breaks a rule is a
+`rename` row when any of these holds:
+
+1. the change adds it;
+2. the change made it read two ways, or changed what it holds;
+3. it is a single letter outside P1's exceptions, or an invented abbreviation (T1, P1, P2),
+   and the function, impl, struct or enum that declares it lies in a hunk of the change;
+4. every use of it is inside the files in scope, and its declaring item lies in such a hunk.
+
+Any other name that breaks a rule goes on a follow-up list at the end of the table, one line
+each, and is not applied. The list of names you do not change, below, outranks this scope
+rule.
 
 ## Names you do not propose to change
 
@@ -115,13 +132,17 @@ this workspace does not enable it.
   `IntParseError`. rdnx keeps a unique `…Error` name per failure (`RepositoryStoreError`,
   `LookupError`, `SubmitError`).
 
-## Booleans (std practice)
+## Booleans (std practice), rule id `BOOL`
 
 - A predicate method reads as a question: `is_empty()`, `has_terminal()`, `contains(..)`.
 - A bool field, parameter or local reads as a true/false statement: `keep_cache`,
   `cache_disabled`, `replace_all`. A bare verb (`stop`, `disable_cache`) reads as an order:
   rename it so it reads as a statement, never by adding `_flag`.
 - `_flag` is only for a shared `AtomicBool` that signals a request: `stop_request_flag`.
+- A bool name carries its subject: `scriptlet_failed`, not `failed`; `oldest_event_removed`,
+  not `evicted`. A bare participle or adjective is a `BOOL` rename.
+- A noun phrase is not a statement: `first_entry` reads as a thing. Write
+  `phase_first_entered`.
 - A bool argument hides its meaning at the call site (`rename(path, true)`). For a public
   function, note a two-variant enum (`rename(path, Overwrite::Replace)`) as a remark for him,
   not as a rename.
@@ -150,11 +171,21 @@ a hollow `// why:`.
   automatic fail.
 - Avoid words that read two ways. `Share::Full` and `put_full` read as "the queue is full"
   when they mean "may use the whole budget"; `Headroom::MayUse` cannot be misread.
+- Say what it decides or holds, never where it sits. `CriticalClass` named the lane the event
+  lives in; `RetentionKind { Kept, Evictable }` names what the lane does with it. Words that
+  name a place: `lane`, `bucket`, `slot`, `class`, `group`, `layer`. A prompt to look, not
+  an automatic fail: `group` is also a dnf term.
+- A name that would make a reader ask "what is X?" fails: `evicted` (what was evicted?),
+  `failed` (what failed?).
 
 **T3. Short name, full meaning in the doc line.** Use it when the exact name needs five or more
 words, or when a shorter name with its `///` line reads better at the call site than the exact
 one: `Headroom` with `/// Headroom kept for lifecycle event lines.` instead of
-`LifecycleEventLineHeadroom`. A short name with no doc line completing it is still vague.
+`LifecycleEventLineHeadroom`. A short name with no doc line completing it is still vague, and a doc line never rescues a
+vague name: it completes a name only under the five-word condition above. A new bool, and a
+new field whose name is a generic noun, always carries a `///` line saying what it means
+and, for a bool, when it is true (`scriptlet_failed`: "the scriptlet exited non-zero or its
+script errored").
 
 **T4. A binding of one of the repository's own types is named the snake_case of that type, the
 same way for every sibling.**
@@ -167,6 +198,8 @@ same way for every sibling.**
   `fn cancel(&self, id: &OperationId)` is fine. `fn attach(&self, operation_id: &OperationId,
   plan_id: &PlanId)` names both. `fn attach(&self, id: &OperationId, plan: &Plan)` whose body
   uses `plan.id` names its parameter `operation_id`.
+- Renaming a type renames every binding named after it: `CriticalClass` to `RetentionKind`
+  turns `critical_class` into `retention_kind`.
 - Look through `&`, `Option`, `Arc` and `Box`: `queue_ledger: Arc<QueueLedger>`. It does not
   apply to std, tonic or primitive types (`channel`, `receiver`, `request`, `count`).
 
@@ -175,12 +208,34 @@ not `QueueShared` for something kept behind an `Arc`. Words to look for: `Shared
 `Arc`, `Boxed`, `Inner`, `Cell`. A lock guard kept beside its lock is the usual sanctioned
 deviation (`// why: guard and Mutex are both in scope` above `let queue_guard = ...`).
 
+## Shell
+
+T1 and T2 apply to shell scripts and test harnesses. A script-internal constant is
+`UPPER_SNAKE` and says what it holds (`EVIDENCE_DIR`, not `EV`; `START_MILLISECONDS`, not
+`T0`). A local or a function is `lower_snake` and says what it holds or does (`pass_count`,
+not `pass`; `wait_terminal`, not `term`). No single letters, including awk variables. An environment
+variable the script reads from its caller, a flag, and any name that a recipe or a doc cites are
+never proposed.
+
+## Checks the designer runs on every row
+
+1. **Call-site sentence.** Write "`<name>` is the <what> that <it holds, decides or does>",
+   from the name and its type alone. A row you cannot complete without opening the body, or
+   one that says where the thing sits instead of what it is for, is a `rename` (T2).
+2. **Polysemy sweep.** For each domain word the change introduces or repurposes (`critical`,
+   `lifecycle`, `failed`, `class`), list every place it appears in the change and confirm it
+   has one meaning. Two meanings: rename the use the change added; when both are new, the one
+   with fewer callers.
+3. **Booleans.** Every bool field, parameter, local and predicate goes through the Booleans
+   rules above, noun phrases included.
+4. **Doc line.** Every new bool or generically named field has its `///` line (T3).
+
 ## Tests
 
 Follow **rust-testing** §7 and §10. A test module is named after the function or type it tests
 (`mod from_config`). A test fn is `should_<behaviour>` or `should_<behaviour>_when_<condition>`.
 No `test_` prefix and no `_test` suffix on files or modules; a test file mirrors its source file's
-name. T1 to T5 apply to test code too. Flag only the names the change adds or renames.
+name. T1 to T5 apply to test code too. The scope rule above decides which test names a review covers.
 
 Sources:
 - [Rust API Guidelines, naming](https://rust-lang.github.io/api-guidelines/naming.html)
