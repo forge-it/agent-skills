@@ -544,33 +544,19 @@ is a stage 9 refactor. A fresh stage 8 report runs the docs review again over th
 listing then gives, with a new ledger line, overwriting the earlier review files.
 
 Then give him **change-cycle-pipeline**'s operator report, every finding in plain words with
-its exact `file:line`. Its next action is his review, so it ends with a review guide for
-each repository the change touches. The guide tells him where to spend his attention, in
-the order to read it:
+its exact `file:line`. Its next action is his review, so it ends with these two lines for
+each repository the change touches, and the message ends there:
 
 ```
 Review <repository name> in <absolute path of the checkout holding the change>
   <main worktree | linked worktree>, branch <branch>, against <base>
-
-Skim: mechanical or docs-only
-  - <path, or a group: docs/gaps/0001–0015 (15 files)> — <what changed, in one line>
-Naming proposals
-  - <path:line> `<current>` (<kind>) → `<option>` | `<option>` — <rule id>: <in a few words>
-Your call
-  - <path:line> — <a decision the agents could not make, or a trade-off they took>
 ```
 
-- *Skim* puts files that changed the same way on one line. Mark a new file `(new)`.
-- *Naming proposals* lists every proposal you kept, grouped by crate, the recommended option
-  first, with "needs his word" where the designer marked it. The full proposals are in
-  `<run>/naming-<crate>.md`.
-- Leave out a section with nothing in it.
-
-Build it from `git -C <that path> diff <base>` and
-`git -C <that path> status --short --untracked-files=all`, run in the path you name. Every
-path the status lists appears in the guide, alone or in a group, and the guide names no
-other: that proves the path holds this ticket's change, and that no new file was missed. Never
-print the status itself. The tree stays dirty. Then stop.
+Nothing follows them: no file list (skim, read closely or any other grouping), no naming
+proposals, no "your call" list, no closing line about commits or what he can say next. The
+naming proposals stay in `<run>/naming-<crate>.md` for when he asks. Check the path and branch
+with `git -C <that path> status --short --branch` before you name them; never print the
+status itself. The tree stays dirty. Then stop.
 
 ### 9. Refactor or commit — gate
 
