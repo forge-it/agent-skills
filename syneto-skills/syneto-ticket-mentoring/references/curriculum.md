@@ -27,9 +27,9 @@ A reproduction is a story in steps; so is a commit history.
 - `git.status-diff-log` — `status --short`, `diff`, `log --oneline`: where am I, what changed — P — reads his own tree's state aloud
 - `git.branch-from-base` — the base branch, pull first, branch from it; why never from a stale base — P — types the sequence
 - `git.never-rewrite` — never stash, reset, force, clean: they destroy someone's work — P — says why when asked
-- `git.add-by-path` — staging named files, never `-A` — J — stages exactly the ticket's files
-- `git.commit-message` — the repository's subject shape, the ticket key, a body that says why — J — writes an accepted message
-- `git.push-and-mr` — push, the merge request, its target branch, the review — J — opens an MR via the senior's stage 10
+- `git.add-by-path` — staging named files, never `-A` — P — stages exactly the ticket's files
+- `git.commit-message` — the repository's subject shape, the ticket key, a body that says why — P — writes an accepted message
+- `git.push-and-mr` — push, the merge request, its target branch, the review — P — opens an MR via the senior's stage 10
 - `git.squash-merge` — what squash did to his commits; why local branches look unmerged — J — explains the `sha` check at cleanup
 
 ## py. Reading Python
@@ -75,7 +75,7 @@ cases are his habit. He writes tests before he writes production code.
 - `pytest.fake-vs-mock` — fakes for ports; `responses`/`aioresponses` at the HTTP boundary; never patch our own wrapper (python-testing 1) — J — chooses correctly for a test
 - `pytest.no-parametrize` — one test function per case, deliberately — J — writes separate tests unprompted
 - `pytest.test-tiers` — unit, integration, e2e in rest-api; what each catches; what CI runs — J — says which tier a test belongs in
-- `pytest.break-it-on-purpose` — revert the fix, the test must go red — J — does it before stage G unprompted
+- `pytest.break-it-on-purpose` — edit the fix back by hand, the test must go red, then forward again — J — does it before stage G unprompted
 
 QA habits to unlearn, shown side by side when they surface: verifying by looking instead of
 asserting; testing through the API what a unit test says faster; re-running by hand instead
@@ -106,8 +106,8 @@ code that serves them. `architecture-map.md` says how to build the map.
 He has filed bugs against developers; now he answers review comments.
 
 - `ci.pipeline` — stages and jobs, reading a red job's log — J — finds why a job failed
-- `ci.mr-description` — what a reviewer needs: what, why, how tested, risk — J — drafts an MR description
-- `ci.review-comments` — answering a comment: fix, or explain, never ignore — J — resolves a comment
+- `ci.mr-description` — what a reviewer needs: what, why, how tested, risk — P — drafts an MR description
+- `ci.review-comments` — answering a comment: fix, or explain, never ignore — J — answers a comment so that Cristian resolves it
 
 ## cc. Claude Code
 

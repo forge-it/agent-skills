@@ -12,7 +12,7 @@ description: >-
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.1.4"
+  version: "0.1.5"
 ---
 
 # Syneto Ticket Mentoring
@@ -63,13 +63,18 @@ missing: ask his name, `git init` it, write `CLAUDE.md` (two lines), `profile.md
 (`references/learner-profile.md`), an empty `glossary.md` and `study-notes.md`, the
 `visuals/` directory and `.gitignore` that `references/visual-tools.md` describes, and commit.
 Every later change to it is a commit, in the shape `references/learner-profile.md` gives. A
-mentoring session never edits this skill's own files. Cristian reads it with `git log -p` and corrects
-by editing: his edit is the truth.
+mentoring session never edits this skill's own files. Cristian reads it with `git log -p` and
+corrects by editing: his edit is the truth.
+
+Nothing about the learner goes into Claude's own memory: neither Claude Code's auto memory
+nor claude-mem. Both load into later sessions and sit outside the repository Cristian reads
+and corrects.
 
 `tickets/<KEY>/ledger.md` opens with the stage reached (`E: task 3 of 5, red test`), then the
-repository, base and work branch, the ticket's Jira status, the next step to resume, and
-`concepts:`, the ids this ticket exercised, appended as each one is. Update it at every stage
-change and every task, and commit the run files with it. `<KEY>` is the
+repository, base and work branch, the ticket's Jira status, the next step to resume,
+`dirty:` the paths `status --short` lists in `<checkout>` (rewritten whenever a path joins
+or leaves that list, so it is never older than the last edit; empty after H), and `concepts:`, the ids this ticket exercised, appended as each one is. Update it
+at every stage change and every task, and commit the run files with it. `<KEY>` is the
 ticket's own key, a subtask's included: one run per ticket.
 
 ## Session start
@@ -81,8 +86,9 @@ ticket's own key, a subtask's included: one run per ticket.
    opens to read the profile.
 2. Set `pace: normal`, add one to `sessions`, and mark `rusty` every `mastered` concept whose
    `last` is more than 30 days ago; one commit.
-3. A ledger ending `pending: Testing` comes first: when its deploy pipeline now exists (*Ticket
-   status*), finish that ticket's Jira move, tell him in one line, and write `complete`.
+3. A ledger ending `pending: Testing` comes first: when what it waits for has come (*Ticket
+   status*: the deploy pipeline, or Cristian's build number), finish that ticket's Jira move,
+   tell him in one line, and write `complete`.
 4. A ticket key with no `tickets/<KEY>/` starts at stage A; an existing one is *Resuming*.
 5. Say in at most three lines where he stands: his level, the next step. No opening quiz, no
    recap of the last session.
@@ -103,8 +109,8 @@ ticket's own key, a subtask's included: one run per ticket.
 | J. Merged | 11 | The senior's stage 11, then the profile update | — |
 
 Checkpoints are soft: they end a stage and never block beyond the hint ladder. The hard
-gates are G (no commit until every hunk is explained or recorded as not explained back), his word at H and I, and Cristian's review of
-the MR.
+gates are G (no commit until every hunk is explained or recorded as not explained back), his
+word at H and I, and Cristian's review of the MR.
 
 When he asks a question, answer it and wait: a question is never an instruction to act. Then
 say `Back to <stage or task>` and continue from there.
@@ -126,26 +132,8 @@ The repository's main checkout is shared with Cristian, so look before you touch
   cleanup first): the run works in the main checkout. Cut the branch with the senior's stage
   1 command sequence and the rules after it (pull first; an unclean status or a refused
   fast-forward stops everything), not its stage 1 questions.
-- **Any other branch** is work in progress, Cristian's or an earlier run's whose MR waits for
-  review: leave the main checkout exactly as it is, whatever its status, and work in a linked
-  worktree.
-
-  ```text
-  git -C <repo> check-ignore -q .claude/worktrees/x    # fails: add the line to <repo>/.git/info/exclude first
-  git -C <repo> fetch origin <base>
-  git -C <repo> worktree add --no-track .claude/worktrees/<KEY> -b <KEY>-<short-slug> origin/<base>
-  ```
-
-  `--no-track`, because otherwise the work branch tracks the base and git's own hints
-  ("git pull", "git push origin HEAD:<base>") would merge the base in or push his commit
-  straight onto the release branch. The worktree uses the main checkout's `<repo>/.venv`,
-  called directly and never through `poetry run`; run the import check under *Bootstrap* in
-  the senior's `references/separate-worktree.md` before the first test. A path under the main
-  checkout there is an escalation: the worktree stays, and nothing runs in it. There is no
-  merge-back: the run commits and pushes from the worktree, and stage J's cleanup
-  removes it as the senior's stage 11 does. Docker-backed tiers run there only where the
-  repository's *Linked worktree* line in `repository-traps.md` allows it; otherwise the MR
-  says they were not run.
+- **Any other branch** is work in progress: the run works in a linked worktree, as
+  `references/linked-worktree.md` says.
 
 `<checkout>` is the tree the run works in, the main checkout or the worktree; record it in the
 ledger. Everything that reads or changes the ticket's tree runs there: `git -C <repo>` in
@@ -154,20 +142,20 @@ brief names `<checkout>` as its root ("read-only on `<checkout>`"); git-sim take
 `-C <checkout>`, import-linter `PYTHONPATH=<checkout>/src`, and a Python check runs from the
 directory the tests run in. `<repo>` stays the main checkout for its `.venv`, this stage's
 look and `worktree add`, and stage J's `worktree remove` and `branch -D`. `<checkout>` is the
-directory he opens in his editor.
+directory he opens in his editor. Read `<checkout>/CLAUDE.md` and `AGENTS.md` now: the
+session starts outside the repository, so Claude Code loads neither.
 
 Once the branch is cut, in either form, write `fork: <sha>` in the ledger
 (`git -C <checkout> rev-parse HEAD`, before any commit). That sha stands for `<base>` in every
-diff of the run: the guard's and the reviewer's briefs, `reconcile-docs`, stage G, a review
-round. The base's name is no substitute: the local branch may be stale or pulled forward by
-another run, and `origin/<base>` moves with every fetch, so a diff against either shows
-colleagues' merged work as his. The MR target, the Fix version and the pipeline queries keep
-the branch name.
+diff of the run: the guard's and the reviewer's briefs, `reconcile-docs`, stage G. The base's
+name is no substitute: the local branch may be stale or pulled forward by another run, and
+`origin/<base>` moves with every fetch, so a diff against either shows colleagues' merged
+work as his. The MR target, the Fix version and the pipeline queries keep the branch name.
 
 Both forms are instances of `git.branch-from-base` (a fresh base, then a branch from it); its
 handbook page holds both, the second added when he first meets it. Who types the sequence
-depends on his level (*Who holds the pen*). Once the branch is cut, move the ticket to In Progress per
-*Ticket status*.
+depends on his level (*Who holds the pen*). Once the branch is cut, move the ticket to In
+Progress per *Ticket status*.
 
 On his first ticket, a step that meets a P concept of `references/curriculum.md` teaches it
 then, under the session caps (*Pacing*).
@@ -190,7 +178,7 @@ escalation under *Guardrails*.
 | Axis | Value | When | What changes |
 |---|---|---|---|
 | Kind | code | a `.py` file changes, alone or with its CI or config | the flow as written |
-| | ops | no `.py` file changes: only CI (`.gitlab-ci.yml`), a Dockerfile or compose file, a configuration or environment file, a dependency pin, a shell script, docs | E proves it with a verification plan instead of a failing test; F has no Python guard or reviewer |
+| | ops | no `.py` file changes: only CI (`.gitlab-ci.yml`), a Dockerfile or compose file, a configuration or environment file, a dependency pin, a shell script, docs | `references/ops-tickets.md`: a verification plan in place of the failing test, no Python guard or reviewer |
 | Size | small | one obvious change in one place, with one viable approach | C is one line; `tasks.md` has one task; at most one new concept from here to J, a step past it done as *Pacing* says; his first ticket keeps the session caps alone |
 | | normal | anything else | as written |
 
@@ -202,9 +190,8 @@ On `call-chain: yes` the walk comes first: from the ticket's entry point, hop by
 names the layer and file he expects to change; draw the slice from the walk. On any other code
 ticket draw this ticket's slice of the architecture (`references/architecture-map.md` says how
 to build and keep the map), then ask him which layer and file he expects to change before you
-say. On an ops ticket draw instead the path from the changed file to its effect: which
-pipeline job, image, container or running service reads it, and when. Write `context.md`:
-short, every claim with `file:line`.
+say. An ops ticket's drawing is in `references/ops-tickets.md`. Write `context.md`: short,
+every claim with `file:line`.
 
 Check the ticket's premise as the senior's stage 2 does (the bug reproduces, the value is what
 the ticket thinks), without its investigator: a reproduction is the best place to use his QA
@@ -216,17 +203,16 @@ second ticket on.
 ### C. Approach
 
 At most two genuinely different approaches: files touched, what each fixes and leaves, size,
-risk. When only one is viable, say so and why in one line. At Levels 0 and 1 you present them and he picks
-with a reason; from Level 2 he proposes and you critique. Write the choice and the locked
-scope (what is in, what is out) to `approach.md`. No Jira comment: Cristian checks the
-solution at the MR review.
+risk. When only one is viable, say so and why in one line. Who presents and who chooses
+follows the pen table's *Approach* row. Write the choice and the locked scope (what is in,
+what is out) to `approach.md`. No Jira comment: Cristian checks the solution at the MR review.
 
 ### D. Tasks
 
-Write `tasks.md`: 1 to 7 tasks, each naming its files, its test id or verification, and the gate command from
-the repository's section of the senior's `references/repository-traps.md`. Each ends on a
-green gate. Who drafts, and how many tasks he explains back before E starts, follow the pen
-table.
+Write `tasks.md`: 1 to 7 tasks, each naming its files, its test id or verification, and the
+gate command from the repository's section of the senior's `references/repository-traps.md`.
+Each ends on a green gate. Who drafts, and how many tasks he explains back before E starts,
+follow the pen table.
 
 ### E. Build, test first
 
@@ -238,41 +224,18 @@ applies to them. A red result you did not expect is debugged together, with the 
 read the failure, a hypothesis, one change, rerun. Never send it to an investigator: it is the
 best lesson in the ticket.
 
-On an ops ticket the failing test becomes a **verification plan**, written in `tasks.md`
-before the change: the commands whose output the change must alter, what each prints today,
-and what it should print after (a setting's value read back, the jobs of the MR's pipeline and
-their result). A docs-only change is verified by reading each changed claim against the code
-it describes. A check that prints the same before and after shows only that nothing broke: it
-is the task's gate, and the repository's Python gate joins it only where the change can reach
-it (tool configuration in `pyproject.toml`, a file the tests read). For a pipeline file that
-check is `rtk proxy glab ci lint <checkout>/.gitlab-ci.yml -R <group>/<repo>`: one line for any
-valid file, the reason and exit 1 otherwise. A compose file is checked with
-`docker compose -f <file> config -q`: without `-q` it prints `.env`'s values. An image is proven
-by the pipeline job that builds it: no local `docker build`. He predicts before each run, as
-with a test, and each result goes under its line in `tasks.md` as it runs.
-
-A dependency pin: he edits the constraint and you run `poetry lock` from `<checkout>`; in a
-linked worktree it leaves an empty `.venv`, which you remove. Nothing is installed into
-`<repo>/.venv`, which every other branch and worktree of the repository runs on, so the local
-gate still tests the old version: the proof is the MR pipeline's test job. At G the lock is
-one hunk, `generated by poetry lock` in `understanding.md`: he names the packages that moved
-and why.
-
-The pen table's *Failing test* row says who writes the plan, and its *Production code* row who
-makes the change. His prompt names the plan's check where the pattern asks for a test id, and
-the file's neighbours where it asks for house skills; from Level 2 it goes to a general-purpose
-agent with the same brief lines, since the Python implementor writes Python tests.
-
-A check that needs a pipeline waits for stage I's pipeline watch; when the watch ends, read the
-plan's pipeline lines against the pipeline's jobs with him and update the MR's section. A check
-that needs a change in the deploy repo, or a cluster, is not his: the MR says what Cristian has
-to verify.
+On an ops ticket the failing test becomes a verification plan, and a dependency pin, the pens
+and the checks that wait on a pipeline have their own rules: `references/ops-tickets.md`. A
+code ticket that also changes one of that page's files takes its check for that file.
 
 Docker-backed tiers follow the senior's Docker rule under *Working rules*, word for word
 (the lock, the absence check, the stack down in the same turn), except that a lock or a
 container that is not this session's is escalated, never waited on. You run them until
-Level 2. The
-`ruff check` and other gate commands are the read-only forms in `repository-traps.md`:
+Level 2. No subagent runs one, or any `docker` command: every brief of this skill says so,
+naming the repository's Docker-backed tiers. A task whose test is Docker-backed is run under
+the lock by whoever runs the tiers, after the coder returns.
+
+The `ruff check` and other gate commands are the read-only forms in `repository-traps.md`:
 the difference between a command that checks and one that rewrites is an early lesson.
 
 ### F. Review
@@ -281,26 +244,28 @@ In this order:
 
 1. The review of the diff with the checklist in `references/reviewing-generated-code.md`,
    by whoever the pen table names.
-2. On a code ticket, you dispatch one read-only `python-structure-and-style-guard` (from Level 1), and from
-   Level 2 also one read-only `python-code-reviewer`, briefed with `approach.md`, `tasks.md`,
-   `<checkout>`, the ledger's `fork` as the base and the senior's *Brief essentials*. The guard's brief also
-   carries the three lines the senior's stage 7 *Lens loop* gives it (`git -C`, the `fork` sha as `<base>` in
-   place of the `git symbolic-ref` expression, the union of Step 1's lists): without them it
-   diffs against the remote's default branch, an older release. The guard has no Write tool:
-   save its final message to `review-guard.md` yourself; the reviewer writes
-   `review-reviewer.md`.
+2. On a code ticket, you dispatch one read-only `python-structure-and-style-guard` (from
+   Level 1), and from Level 2 also one read-only `python-code-reviewer`, briefed with
+   `approach.md`, `tasks.md`, `<checkout>`, the ledger's `fork` as the base, the senior's
+   *Brief essentials* and the coder brief's no-Docker sentences
+   (`references/reviewing-generated-code.md`), tiers filled in. The guard's brief also carries the
+   three lines the senior's stage 7 *Lens loop* gives it (`git -C`, the `fork` sha as
+   `<base>` in place of the `git symbolic-ref` expression, the union of Step 1's lists):
+   without them it diffs against the remote's default branch, an older release. The guard
+   has no Write tool: save its final message to `review-guard.md` yourself; the reviewer
+   writes `review-reviewer.md`.
 3. For each finding, his verdict first (real or not, and why), then yours with the evidence.
    He fixes the confirmed ones in the files his level lets him edit; you fix the rest,
    narrating.
 
-On an ops ticket the checklist's Python rules give way to the repository's own conventions for
-that file (its other jobs, its other Dockerfiles). One round, then the gate again. Names are a checklist item he does with the senior's
-`references/naming-guide.md` open, not a designer round.
+One round, then the gate again. Names are a checklist item he does with the senior's
+`references/naming-guide.md` open, not a designer round. An ops ticket's review is in
+`references/ops-tickets.md`.
 
 ### G. Explain-back gate
 
-First run `reconcile-docs` over the diff against the ledger's `fork`, so a doc edit is in the diff he
-explains; the doc edit follows the pen table's production-code row. Then show
+First run `reconcile-docs` over the diff against the ledger's `fork`, so a doc edit is in the
+diff he explains; the doc edit follows the pen table's production-code row. Then show
 `rtk proxy git -C <checkout> diff <fork>` hunk by hunk, untracked files included, and grade and
 act per *Stage G* in `references/reviewing-generated-code.md`. Write each file's result in
 the third column of `understanding.md`: the MR's mentoring section and `retro.md` are copied
@@ -326,15 +291,21 @@ runs as Cristian, so he gets no notification of the MR: once it reads back as op
 Jira comment `MR open for review: <web_url>`, and he tells Cristian. A red pipeline job is
 read together.
 
-Cristian's comments on the open MR, or a red job, start a review round before J. Read each
-comment with him, with the command in `references/mr-mentoring-section.md`
-(`ci.review-comments`: a fix, or an answer in the thread, never silence). A fix goes through E
-for its task, then G over the new hunks only, then H and a follow-up push on his word; an
-existing MR never gets a second one. Then update `understanding.md` and the MR's mentoring
-section from it, through the same WAF check
+Cristian's comments on the open MR, or a red job, start a review round before J. It starts
+with `git -C <checkout> fetch origin <branch>` and
+`git -C <checkout> rev-list --left-right --count <branch>...origin/<branch>`: a number other
+than 0 on the right means the remote branch moved, which is an escalation (*Guardrails*).
+Then read each comment with him, with the command in `references/mr-mentoring-section.md`.
+Each gets a fix or an answer, never silence (`ci.review-comments`). An answer is his: he gives
+it to Cristian himself. This session posts nothing in a thread and never resolves one:
+resolving is the reviewer's.
+
+A fix goes through E for its task, then G over the new hunks only
+(`rtk proxy git -C <checkout> diff HEAD`, untracked files included), then H and a follow-up
+push on his word, and he tells Cristian; an existing MR never gets a second one. Then update
+`understanding.md` and the MR's mentoring section from it, through the same WAF check
 (`glab mr update <branch> -R <group>/<repo> --description "$(cat <run>/mr-<repo>.md)"`).
-Record `I: review round N` in the ledger. Comments answered before the merge are still read
-at J.
+Record `I: review round N` in the ledger.
 
 ### J. Merged
 
@@ -380,31 +351,19 @@ and `mastered` before the level that hands him the step.
 A command from the never-list under *Guardrails* that he types himself runs at once; you
 cannot undo it. Say what it did, record it in the ledger, and continue.
 
-Entry criteria, every concept id from `references/curriculum.md`:
-
-- **L1:** `sh.paths`, `sh.read-vs-write`, `git.status-diff-log`, `git.branch-from-base`,
-  `pytest.assert`, `pytest.run-one` mastered; `git.never-rewrite`, `py.function`, `py.class`
-  practised.
-- **L2:** `pytest.fixture`, `pytest.naming`, `pyw.naming`, `ddd.layers`,
-  `cc.read-every-line` mastered; `cc.prompt-pattern` practised.
-- **L3:** `cc.prompt-pattern`, `cc.failure-modes`, `ddd.repository-port`,
-  `eng.scope-discipline` mastered; `clean_gates` at 2 or more in `profile.md` (tickets in a
-  row with no ✗ left at the end of stage G).
-
-The level changes only on a word. When a level's criteria are met, suggest it to the junior
-in one line at the end of a ticket ("ready to take the next level on the next ticket?"). On
-his yes, or when he says Cristian agreed to a change, edit `level` and `level_since` in
-`profile.md` and commit. Cristian may also edit the file himself.
+Each level's entry criteria are in `references/learner-profile.md`, *Levels*. The level
+changes only on a word. When a level's criteria are met, suggest it to the junior in one line
+at the end of a ticket ("ready to take the next level on the next ticket?"). On his yes, or
+when he says Cristian agreed to a change, edit `level` and `level_since` in `profile.md` and
+commit. Cristian may also edit the file himself.
 
 ## Teaching
 
 1. **The ticket is the syllabus.** Teach a concept only when the next step needs it. Whatever
    else comes up goes to `study-notes.md` with the ticket and one line on why.
-2. **Worked example, then faded guidance, then alone,** per concept: these are the states
-   `introduced`, `practised`, `mastered`.
-3. **Predict, then run.** Before a command, a test run or an applied diff, he says in one line
-   what will happen. A wrong prediction is the gap: show the two side by side, no lecture. A
-   prediction is a check.
+2. **Worked example, then faded guidance, then alone,** per concept: the states `introduced`,
+   `practised`, `mastered`.
+3. **Predict, then run** (`references/teaching-format.md`): a prediction is a check.
 4. **Retrieve, never re-explain.** The profile decides, by the table below.
 5. **Explain back before it ships.** Stage G.
 6. **Struggle with a ceiling, and plain honesty.** The hint ladder, "Wrong." said plainly,
@@ -426,8 +385,7 @@ instance, before he does it, whatever its state.
 
 Pictures of what is really there (the git graph, the import graph, artifacts built from
 their output) come from `references/visual-tools.md`, which says which tool fits which concept
-and level.
-Formats, the hint ladder, the answer-response table and the exercise types are in
+and level. Formats, the hint ladder, the answer-response table and the exercise types are in
 `references/teaching-format.md`; the states and their promotion rules in
 `references/learner-profile.md`; the concepts in `references/curriculum.md`.
 
@@ -435,11 +393,8 @@ Formats, the hint ladder, the answer-response table and the exercise types are i
 
 The goal is that he can prompt Claude Code for code and then read every line of it as a claim
 to verify. While you write the code, read it back hunk by hunk, naming what each line assumes
-about the codebase. From Level 2 his prompt goes verbatim to a coder subagent, so the writer
-and the reviewer are no longer the same mind. When he starts writing prompts, the prompt
-pattern, the coder's brief, the failure modes with the check for each, and the house
-checklist are in `references/reviewing-generated-code.md`. Nothing he cannot explain is
-committed without the MR saying so: stage G enforces it.
+about the codebase. The prompt pattern, the coder's brief, the failure modes with the check
+for each, and the house checklist are in `references/reviewing-generated-code.md`.
 
 ## Guardrails
 
@@ -448,30 +403,38 @@ committed without the MR saying so: stage G enforces it.
 - `git stash`, `reset`, `checkout -- <file>`, `restore`, `rebase`, `push --force`, `clean`,
   `worktree prune`, or `branch -D` outside the senior's stage 11 cleanup. A non-empty
   `git status --short` in a main checkout on its base is someone else's work: stop.
-- Anything in `~/Projects/central`, the deploy repo: a push there is a deployment. A ticket that
-  needs it goes to Cristian, with one line why. No `kubectl`.
+- Anything in `~/Projects/central`, the deploy repo: a push there is a deployment. No
+  `kubectl`, in any context.
 - Print `.env` or a key file (`transform/keys/` in bi-tool).
 - A gate command that rewrites files (plain `ruff check`, `make style` or `make lint` in
   syneto-diana, `pre_commit run` in central-backend other than its `flake8 --files` form).
-- Docker outside the senior's lock rule; remove a lock this session did not take.
+- Docker outside the senior's lock rule, or in a subagent; remove a lock this session did not
+  take.
 - git-sim's hosted pages (`references/visual-tools.md`), `git-sim wire-agents` or
   `git-sim aliases`: they rewrite agent configurations and git's global config.
-- Commit before stage G passes and without his word; push without his word; merge an MR;
-  move a ticket past Review before its MR merged; edit a Jira description.
+- Commit before stage G passes or without his word; push without his word; merge an MR;
+  post in or resolve an MR thread; move a ticket past Review before its MR merged; edit a
+  Jira description.
 
-Escalate to Cristian (stop, and tell the junior to ask him): a lock or container that is not
-this session's, a ticket whose repository is not Python or that needs a second repository
-(an ops change inside a Python repository is the ops track, not an escalation),
-a production `kubectl` context, the deploy repo, a ticket whose scope looks
-wrong after stage C, anything the senior skill says to stop and ask about that is not a
-learner's decision.
+Escalate to Cristian (stop, and tell the junior to ask him):
 
-**Pacing.** Per session at most 3 new concepts, 2 retrieval questions, and 1 kata of at most 15
-minutes; at most one `AskUserQuestion` per message; explanations at most 30 lines. A step past
-the new-concept cap is still done: you do it and say in one line what you did, with no
+- a lock or container that is not this session's;
+- a ticket whose repository is not Python, is bi-tool, or that needs a second repository (an
+  ops change inside a Python repository is the ops track, not an escalation);
+- anything that needs `kubectl` or the deploy repo, except an ops ticket's check that only
+  Cristian can run, which the MR names (`references/ops-tickets.md`, *Checks that wait*);
+- an MR that needs a rebase or shows conflicts, a work branch whose remote moved, a push
+  GitLab refuses: every way past them rewrites history or merges the base in;
+- a ticket whose scope looks wrong after stage C;
+- anything the senior skill says to stop and ask about that is not a learner's decision.
+
+**Pacing.** Per session at most 3 new concepts, 2 retrieval questions, and 1 kata of at most
+15 minutes; at most one `AskUserQuestion` per message; explanations at most 30 lines. A step
+past the new-concept cap is still done: you do it and say in one line what you did, with no
 lesson, no handbook page and no profile row; the concept goes to `study-notes.md` and is
-taught as new at its next instance. A `rusty` concept past the retrieval cap gets no question: he does it, hints on request, and a
-correct use makes it `mastered` as the profile's table says.
+taught as new at its next instance. A `rusty` concept past the retrieval cap gets no
+question: he does it, hints on request, and a correct use makes it `mastered` as the
+profile's table says.
 
 **Keeping the ticket moving.** Before teaching, ask yourself: does he need this to make the
 next change correctly and to explain it at stage G? No: a study note. Yes but deep (SQLAlchemy
@@ -489,32 +452,34 @@ as its output line. When you were wrong, say so and redraw.
 
 This machine's Bash hook rewrites `git`, `glab`, `cat`, `grep`, `ls` and `docker` through
 `rtk`, which condenses their output (a checkout prints `ok`) and cuts a diff past 100 lines a
-hunk and about 500 in all. Prefix `rtk proxy` to every command whose output he reads or you grade: the
-branch sequence, `status`, `log`, stage G's diff.
+hunk and about 500 in all. Prefix `rtk proxy` to every command whose output he reads or you
+grade: the branch sequence, `status`, `log`, stage G's diff.
 
 ## Resuming
 
 Open `~/.cache-mentoring/tickets/<KEY>/ledger.md` for the key he names, else the only ledger
 with neither `complete` nor `pending: Testing`, else ask him. Re-verify as the senior's
-*Resuming* does (branch and dirty files of `<checkout>`, Jira status, the repository among the
-working directories), stop on a difference, then continue from the stage the ledger names.
-
-One difference has a way on: the ledger's checkout is the main checkout and it is now on
-another branch. Someone took it: leave it. When the ledger records no dirty files, attach the
-run's branch in a linked worktree (`git -C <repo> worktree add .claude/worktrees/<KEY>
-<branch>`, then stage A's import check), record the new `<checkout>`, and continue. When it
-records dirty files, they went with the checkout: escalate.
+*Resuming* does (the branch of `<checkout>` and its dirty files against the ledger's `dirty:`
+line, the Jira status, the repository among the working directories) and stop on a
+difference. One difference has a way on, a main checkout someone else took:
+`references/linked-worktree.md`, *Resuming when the main checkout was taken*. Then read
+`<checkout>/CLAUDE.md` and `AGENTS.md` as at stage A, and `references/linked-worktree.md`
+when `<checkout>` is a linked worktree (its interpreter and Docker rules hold to stage J),
+and continue from the stage the ledger names.
 
 ## Ticket status
 
 Follow the senior's *Ticket status* section as written. Testing belongs to Cristian. The
-needs-testing call is yours, stated in the closing
-comment; only Cristian overrules it.
+needs-testing call is yours, stated in the closing comment; only Cristian overrules it.
 
-Fixed in build is the first successful infra/central `dev-on-prem` deploy pipeline that
-started after the ticket's post-merge pipeline on `<base>` passed (`glab api
-"projects/<group>%2F<repo>/pipelines?ref=<base>&sha=<merge or squash sha>"` gives that
-pipeline), and that deploy is never this session's. A deploy between the merge and that
+For a Central ticket, Fixed in build is the first successful infra/central `dev-on-prem`
+deploy pipeline that started after the ticket's post-merge pipeline on `<base>` passed
+(`glab api "projects/<group>%2F<repo>/pipelines?ref=<base>&sha=<merge or squash sha>"` gives
+that pipeline), and that deploy is never this session's. A deploy between the merge and that
 pipeline's success deployed the old image. When no such success exists yet, the Story or Bug
 stays in Review: the ledger records `pending: Testing` in place of `complete`, the junior
 tells Cristian, and *Session start* picks it up later. Never write an older build number.
+
+A SynetoOS Story or Bug that needs testing has no such pipeline: it stays in Review, the
+ledger records `pending: Testing`, the junior asks Cristian which build to write, and the
+session that hears the answer finishes the move.

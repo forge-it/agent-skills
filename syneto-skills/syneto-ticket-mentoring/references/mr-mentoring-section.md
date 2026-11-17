@@ -23,7 +23,8 @@ Questions for your review: why does the fake repository not need `commit()`?
 Docker tiers: integration, mentor-run: passed / not run.
 ```
 
-- **Written by:** `junior, by hand`, `junior, via prompt` (the coder subagent from his prompt),
+- **Written by:** `junior, by hand`, `junior, via prompt` (written from his prompt: by you at
+  Level 1, by the coder subagent from Level 2),
   `mentor, in session`, or `written by Claude, not explained back` when he skipped it with
   "just do it".
 - **Explained back:** `yes`, `partly: <the gap>`, or `no` (a hunk still ✗ at stage G).
@@ -34,7 +35,8 @@ Docker tiers: integration, mentor-run: passed / not run.
 
 ## Reading the review back (stage J)
 
-Read Cristian's notes, in a review round and again after the merge:
+Read Cristian's notes in a review round, for the fix, and after the merge, for the profile: a
+comment changes the profile once, at stage J.
 
 ```text
 glab mr view <branch> -R <group>/<repo> --comments -P 100

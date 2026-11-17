@@ -31,8 +31,9 @@ You work in <checkout>, on branch <branch>; nobody else edits it while you work.
 only under it. Run every git command as `git -C <checkout>`. Use <repo>/.venv/bin/python, the
 main checkout's interpreter, from <checkout>. Git is
 read-only for you except the files you edit: no commit, stash, fetch, pull, checkout or
-reset. The gate is: <gate command from repository-traps.md>. Report the files you changed
-and the gate's result line.
+reset. Run no Docker-backed test and no `docker` command: <the tiers the repository's Docker
+lines in repository-traps.md name>. Report such a test as not run. The gate is: <gate command
+from repository-traps.md>. Report the files you changed and the gate's result line.
 ```
 
 Add the rest of the senior's *Brief essentials* that apply, except the dispatch-mode block,
@@ -48,7 +49,7 @@ Each failure mode comes with the one check that catches it: a QA person reviews 
 | Invented API or wrong signature | From the directory the tests run in, `<repo>/.venv/bin/python -c "import <module>; help(<module>.<name>)"`, or grep the repository for the definition and quote its `file:line` |
 | Wrong assumption about the codebase | For every call into existing code, open the callee: does it do what the new code assumes? |
 | Over-engineering | Compare the diff with the acceptance criteria: a class, helper, option or layer the ticket did not ask for is a question |
-| A test that tests nothing | **Break it on purpose**: undo the production change, run the test, it must go red |
+| A test that tests nothing | **Break it on purpose**: edit the line that carries the fix back to what it was, run the test, it must go red, then edit it forward again; never with `stash`, `restore` or `checkout --` |
 | Silent scope creep | `git -C <repo> status --short` lists only the files in `tasks.md`; anything else is explained or removed |
 | Convention drift | The house checklist below |
 | Stale library knowledge | The version in `poetry.lock`; the import works in the venv |

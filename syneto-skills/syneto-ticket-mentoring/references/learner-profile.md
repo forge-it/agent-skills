@@ -56,6 +56,20 @@ comment's first line and is taught as new at its next instance.
 A multiple-choice answer alone never promotes past `practised`: promotion takes an act (he
 did it, or said it in his own words). Multiple choice is for `rusty` retrieval only.
 
+## Levels
+
+Entry criteria, every concept id from `curriculum.md`. Meeting them only lets you suggest the
+level (SKILL.md, *Who holds the pen*).
+
+- **L1:** `sh.paths`, `sh.read-vs-write`, `git.status-diff-log`, `git.branch-from-base`,
+  `pytest.assert`, `pytest.run-one` mastered; `git.never-rewrite`, `py.function`, `py.class`
+  practised.
+- **L2:** `pytest.fixture`, `pytest.naming`, `pyw.naming`, `ddd.layers`,
+  `cc.read-every-line` mastered; `cc.prompt-pattern` practised.
+- **L3:** `cc.prompt-pattern`, `cc.failure-modes`, `ddd.repository-port`,
+  `eng.scope-discipline` mastered; `clean_gates` at 2 or more (tickets in a row with no ✗
+  left at the end of stage G).
+
 ## Who writes it, when
 
 You, at three moments, editing rows in place (never regenerate the file, so a line Cristian
