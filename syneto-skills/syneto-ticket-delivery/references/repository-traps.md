@@ -209,6 +209,33 @@ up at a time: when the other is up and you did not start it, ask him before taki
   - `src/diana/api-docs/*.md` is served as the OpenAPI description, so a wrong sentence there
     ships to clients.
 
+## syneto-mercurio — `lx/syneto-mercurio`
+
+Facts as of 2026-11-12 (SYN-3715).
+
+- **Stack:** Syneto OS Python 3.12, FastAPI. Implementor `python-implementor-expert-no-commit`;
+  fixer `python-fixer-no-commit`. There is no `CLAUDE.md`, `AGENTS.md` or `Makefile`: the
+  rules live in `.gitlab-ci.yml`, `run-unit-tests.sh`, `pyproject.toml`,
+  `.pre-commit-config.yaml` and `.fmd-lint.yaml`.
+- **Base:** the software-editions work branches from and targets `software-editions-6.1.0`,
+  not `main`.
+- **Gate**, from the root of the tree under test:
+  - `<repo>/.venv/bin/ruff check --no-cache --no-fix mercurio tests` and
+    `<repo>/.venv/bin/black --check mercurio tests`. The venv's black (24.3) is older than
+    pyproject's `^25.12`, so 2 untouched files fail `--check`: judge only the changed files.
+  - `cd tests && PYTHONDONTWRITEBYTECODE=1 <repo>/.venv/bin/python -m pytest -q -p no:cacheprovider`
+    (1541 passed in ~12 s on 2026-11-12). CI's `./run-unit-tests.sh` writes coverage files.
+  - `<repo>/.venv/bin/fmd-lint` (CI `docs-lint`, not allowed to fail): every route in the
+    generated OpenAPI spec needs a section in `docs/`. It writes the gitignored
+    `openapi_spec.json`.
+  - CI's `syneto-gate` (type checking, the coverage of changed lines ≥ 80%, gitleaks) is not
+    installed locally. Say so in the report rather than claiming it passed.
+- **Traps:** there is no vendored proto. Central's gRPC types come from server reflection
+  at runtime, so a new central-backend RPC needs only a method constant here, and an older
+  Central answers `UNIMPLEMENTED` (→ 503 `CENTRAL_UNREACHABLE`). The gateway retries
+  `DEADLINE_EXCEEDED` once for every method, so a mutation is at-least-once. Docs cURL
+  examples use `Bearer your_token`, which gitleaks accepts.
+
 ## central (deploy) — `infra/central`
 
 - **Stack:** Pulumi Python. No fleet agent: use general-purpose.
