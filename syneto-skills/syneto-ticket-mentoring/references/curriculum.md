@@ -121,6 +121,18 @@ He verified vendors' claims for a living: generated code is a claim.
 - `cc.fresh-session` — when a new session beats a long one; resuming from the ledger — J — resumes a ticket in a fresh session
 - `cc.skills` — skills as checklists the session loads — J — names the skill a review applies
 
+## ops. Pipelines, images and configuration
+
+Met on any ticket that changes them, ops or code (SKILL.md, stage B). He verified releases for a living: a verification plan is a
+test plan for a change no unit test can reach.
+
+- `ops.verification-plan` — proving a change with no unit test: a lint, a build, a dry run, the pipeline, each with today's output and the expected one — J — writes a plan whose checks would fail without the change
+- `ops.pipeline-config` — changing `.gitlab-ci.yml`: rules, what triggers a job on which branch (`ci.pipeline` is reading a run) — J — says which jobs his change runs, and when
+- `ops.docker-image` — a Dockerfile's layers, build time vs run time, what is baked in vs passed in — J — says what a Dockerfile change changes in the running container
+- `ops.config-source` — which source of a setting wins: code default, config file, environment, the deploy repo (`sh.env-file` is the file itself) — J — traces a setting to its deployed value with the senior's stage 2 read, never in the deploy repo's checkout
+- `ops.dependency-pin` — changing a pin: the constraint, regenerating the lock, what a bump can break (`tool.dependencies` is reading them) — J — reads a lock diff and names what changed
+- `ops.scheduled-job` — cron syntax, where a schedule runs and in which timezone — J — reads a schedule aloud in words
+
 ## eng. Engineering practice
 
 - `eng.acceptance-criteria` — the acceptance criteria are the definition of done — P — restates them at stage A

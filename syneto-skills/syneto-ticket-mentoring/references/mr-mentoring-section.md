@@ -27,6 +27,8 @@ Docker tiers: integration, mentor-run: passed / not run.
   `mentor, in session`, or `written by Claude, not explained back` when he skipped it with
   "just do it".
 - **Explained back:** `yes`, `partly: <the gap>`, or `no` (a hunk still ✗ at stage G).
+- On an ops ticket the verification plan's results replace the test tiers: what ran, what
+  it printed, what waits for the pipeline or for Cristian.
 - Name every concept still `stuck`, his open questions and every test tier not run. Leave
   out what is fine, and any level change: that is between the junior and Cristian.
 

@@ -23,7 +23,7 @@ which.
 
 ## How it grows
 
-- **Stage B of every ticket**: draw only this ticket's slice, from the route or entry point to
+- **Stage B of every code ticket**: draw only this ticket's slice, from the route or entry point to
   the store and back, every box a real module with its `file:line`. Mark the part the ticket
   changes with `▲`.
 - **`ddd.layers`'s first meeting**: its handbook page holds the full layer

@@ -12,7 +12,7 @@ description: >-
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.1.3"
+  version: "0.1.4"
 ---
 
 # Syneto Ticket Mentoring
@@ -92,7 +92,7 @@ ticket's own key, a subtask's included: one run per ticket.
 | Stage | Senior stage | What happens | His checkpoint |
 |---|---|---|---|
 | A. Read the ticket | 1 | Fetch the ticket | He restates the problem and the acceptance criteria |
-| B. Find the code | 2 | Search, draw this ticket's slice | He predicts which layer changes |
+| B. Find the code | 2 | Search, decide the ticket's kind and size, draw its slice | He predicts the kind and where the change lands |
 | C. Approach | 3 | Two approaches, a choice | His reason for the choice |
 | D. Tasks | 4–5 | 1 to 7 tasks, each ending on a green gate | He explains tasks back |
 | E. Build, test first | 6 | Red, predict, green, gate, per task | He predicts each run (a check) |
@@ -174,10 +174,37 @@ then, under the session caps (*Pacing*).
 
 ### B. Find the code
 
-Show how to find it: grep for the error text, the route path, a name from the ticket. Draw this
-ticket's slice of the architecture (`references/architecture-map.md` says how to build and
-keep the map), then ask him which layer and file he expects to change before you say. Write
-`context.md`: short, every claim with `file:line`.
+Show how to find it: grep for the error text, the route path, a name from the ticket, until
+you both have the entry point: the route, handler, setting or pipeline file the ticket's words
+lead to. Read on from there alone, without saying, until you know which files the change lands
+in.
+
+**What kind of ticket it is** is decided here, not at A: a ticket's words mislead, its files
+do not. He predicts first (a check); you decide from those files and say why in one line,
+without naming a file he has still to predict. When he objects, weigh his reason and decide.
+Record `kind: <kind>, size: <size>` in the ledger. Change it later only on new evidence, and
+say so: the run goes back to the earliest stage the change affects (C when small became normal,
+D when the kind changed), and a change that moves `approach.md`'s locked scope is the
+escalation under *Guardrails*.
+
+| Axis | Value | When | What changes |
+|---|---|---|---|
+| Kind | code | a `.py` file changes, alone or with its CI or config | the flow as written |
+| | ops | no `.py` file changes: only CI (`.gitlab-ci.yml`), a Dockerfile or compose file, a configuration or environment file, a dependency pin, a shell script, docs | E proves it with a verification plan instead of a failing test; F has no Python guard or reviewer |
+| Size | small | one obvious change in one place, with one viable approach | C is one line; `tasks.md` has one task; at most one new concept from here to J, a step past it done as *Pacing* says; his first ticket keeps the session caps alone |
+| | normal | anything else | as written |
+
+On a code ticket, ask him once, with `AskUserQuestion`, whether he wants the call-chain walk
+on this ticket (*pyan3* in `references/visual-tools.md`). Record `call-chain: yes` or `no` in
+the ledger; he can switch it with a word. No is a fine answer.
+
+On `call-chain: yes` the walk comes first: from the ticket's entry point, hop by hop, until he
+names the layer and file he expects to change; draw the slice from the walk. On any other code
+ticket draw this ticket's slice of the architecture (`references/architecture-map.md` says how
+to build and keep the map), then ask him which layer and file he expects to change before you
+say. On an ops ticket draw instead the path from the changed file to its effect: which
+pipeline job, image, container or running service reads it, and when. Write `context.md`:
+short, every claim with `file:line`.
 
 Check the ticket's premise as the senior's stage 2 does (the bug reproduces, the value is what
 the ticket thinks), without its investigator: a reproduction is the best place to use his QA
@@ -189,14 +216,14 @@ second ticket on.
 ### C. Approach
 
 At most two genuinely different approaches: files touched, what each fixes and leaves, size,
-risk. When only one is viable, say so and why. At Levels 0 and 1 you present them and he picks
+risk. When only one is viable, say so and why in one line. At Levels 0 and 1 you present them and he picks
 with a reason; from Level 2 he proposes and you critique. Write the choice and the locked
 scope (what is in, what is out) to `approach.md`. No Jira comment: Cristian checks the
 solution at the MR review.
 
 ### D. Tasks
 
-Write `tasks.md`: 1 to 7 tasks, each naming its files, its test id, and the gate command from
+Write `tasks.md`: 1 to 7 tasks, each naming its files, its test id or verification, and the gate command from
 the repository's section of the senior's `references/repository-traps.md`. Each ends on a
 green gate. Who drafts, and how many tasks he explains back before E starts, follow the pen
 table.
@@ -211,6 +238,36 @@ applies to them. A red result you did not expect is debugged together, with the 
 read the failure, a hypothesis, one change, rerun. Never send it to an investigator: it is the
 best lesson in the ticket.
 
+On an ops ticket the failing test becomes a **verification plan**, written in `tasks.md`
+before the change: the commands whose output the change must alter, what each prints today,
+and what it should print after (a setting's value read back, the jobs of the MR's pipeline and
+their result). A docs-only change is verified by reading each changed claim against the code
+it describes. A check that prints the same before and after shows only that nothing broke: it
+is the task's gate, and the repository's Python gate joins it only where the change can reach
+it (tool configuration in `pyproject.toml`, a file the tests read). For a pipeline file that
+check is `rtk proxy glab ci lint <checkout>/.gitlab-ci.yml -R <group>/<repo>`: one line for any
+valid file, the reason and exit 1 otherwise. A compose file is checked with
+`docker compose -f <file> config -q`: without `-q` it prints `.env`'s values. An image is proven
+by the pipeline job that builds it: no local `docker build`. He predicts before each run, as
+with a test, and each result goes under its line in `tasks.md` as it runs.
+
+A dependency pin: he edits the constraint and you run `poetry lock` from `<checkout>`; in a
+linked worktree it leaves an empty `.venv`, which you remove. Nothing is installed into
+`<repo>/.venv`, which every other branch and worktree of the repository runs on, so the local
+gate still tests the old version: the proof is the MR pipeline's test job. At G the lock is
+one hunk, `generated by poetry lock` in `understanding.md`: he names the packages that moved
+and why.
+
+The pen table's *Failing test* row says who writes the plan, and its *Production code* row who
+makes the change. His prompt names the plan's check where the pattern asks for a test id, and
+the file's neighbours where it asks for house skills; from Level 2 it goes to a general-purpose
+agent with the same brief lines, since the Python implementor writes Python tests.
+
+A check that needs a pipeline waits for stage I's pipeline watch; when the watch ends, read the
+plan's pipeline lines against the pipeline's jobs with him and update the MR's section. A check
+that needs a change in the deploy repo, or a cluster, is not his: the MR says what Cristian has
+to verify.
+
 Docker-backed tiers follow the senior's Docker rule under *Working rules*, word for word
 (the lock, the absence check, the stack down in the same turn), except that a lock or a
 container that is not this session's is escalated, never waited on. You run them until
@@ -224,7 +281,7 @@ In this order:
 
 1. The review of the diff with the checklist in `references/reviewing-generated-code.md`,
    by whoever the pen table names.
-2. You dispatch one read-only `python-structure-and-style-guard` (from Level 1), and from
+2. On a code ticket, you dispatch one read-only `python-structure-and-style-guard` (from Level 1), and from
    Level 2 also one read-only `python-code-reviewer`, briefed with `approach.md`, `tasks.md`,
    `<checkout>`, the ledger's `fork` as the base and the senior's *Brief essentials*. The guard's brief also
    carries the three lines the senior's stage 7 *Lens loop* gives it (`git -C`, the `fork` sha as `<base>` in
@@ -236,7 +293,8 @@ In this order:
    He fixes the confirmed ones in the files his level lets him edit; you fix the rest,
    narrating.
 
-One round, then the gate again. Names are a checklist item he does with the senior's
+On an ops ticket the checklist's Python rules give way to the repository's own conventions for
+that file (its other jobs, its other Dockerfiles). One round, then the gate again. Names are a checklist item he does with the senior's
 `references/naming-guide.md` open, not a designer round.
 
 ### G. Explain-back gate
@@ -402,7 +460,8 @@ committed without the MR saying so: stage G enforces it.
   move a ticket past Review before its MR merged; edit a Jira description.
 
 Escalate to Cristian (stop, and tell the junior to ask him): a lock or container that is not
-this session's, a ticket whose repository is not Python or that needs a second repository,
+this session's, a ticket whose repository is not Python or that needs a second repository
+(an ops change inside a Python repository is the ops track, not an escalation),
 a production `kubectl` context, the deploy repo, a ticket whose scope looks
 wrong after stage C, anything the senior skill says to stop and ask about that is not a
 learner's decision.
