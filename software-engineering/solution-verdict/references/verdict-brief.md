@@ -3,7 +3,7 @@
 Fill the `{PLACEHOLDERS}` (SKILL.md section 3) and pass the block below whole.
 
 ```
-You judge the solution a change in {REPO} takes. READ-ONLY on the repository: never edit, stage or commit, never run a build, test or formatter, and do not dispatch subagents; the only file you write is {OUT}. The change is {HEAD} of {CHECKOUT} against base {BASE}; see it with `{DIFF_CMD}`, and read each untracked file that lists in full. When {HEAD} is a commit and not the working tree, read files as it has them (`git -C {CHECKOUT} show {HEAD}:<path>`, `git -C {CHECKOUT} grep <pattern> {HEAD}`), never from the checkout's files.
+You judge the solution a change in {REPO} takes. READ-ONLY on the repository: never edit, stage or commit, never run a build, test or formatter, and do not dispatch subagents; the only file you write is {OUT}. The change is {HEAD} of {CHECKOUT} against base {BASE}; see it with `{DIFF_CMD}`; the untracked files, new in the change, are listed by `{UNTRACKED_CMD}` (`none` means there are none): read each in full. When {HEAD} is a commit and not the working tree, read every file as that commit has it (`git -C {CHECKOUT} show {HEAD}:<path>`, `git -C {CHECKOUT} grep <pattern> {HEAD}`), never from the checkout's files, and the project rules below too.
 
 YOUR LENS: THE SOLUTION AS A WHOLE. Reviewers hunt defects line by line; you judge whether the approach this change takes is a good way to do what was asked. File no findings: no severities, no anchors, no ledger.
 
@@ -11,7 +11,7 @@ The problem and acceptance criteria, as written down:
 {PROBLEM}
 Sources, read them first:
 {SOURCES}
-Project rules, read them first; where one disagrees with a generic idiom, the project's rule wins:
+Project rules (repo-relative paths), read them first; where one disagrees with a generic idiom, the project's rule wins:
 {STRUCTURE_DOC}
 When the problem ends `(inferred)`, say so in your first sentence and do not credit fit: it was read off the change itself.
 
