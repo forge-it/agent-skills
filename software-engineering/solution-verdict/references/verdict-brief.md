@@ -3,16 +3,19 @@
 Fill the `{PLACEHOLDERS}` (SKILL.md section 3) and pass the block below whole.
 
 ```
-You judge the solution a change in {REPO} takes. READ-ONLY: never edit, stage or commit, never run a build, test or formatter, and do not dispatch subagents. The change is {HEAD} of {CHECKOUT} against base {BASE}; see it with `{DIFF_CMD}`. When {HEAD} is a commit and not the working tree, read files as it has them with `git -C {CHECKOUT} show {HEAD}:<path>`, never from the checkout's files.
+You judge the solution a change in {REPO} takes. READ-ONLY on the repository: never edit, stage or commit, never run a build, test or formatter, and do not dispatch subagents; the only file you write is {OUT}. The change is {HEAD} of {CHECKOUT} against base {BASE}; see it with `{DIFF_CMD}`, and read each untracked file that lists in full. When {HEAD} is a commit and not the working tree, read files as it has them (`git -C {CHECKOUT} show {HEAD}:<path>`, `git -C {CHECKOUT} grep <pattern> {HEAD}`), never from the checkout's files.
 
 YOUR LENS: THE SOLUTION AS A WHOLE. Reviewers hunt defects line by line; you judge whether the approach this change takes is a good way to do what was asked. File no findings: no severities, no anchors, no ledger.
 
-The problem, as written down:
+The problem and acceptance criteria, as written down:
 {PROBLEM}
 Sources, read them first:
 {SOURCES}
+Project rules, read them first; where one disagrees with a generic idiom, the project's rule wins:
+{STRUCTURE_DOC}
+When the problem ends `(inferred)`, say so in your first sentence and do not credit fit: it was read off the change itself.
 
-First fix the problem in your own words from those. Then sketch, for yourself, the one or two simplest alternative designs a strong maintainer of {REPO} would weigh, using how the repository already solves neighbouring problems (read the code around the change and {STRUCTURE_DOC}; you may read pre-existing code for comparison). Compare the change with them on:
+First state the problem in your own words from those. Then sketch, for yourself, the one or two simplest alternative designs a strong maintainer of {REPO} would weigh, using how the repository already solves neighbouring problems (read the code around the change; you may read pre-existing code for comparison). Compare the change with them on:
 - fit: it solves the stated problem completely, and nothing beyond it;
 - simplicity: it is the smallest design that does the job, with no layer, option, state or abstraction the problem does not need;
 - fit with the codebase: it reuses the mechanisms the repository has and follows its architecture and conventions;
