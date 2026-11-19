@@ -149,7 +149,7 @@ Then ask, in **one** message, everything that applies:
 
 The tickets in scope are the ones he handed over plus the subtasks he confirms. Write
 `ticket.md` (verbatim) and `ledger.md`, his code review and docs review choices in it, then
-move every ticket in scope to **In Progress** (see *Ticket status*).
+assign every ticket in scope to him and move it to **In Progress** (see *Ticket status*).
 
 Then cut the work branch in each repository, yourself, before any gatherer reads the code.
 **Always pull first.** Never branch from the local base without pulling, and never from
@@ -627,7 +627,7 @@ the set the ledger names.
 
 | When | Move to |
 |---|---|
-| Stage 1, he hands you the tickets | In Progress |
+| Stage 1, he hands you the tickets | Assigned to him, then In Progress |
 | Stage 10, every code repository the ticket covers has an open MR | Review |
 | Stage 11, every one of those MRs is merged and any deploy branch is pushed | Subtask: Done. Story, Bug, Epic: Testing, or Done when it needs no testing |
 
@@ -636,6 +636,12 @@ current status** and match the target status by name, because a wrong id succeed
 plausible wrong state (from In Progress, `4` is Review on a Story but "No review needed" →
 Done on a Subtask). Read the status back after every move.
 
+- Every ticket in scope is assigned to him, Cristian Ciortea (accountId
+  `62b95b61018dea0d4073182e`), with `editJiraIssue` `{"assignee": {"accountId": …}}` before it
+  moves to In Progress; a resumed run fixes the assignee the same way before any other
+  transition. A ticket left unassigned or showing someone else while the work runs reads as
+  nobody's on the board (SYN-3786, 2026-11-19). When it was assigned to someone else, reassign
+  it and name that person in the report. Read the assignee back with the status.
 - Anything that is not a Subtask (a Story, a Bug) will not move to In Progress until Fix
   versions is set: set the version that corresponds to the base (stage 1) with
   `editJiraIssue` first. When no version matches, ask him.
