@@ -2,8 +2,8 @@
 
 Fill the `{PLACEHOLDERS}` from `meta.json` and the repository's entry in
 `repository-facts.md`, and pass each brief whole: the common preamble, then the lens section.
-Dispatch every lens in one message: 01 to 08 always, and 09 when the stack row in SKILL.md
-says the stack has it.
+Dispatch every lens in one message: 01 to 08 always, 09 when the stack row in SKILL.md
+says the stack has it, and 10 only when he said yes to the solution verdict (SKILL.md stage 3).
 
 | Placeholder | Value |
 |---|---|
@@ -18,8 +18,8 @@ says the stack has it.
 | `{STYLE_SKILL}`, `{TEST_SKILL}`, `{ARCHITECTURE_LINE}`, `{REVIEWER_AGENT}` | from the stack table in SKILL.md |
 | `{REPO_FACTS}` | the repository entry's *Facts for every lens* lines, else nothing |
 
-With no ticket, drop `({TICKET})` and the `Ticket:` line from the preamble, tell lenses 01
-and 05 to judge against the MR description alone, and tell lens 07 to skip its ticket table
+With no ticket, drop `({TICKET})` and the `Ticket:` line from the preamble, tell lenses 01,
+05 and 10 to judge against the MR description alone, and tell lens 07 to skip its ticket table
 and judge migrations and contract only, saying so at the top of its ledger.
 
 ## Common preamble
@@ -153,6 +153,33 @@ Where the repository's rules or {STRUCTURE_DOC} state a preference (a named help
 For each entry: Description says what the code does now and explains the Rust concept behind the better form, in at most two short paragraphs; Recommended fix is a short before/after snippet; Impact says what the idiom buys (clarity, a bug class the compiler then rules out, less code). A Nit stays a few lines. When the snippet changes ownership or borrowing and you are not sure it compiles, end Recommended fix with `Compiles: unsure — <why>`.
 Severity: an idiom is Minor at most, Nit for taste. Write at most eight idiom entries, strongest first, production code before test code. A real bug you notice goes in with its true severity and a plain title; the synthesizer files it under logic.
 Inside "Checked and sound", add a list headed `Done well (Rust idioms)`: up to six things the author did idiomatically, each with `path:line`.
+```
+
+## 10 · Solution verdict — `general-purpose` on `opus` at `medium`, optional
+
+Only when he said yes (SKILL.md stage 3). It yields no findings, so it has no ledger, prefix,
+refuter or synthesizer pass. Pass the common preamble, but its ledger paragraph is replaced by
+this brief's output.
+
+```
+YOUR LENS: THE SOLUTION AS A WHOLE. The other lenses hunt defects line by line; you judge whether the approach this MR takes is a good way to do what the ticket asks. File no findings: no severities, no anchors, no ledger.
+First work out the problem from {RUN}/ticket.md and {RUN}/mr-description.md. Then sketch, for yourself, the one or two simplest alternative designs that a strong maintainer of {REPO} would weigh, using how the repository already solves neighbouring problems (read the code around the change and {WT}/{STRUCTURE_DOC}; you may read pre-existing code for comparison). Compare the MR with them on:
+- fit: it solves the stated problem completely, and nothing beyond it;
+- simplicity: it is the smallest design that does the job, with no layer, option, state or abstraction the problem does not need;
+- fit with the codebase: it reuses the mechanisms the repository has and follows its architecture and conventions;
+- robustness and upkeep: failure handling, migration and rollout, how hard the next change will be;
+- cost: speed and resources at the scale the service really meets.
+Grade, as a whole number: 5 Perfect (no better solution reasonably exists), 4 Excellent, 3 Good, 2 Acceptable (it works, but a clearly better route exists), 1 Bad (wrong approach, redo it). The grade follows from the improvements: a 5 has none, and every point under 5 is explained by at least one.
+Write {RUN}/solution-verdict.md in exactly this shape:
+
+Solution verdict: <Perfect|Excellent|Good|Acceptable|Bad> (grade <N>)
+<two to four plain sentences: why this grade, and which alternative you compared the MR with>
+
+Optional improvements:
+1. <what to change in code this MR adds or changes, what it buys, and what it costs>
+2. …
+
+Write `Optional improvements: none` for a 5. At most five improvements, strongest first, each of one to three sentences in plain words with no unexplained jargon. The MR can merge without them. Your final message: only the verdict line.
 ```
 
 ## Synthesizer — `general-purpose`, after every lens finishes

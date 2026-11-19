@@ -4,7 +4,7 @@ description: Use when the operator asks to review a GitLab merge request on code
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.2.2"
+  version: "0.3.0"
 ---
 
 # Roche MR Review
@@ -29,6 +29,7 @@ definition. Pass `model` and `effort` explicitly on every dispatch:
 | Role | Model and effort |
 |---|---|
 | The lenses, the synthesizer | `sonnet` at `medium` |
+| Lens 10, the solution verdict (optional) | `opus` at `medium` |
 | Refuters (stage 4) | `haiku` at `max`, always |
 
 A model or effort he asks for on this review wins over these. Record it in `meta-notes.md`
@@ -40,7 +41,7 @@ in the run directory.
 |---|---|---|---|
 | 1 | Set up the run | `~/.cache/roche-mr-review/<repo>-<iid>/` | — |
 | 2 | Run the repository's gate on the MR head | `gate.md` | — |
-| 3 | Review fleet: eight lenses in parallel, nine on a Rust stack | `ledger-NN-*.md` | — |
+| 3 | Review fleet: eight lenses in parallel, nine on a Rust stack; the solution verdict as a tenth when he says yes | `ledger-NN-*.md`, `solution-verdict.md` | **his yes or no on the verdict** |
 | 4 | Synthesize, refute every Critical and Important, verify the survivors yourself | `ledger-synthesized.md`, `refute-K.md` | — |
 | 5 | Present the ledger | — | **his picks** |
 | 6 | Post the picked findings as review notes | `notes/`, `posted.json` | — |
@@ -52,7 +53,7 @@ Mac's `/usr/bin/python3` is 3.9, so run them as
 `uv run -q --no-project --python 3.13 python -B ~/src/agent-skills/roche-skills/roche-mr-review/scripts/<name>.py`
 (`-B` keeps Python from writing `__pycache__` into the skills repository). Each has `--help`.
 A later session resumes from the run directory: `meta.json`, `meta-notes.md`, `gate.md`, the
-ledgers (with their *Uncertain* lines) and `refute-*.md` carry the review, and `posted.json` says what is live.
+ledgers (with their *Uncertain* lines), `solution-verdict.md` and `refute-*.md` carry the review, and `posted.json` says what is live.
 
 Every repository has an entry in `references/repository-facts.md`: its stack, its gate, its
 structure document and its traps. For a repository with no entry, read its CLAUDE.md,
@@ -72,7 +73,7 @@ belong to the spec. Pass `--ticket <KEY>` when none carries it.
 
 **A later round.** Rerun `setup_review.py` after the author pushes: it moves the worktree to
 the new head and keeps `notes/` and `posted.json`. Reviewing the new head is a new round in
-the same run directory. Before its gate, move `gate.md`, `ledger-*.md`, `refute-*.md` and
+the same run directory. Before its gate, move `gate.md`, `ledger-*.md`, `solution-verdict.md`, `refute-*.md` and
 `review-mr-<iid>.md` into `<run>/round-<N>/`, where N counts the rounds already done. Fill
 the synthesizer's `{FIRST}` with one more than the highest finding number in `posted.json` or `notes/`, compared as numbers, so no new finding takes a posted
 finding's number and `post_notes.py` never updates a live note with a new finding's text.
@@ -124,6 +125,16 @@ only**, never pre-existing code. A finding that breaks that rule is dropped in s
 Fill the briefs from the repository's entry: its stack row (from the stack table below), its
 structure document, and its facts.
 
+**The solution verdict (lens 10) is optional, and you ask before it runs.** It judges whether
+the MR's approach as a whole is the best way to do what the ticket asks. It files no findings:
+it grades the solution 1 to 5 (5 perfect, 4 excellent, 3 good, 2 acceptable, 1 bad) and lists
+optional improvements. Before the dispatch, ask him once, with AskUserQuestion, whether to run
+it on this round (it costs one `opus` dispatch), and record his answer in `meta-notes.md`.
+On yes, dispatch it in the same message as the other lenses; on no, dispatch the rest alone.
+He is asked again on every later round. It has no ledger, so the synthesizer and the refuters
+never see it. When it dies or writes no `solution-verdict.md`, re-dispatch it once, then tell
+him it is missing; nothing else waits on it.
+
 ### 4. Synthesize, refute, verify
 
 Once every dispatched lens has its ledger, dispatch the synthesizer brief. When a lens died
@@ -168,14 +179,16 @@ finding you cannot confirm goes to him as uncertain, never as fact, with the sam
 On a later round, first list the posted findings, one line each with their *On the new head*
 status, so he can say which threads to answer or resolve. Then list, one line each, this
 round's findings that carry a *Declined earlier* line: he has passed on them once. Then show
-the rest of this round's findings as below.
+the rest of this round's findings as below. When the solution verdict ran, show
+`solution-verdict.md` verbatim first, ahead of the findings.
 
 Show the Critical and Important findings in full (Finding N — Severity — title, Where, Impact,
 Description, Recommended fix), then one table row per Minor and Nit (number, severity,
 category, title, anchor), one line per Critical or Important finding the refuters dropped
 (title and the refuter's reason, so he can disagree), the ledger path, the gate result, and
 the static-review caveat when it applies, and, when lens 09 ran, its *Done well (Rust idioms)*
-list (it reaches the author only if he asks for it as a general note). Every finding keeps its exact `file:line` and
+list (it reaches the author only if he asks for it as a general note; the solution verdict
+is the same). Every finding keeps its exact `file:line` and
 quoted line, explained in plain words; he rejects unexplained jargon. Record in
 `meta-notes.md` that this round's ledger was presented. Then stop.
 
