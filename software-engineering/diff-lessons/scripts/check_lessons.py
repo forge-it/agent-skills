@@ -5,8 +5,8 @@ usage: python3 -I check_lessons.py DRAFT [--cap N] [--lesson-cap N]
 
 Prints `chars: N`, then one `line N: reason` per violation; exits 1 when there is any.
 Rules (SKILL.md section 3):
-  - the whole draft is at most --cap characters (default 12000), and each lesson, from its
-    `## ══ LESSON` heading to the next part, at most --lesson-cap (default 3200);
+  - the whole draft is at most --cap characters (default 16000), and each lesson, from its
+    `## ══ LESSON` heading to the next part, at most --lesson-cap (default 5000);
   - outside code fences, no trailing space and no double-width character (emoji, CJK);
   - outside code fences, only ASCII and the allow-listed glyphs;
   - inside ```text fences, no line over 70 columns, and every box row (starting ╭ │ ╰)
@@ -74,8 +74,8 @@ def check(text, cap, lesson_cap):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("draft")
-    ap.add_argument("--cap", type=int, default=12000)
-    ap.add_argument("--lesson-cap", type=int, default=3200)
+    ap.add_argument("--cap", type=int, default=16000)
+    ap.add_argument("--lesson-cap", type=int, default=5000)
     args = ap.parse_args()
     text = open(args.draft, encoding="utf-8").read()
     problems = check(text, args.cap, args.lesson_cap)

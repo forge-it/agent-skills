@@ -6,9 +6,10 @@ argument-hint: "[target] [lang:<language>]"
 
 # Diff lessons
 
-One message, at most 12000 characters (a little over three times change-briefing's cap). It teaches up to three
-ideas of the language the changed code is written in: each one is in the diff, comes with a
-picture, and is put in terms of the languages the reader already knows. An idea is taught
+One message, at most 16000 characters (four and a half times change-briefing's cap). It teaches up to three
+ideas of the language the changed code is written in: each one is in the diff, starts from the
+problem it solves, comes with a picture and a step-by-step reading, and is put in terms of the
+languages the reader already knows. An idea is taught
 once, so the reader learns a language one change at a time.
 
 ## The reader
@@ -122,12 +123,23 @@ THE CODE IN ONE LINE
 ## ══ LESSON 1 ══ <the rule to remember, at most 8 words>
 <path:first line> · `<slug>` · reach <10 cells> <m> of <N> added lines
 ```<cpp | csharp | rust | python | …>
-<NN> <► or space> <the code, its own indentation kept>      added lines, ` …` for a gap, at most 8
+<NN> <► or space> <the code, its own indentation kept>      added lines, ` …` for a gap, at most 10
 ```
-<what it is, and why this code needs it: at most 4 lines of 78 columns>
+THE PROBLEM
+<what goes wrong without this idea: at most 4 lines of 78 columns>
+
+IN PLAIN WORDS
+<the idea, assuming the reader never saw it: at most 6 lines>
+
+READ IT LIKE THIS
 ```text
-<@line rows, at most 10 lines>
+<@line rows, at most 12 lines>
 ```
+<one numbered step per @ row, at most 6, at most 2 lines each>
+
+WHY <C++ | C#> IS BUILT THIS WAY
+<the design reason, at most 3 lines>
+
 ≈ <the closest thing in Rust or Python, in a snippet or a few words>
 ```text
 ╭────────────────────────────────────────────────────────────────────╮
@@ -135,6 +147,12 @@ THE CODE IN ONE LINE
 │ <✘ or ≠> <C++ or C#>       <what this one does instead>            │
 ╰────────────────────────────────────────────────────────────────────╯
 ```
+
+RULE OF THUMB
+<what to do in practice: at most 2 lines>
+
+SEE IT AGAIN
+<where else the reader will meet it: at most 2 lines>
 
 ? <one question>
 
@@ -178,21 +196,39 @@ THE CODE IN ONE LINE
 A Cache owns heap Buffers by key; main hands one in, then reads it again.
 
 ## ══ LESSON 1 ══ one owner: std::move hands it over
-src/cache.cpp:30 · `cpp/std-move` · reach ██░░░░░░░░ 3 of 34 added lines
+src/cache.cpp:30 · `cpp/std-move` · reach ███░░░░░░░ 3 of 34 added lines
 ```cpp
 30   auto buf = std::make_unique<Buffer>(64);
 31   cache.put("a", std::move(buf));
 32 ► std::cout << buf->size() << "\n";
 ```
-`unique_ptr`: a heap value with exactly one owner, freed when that owner dies.
-`std::move` only marks `buf` as giveable; `put`'s by-value parameter takes it.
-Here it matters because line 32 still names `buf` after the hand-over.
+THE PROBLEM
+A heap value (memory you ask for at run time) must be freed exactly once:
+twice crashes, never leaks. C++ has no borrow checker to police that, so a
+value gets one owner object, and a rule decides who the owner is.
+
+IN PLAIN WORDS
+`unique_ptr<Buffer>` is that owner. It holds the Buffer and frees it when
+the `unique_ptr` itself goes out of scope. It cannot be copied, only handed
+over. `std::move(buf)` is the hand-over, but the name misleads: it moves
+nothing. It only says "buf may be emptied now"; the function parameter that
+receives it does the emptying.
+
+READ IT LIKE THIS
 ```text
 @30  buf ──owns──► [Buffer]
 @31  buf ··· (empty)
      items_["a"] ──owns──► [Buffer]        ◄ freed when the cache dies
 @32  buf->size()  ✘ reads through an empty pointer
 ```
+1. Line 30 builds the Buffer on the heap; `buf` owns it.
+2. Line 31 hands it to `put`: the cache's map owns it now, `buf` is empty.
+3. Line 32 still uses `buf`. It compiles; at run time it reads through null.
+
+WHY C++ IS BUILT THIS WAY
+A move is a plain cast, so it costs nothing at run time and old copying
+code keeps working. The price: nothing stops you touching a moved-from name.
+
 ≈ Rust `Box<Buffer>`, moved into `cache.put("a", buf)`
 ```text
 ╭────────────────────────────────────────────────────────────────────╮
@@ -200,6 +236,12 @@ Here it matters because line 32 still names `buf` after the hand-over.
 │ ✘ C++   line 32 compiles; buf is empty, so it crashes at run time  │
 ╰────────────────────────────────────────────────────────────────────╯
 ```
+
+RULE OF THUMB
+After `std::move(x)`, treat `x` as unusable until you assign to it again.
+
+SEE IT AGAIN
+Every `unique_ptr` or `vector` passed by value from a local variable.
 
 ? what does `buf` hold on line 32, and which line emptied it?
 
@@ -256,7 +298,13 @@ A ──calls──► B         who runs whom
   `…`.
 - **Check.** `? ` and a question that the diagram or the code answers, and that a guess does
   not.
-- **Terms.** Each language word the reader would ask about gets plain words once, where it
+- **Teaching order.** Each lesson goes from the problem to the rule: THE PROBLEM says what
+  goes wrong without the idea, in the language's own terms and with no jargon the reader has
+  not met; IN PLAIN WORDS names the mechanism and assumes the reader never saw it; READ IT
+  LIKE THIS walks the diagram, one numbered step per `@` row, each a plain sentence that
+  names the line; WHY says the design reason (what the language bought, what it cost);
+  RULE OF THUMB is what to do in practice; SEE IT AGAIN names where else the reader will meet
+  the idea. Each language word the reader would ask about gets plain words once, where it
   first appears.
 - **Facts.** A rule that differs between standards says which one (`since C++20`). A rule
   you are not sure of is looked up in the language's documentation when a documentation or
@@ -269,15 +317,16 @@ A ──calls──► B         who runs whom
   and no trailing spaces. Diagrams go in ```` ```text ```` fences, no line over 70 columns.
 - **Count it.** Write it to `diff-lessons-draft.md` in the session scratchpad, overwriting
   the last run's, and run `python3 -I <this skill's directory>/scripts/check_lessons.py` on
-  it. It prints `chars: <n>` and one line per violation: more than 12000 characters, a lesson
-  over about 3200, a diagram or box line over 70 columns, a box row that is not exactly 70, a
+  it. It prints `chars: <n>` and one line per violation: more than 16000 characters, a lesson
+  over about 5000, a diagram or box line over 70 columns, a box row that is not exactly 70, a
   glyph outside the list above, a double-width character, a trailing space. Fix every
   violation and run it again until it prints none (a clean run prints only the `chars:` line). Over the size limits, cut the longest
-  lesson first, in this order: its "what it is" to two lines; its code to 6 lines; its diagram
-  to 8 rows; its `?` to five words; then NEXT TIME to one line; then wording elsewhere; and
-  last, when three lessons remain and the total is still over, lesson 3, moved to NEXT TIME,
-  with any WORTH row that cites it dropped. Never cut the `≈` line, the `✔`/`✘` box, the `►`
-  or the lesson heading: they are what the reader scans.
+  lesson first, in this order: its SEE IT AGAIN; its WHY to one line; its RULE OF THUMB to one
+  line; its IN PLAIN WORDS to four lines; its code to 8 lines; its diagram to 10 rows; its `?`
+  to five words; then NEXT TIME to one line; then wording elsewhere; and last, when three
+  lessons remain and the total is still over, lesson 3, moved to NEXT TIME, with any WORTH row
+  that cites it dropped. Never cut THE PROBLEM, the numbered steps, the `≈` line, the `✔`/`✘`
+  box, the `►` or the lesson heading: they are what teaches.
 
 ## 4. After it
 
