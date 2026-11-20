@@ -170,7 +170,7 @@ One message, as it should read (match the shape, not the topic):
 ```text
 ╭────────────────────────────────────────────────────────────────────╮
 │ C++ LESSONS · cpp-demo main vs 3a65e50 · uncommitted               │
-│ 1 file, +34 −1 · C++20 (CMakeLists.txt) · record: 0 → 3 ideas      │
+│ 1 file, +34 −1 · C++20 (CMakeLists.txt) · record: 0 → 1            │
 ╰────────────────────────────────────────────────────────────────────╯
 ```
 
@@ -229,7 +229,8 @@ NEXT TIME
   in 66 columns continues on the next row, indented 2 spaces; a long branch name in the
   banner is cut with `…`.
 - **Reach bar.** A 10-cell bar, `█` filled and `░` empty: the share of the language's added
-  source lines that use the idea, rounded to the nearest cell and at least one, then
+  source lines that use the idea (`m`: the added lines that contain its keyword or API;
+  `N`: all added source lines of the language), rounded to the nearest cell and at least one, then
   `<m> of <N> added lines`.
 - **Picture.** Rows are snapshots: `@<line>` is the state after that source line ran;
   continuation rows are indented 5 spaces. Time runs down the page, never across. The last
@@ -271,7 +272,7 @@ A ──calls──► B         who runs whom
   it. It prints `chars: <n>` and one line per violation: more than 12000 characters, a lesson
   over about 3200, a diagram or box line over 70 columns, a box row that is not exactly 70, a
   glyph outside the list above, a double-width character, a trailing space. Fix every
-  violation and run it again until it prints none. Over the size limits, cut the longest
+  violation and run it again until it prints none (a clean run prints only the `chars:` line). Over the size limits, cut the longest
   lesson first, in this order: its "what it is" to two lines; its code to 6 lines; its diagram
   to 8 rows; its `?` to five words; then NEXT TIME to one line; then wording elsewhere; and
   last, when three lessons remain and the total is still over, lesson 3, moved to NEXT TIME,
