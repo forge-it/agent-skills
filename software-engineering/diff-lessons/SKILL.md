@@ -179,8 +179,9 @@ src/cache.cpp:30 · `cpp/std-move`
 
 - **Grounded.** A lesson's code is added lines of the change. An idea with no changed line
   using it is not a lesson, however useful.
-- **Bridge.** `≈` then a pair, always. Pair `✔`/`✘` when the new language lets the reader's
-  habit through unchallenged: it compiles without error or warning, then misbehaves or answers
+- **Bridge.** `≈` then a pair, always. Pair `✔`/`✘` when the known language guards what the
+  new one leaves open: the `✔` line says how Rust or Python stops it or answers it, the `✘`
+  line says the new language accepts it without error or warning, then misbehaves or answers
   differently. Pair `≠`/`≠` when the new language only differs (a compile error with another
   cause, another name, another rule). `✔` or the first `≠` is the Rust or Python line; `✘` or
   the second `≠` is the new language's line, one line each, at most 78 columns, no
@@ -189,7 +190,7 @@ src/cache.cpp:30 · `cpp/std-move`
 - **Picture.** Rows are snapshots: `@<line>` is the state after that source line ran;
   continuation rows are indented 5 spaces. Time runs down the page, never across. The last
   `@` row of a `✘` lesson is the line the `►` marks. An idea with no flow gets two rows,
-  `without <x>` and `with <x>`, drawn the same way. The words, every arrow carrying one:
+  `without <x>` and `with <x>`; a branch gets one row per condition, labelled by it. The words, every arrow carrying one:
 
 ```text
 name                   a variable
@@ -204,8 +205,9 @@ A ──calls──► B         who runs whom
 ```
 
 - **Code.** `<NN>` is the file's own line number, right-aligned, from
-  `git -C <checkout> show <head>:<path> | cat -n`. `►` marks one line: where the `✘` bites,
-  else where the idea is first used. A code line over 76 columns with its gutter is cut with
+  `git -C <checkout> show <head>:<path> | cat -n`. A stretch of skipped lines is one row,
+  `…`, in the gutter column. `►` marks one line: where the `✘` bites, else where the idea is
+  first used. A code line over 76 columns with its gutter is cut with
   `…`.
 - **Check.** `? ` and a question that the diagram or the code answers, and that a guess does
   not.
