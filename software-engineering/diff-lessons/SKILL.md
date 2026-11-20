@@ -6,7 +6,7 @@ argument-hint: "[target] [lang:<language>]"
 
 # Diff lessons
 
-One message, at most 7000 characters (twice change-briefing's cap). It teaches up to three
+One message, at most 10000 characters (about three times change-briefing's cap). It teaches up to three
 ideas of the language the changed code is written in: each one is in the diff, comes with a
 picture, and is put in terms of the languages the reader already knows. An idea is taught
 once, so the reader learns a language one change at a time.
@@ -118,11 +118,11 @@ THE CODE IN ONE LINE
 ## ══ LESSON 1 ══ <the rule to remember, at most 8 words>
 <path:first line> · `<slug>`
 ```<cpp | csharp | rust | python | …>
-<NN> <► or space> <the code, its own indentation kept>      added lines, ` …` for a gap, at most 6
+<NN> <► or space> <the code, its own indentation kept>      added lines, ` …` for a gap, at most 8
 ```
-<what it is, at most 2 lines of 78 columns>
+<what it is, and why this code needs it: at most 4 lines of 78 columns>
 ```text
-<@line rows, at most 8 lines>
+<@line rows, at most 10 lines>
 ```
 ≈ <the closest thing in Rust or Python, in a snippet or a few words>
 <✔ or ≠> <Rust or Python>: <what the language you know does>
@@ -220,9 +220,9 @@ A ──calls──► B         who runs whom
   the diff, with that lesson's number `(n)`. With none, write `none found`.
 - **Diagrams** go in ```` ```text ```` fences, no line over 70 columns.
 - **Count it.** Write it to `diff-lessons-draft.md` in the session scratchpad, overwriting
-  the last run's, and run `LC_ALL=en_US.UTF-8 wc -m` on it: at most 7000, each lesson about
-  1500 or less. Over that, cut the longest lesson first, in this order: its "what it is" to
-  one line; its code to 4 lines; its diagram to 6 rows; its `?` to five words; then NEXT TIME
+  the last run's, and run `LC_ALL=en_US.UTF-8 wc -m` on it: at most 10000, each lesson about
+  2800 or less. Over that, cut the longest lesson first, in this order: its "what it is" to
+  two lines; its code to 6 lines; its diagram to 8 rows; its `?` to five words; then NEXT TIME
   to one line; then wording elsewhere; and last, when three lessons remain and the total is
   still over, lesson 3, moved to NEXT TIME, with any WORTH line that cites it dropped. Never
   cut the `≈`, `✔`, `✘` lines, the `►` or the lesson heading: they are what the reader
