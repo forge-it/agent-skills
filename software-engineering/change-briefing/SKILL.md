@@ -198,14 +198,18 @@ unchanged: the REC-like image and its eight other scenarios keep the any-argumen
   labels (triage ids, finding numbers, round numbers, amendment numbers, question numbers)
   is said as the decision itself.
 - **Count it.** Write it to the session scratchpad and run `LC_ALL=en_US.UTF-8 wc -m` on
-  the file (characters, not bytes): at most 3500. Over that, cut in this order: TRADEOFFS
+  the file (characters, not bytes): at most 3500; then list every line over 70 columns
+  inside a ```` ```text ```` fence and every character outside the glyph list, and fix them.
+  Over that, cut in this order: TRADEOFFS
   to two lines; the ✘ lines beyond the two strongest, folded into one
   `✘ also rejected: <a>; <b>` line without reasons; each ↳ line to its change in five
   words; each ✘ reason to five words; each AGENT CALLS entry to its `path:line` and the
   decision in five words; then wording anywhere. Every part stays, AGENT CALLS keeps every
   entry, and WHAT WE DID keeps its before → after.
 - **Diagrams** go in ```` ```text ```` fences, so the terminal keeps their alignment, with
-  no line over 70 columns.
+  no line over 70 columns. Outside code fences only ASCII and these glyphs:
+  `─ │ ┌ ┐ └ ┘ ├ ┤ ▲ ▼ ► ◄ ✔ ✘ ↳ → − — · …`, never emoji (✅ ❌ ⚠️), which print two
+  columns wide, and no trailing spaces.
 - **CHOSEN** has one ✔ per ticket. A `↳` line is for a change of approach the operator
   approved; a change the agents made alone is an AGENT CALLS line. A ✘ reason is that
   option's own cost or weakness, never "the operator picked another"; when no record gives
