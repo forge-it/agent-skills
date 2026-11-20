@@ -108,30 +108,39 @@ one or none there is. With none, add after NEXT TIME the line
 
 Exactly these parts, in this order; with fewer than three lessons, those that exist:
 
-```
-<language> lessons · <repo> <branch; for an MR "!<iid> <source branch>"; else "detached at <sha7>"> vs <base sha7> · <N> files, +<a> −<d> · <committed | uncommitted | committed + uncommitted>
-standard: <C++20 | C# 12 | Rust 2021 | …> (<the file it came from>)
+````
+**<Language> lessons** · <repo> <branch; for an MR "!<iid> <source branch>"; else "detached at <sha7>"> vs <base sha7> · <N> files, +<a> −<d> · <committed | uncommitted | committed + uncommitted>
+standard: <C++20 | C# 12 | Rust 2021 | …> (<the file it came from>) · record: <n> → <n+k> ideas
 
 THE CODE IN ONE LINE
 <one sentence, at most 2 lines: what the changed code does>
 
-LESSON 1 · <slug>: <the idea, as a short name>
-<path:line>, the code: added lines, `…` for lines left out, at most 6 lines
-<what it is, at most 3 plain lines>
-<diagram, at most 8 lines>
+## ══ LESSON 1 ══ <the rule to remember, at most 8 words>
+<path:first line> · `<slug>`
+```<cpp | csharp | rust | python | …>
+<NN> <► or space> <the code, its own indentation kept>      added lines, ` …` for a gap, at most 6
+```
+<what it is, at most 2 lines of 78 columns>
+```text
+<@line rows, at most 8 lines>
+```
 ≈ <the closest thing in Rust or Python, in a snippet or a few words>
-≠ <where that match misleads the reader>
-check: <one question>
+<✔ or ≠> <Rust or Python>: <what the language you know does>
+<✘ or ≠> <C++ or C#>:  <what this one does instead>
+
+? <one question>
 
 LESSON 2 …
 LESSON 3 …
 
-WORTH A SECOND LOOK
-- <path:line> — <a concrete risk that lesson N exposes>        at most 3
+## WORTH A SECOND LOOK
+- <✘ or ≠> <path:line> — (<n>) <a concrete risk that lesson n exposes>        at most 3
 
 NEXT TIME
-<slug>, <slug> … (not taught yet) · moved from <language>: nothing new · also changed: <language> (<n> lines), run with lang:<language>
-```
+- not taught yet: <slug>, <slug> …
+- moved from <language>: <its slugs, or nothing new>
+- also changed: <language> (<n> lines), run with lang:<language>
+````
 
 The header is change-briefing's header line two without `<k> new`, its counts those of the
 whole change set; the `vs` base and the
@@ -140,54 +149,82 @@ uncommitted tree against `HEAD` (section 1). A lesson's `path:line` and code com
 head's tree. NEXT TIME's three items are each left out when empty, and the part reads `none`
 when all are; `also changed` skips a language named in `moved from`. With no lessons, leave
 out WORTH A SECOND LOOK.
+`record: <n> → <n+k>` counts the lines of `~/.cache/diff-lessons/<key>.md` before this
+message and after it (n plus the lessons shown); `**` makes the language words bold.
 
 One lesson, as it should read (match the shape, not the topic):
 
 ````
-LESSON 1 · cpp/std-move: a cast, not a move
-src/cache.cpp:12, 41-42
+## ══ LESSON 1 ══ one owner: `std::move` hands it over
+src/cache.cpp:30 · `cpp/std-move`
 ```cpp
-void process(std::unique_ptr<Buffer> p) { … }
-auto buf = std::make_unique<Buffer>(n);
-process(std::move(buf));
+30   auto buf = std::make_unique<Buffer>(64);
+31   cache.put("a", std::move(buf));
+32 ► std::cout << buf->size() << "\n";
 ```
-A `unique_ptr` (made by `make_unique`, C++14) holds a heap value with one owner, freed when
-the owner goes out of scope. `std::move` only marks `buf` as giveable: `process`'s by-value
-parameter `p` is what takes the value.
+`unique_ptr`: a heap value with exactly one owner, freed when that owner dies.
+`std::move` only marks `buf` as giveable; `put`'s by-value parameter takes it.
 ```text
-before the call           while process() runs
-buf ──owns──► [Buffer]    buf ··· (empty)
-                          p ──owns──► [Buffer]   freed after the call
+@30  buf ──owns──► [Buffer]
+@31  buf ··· (empty)
+     items_["a"] ──owns──► [Buffer]        ◄ freed when the cache dies
+@32  buf->size()  ✘ reads through an empty pointer
 ```
-≈ Rust `Box<Buffer>`, moved into `process(buf)`
-≠ Rust refuses to compile a use of `buf` after the move; C++ compiles `buf->size()` and
-  it is undefined behaviour, typically a crash, since `buf` is empty
-check: while process() runs, is `buf` empty or full, and which line made it so?
+≈ Rust `Box<Buffer>`, moved into `cache.put("a", buf)`
+✔ Rust: line 32 is a compile error (use after move)
+✘ C++:  line 32 compiles; `buf` is empty, so it crashes at run time
+
+? what does `buf` hold on line 32, and which line emptied it?
 ````
 
 - **Grounded.** A lesson's code is added lines of the change. An idea with no changed line
   using it is not a lesson, however useful.
-- **Bridge.** `≈` and `≠` are both required. `≈ none: <what comes closest>` and
-  `≠ none: <why the match holds>` are the forms for no counterpart and no false friend. The
-  `≠` line is the false friend: where what the reader knows gives the wrong answer.
-- **Picture.** The diagram shows what the idea does: who owns what, how long a value lives,
-  who calls whom. An idea with no flow gets a before and after pair.
-- **Check.** A question that the diagram or the code answers, and that a guess does not.
+- **Bridge.** `≈` then a pair, always. Pair `✔`/`✘` when the new language lets the reader's
+  habit through unchallenged: it compiles without error or warning, then misbehaves or answers
+  differently. Pair `≠`/`≠` when the new language only differs (a compile error with another
+  cause, another name, another rule). `✔` or the first `≠` is the Rust or Python line; `✘` or
+  the second `≠` is the new language's line, one line each, at most 78 columns, no
+  indentation. `≈ none: <what comes closest>` and `≠ none: <why the match holds>` stay for no
+  counterpart and no false friend.
+- **Picture.** Rows are snapshots: `@<line>` is the state after that source line ran;
+  continuation rows are indented 5 spaces. Time runs down the page, never across. The last
+  `@` row of a `✘` lesson is the line the `►` marks. An idea with no flow gets two rows,
+  `without <x>` and `with <x>`, drawn the same way. The words, every arrow carrying one:
+
+```text
+name                   a variable
+[Type]                 a value on the heap
+(file, open)           an outside resource (file, socket, lock) and its state
+a ──owns──► [T]        a decides when it dies and frees it
+a ──refs──► [T]        one of several holders; the runtime frees it when none is left
+a ··points at··► [T]   a view: no say in its lifetime (C++ T* and &, Rust &)
+a ··· (empty)          points at nothing: moved-from, null
+A ──calls──► B         who runs whom
+@31  ◄ note  ✘         the state after line 31 · a remark · where the trap bites
+```
+
+- **Code.** `<NN>` is the file's own line number, right-aligned, from
+  `git -C <checkout> show <head>:<path> | cat -n`. `►` marks one line: where the `✘` bites,
+  else where the idea is first used. A code line over 76 columns with its gutter is cut with
+  `…`.
+- **Check.** `? ` and a question that the diagram or the code answers, and that a guess does
+  not.
 - **Terms.** Each language word the reader would ask about gets plain words once, where it
   first appears.
 - **Facts.** A rule that differs between standards says which one (`since C++20`). A rule
   you are not sure of is looked up in the language's documentation when a documentation or
   web tool is available, else marked `(unverified)`.
 - **WORTH A SECOND LOOK** names a risk that an idea taught in this message makes visible in
-  the diff, with that lesson's number. With none, write `none found`.
+  the diff, with that lesson's number `(n)`. With none, write `none found`.
 - **Diagrams** go in ```` ```text ```` fences, no line over 70 columns.
 - **Count it.** Write it to `diff-lessons-draft.md` in the session scratchpad, overwriting
   the last run's, and run `LC_ALL=en_US.UTF-8 wc -m` on it: at most 7000, each lesson about
-  1500 or less. Over that, cut the longest lesson first, in this order: its `check:` to five
-  words; its `≠` to one line; its "what it is" to two lines; its diagram to 6 lines; its code
-  to 4 lines; then NEXT TIME to one line; then wording elsewhere; and last, when three
-  lessons remain and the total is still over, lesson 3, moved to NEXT TIME, with any WORTH
-  line that cites it dropped. Every other part stays.
+  1500 or less. Over that, cut the longest lesson first, in this order: its "what it is" to
+  one line; its code to 4 lines; its diagram to 6 rows; its `?` to five words; then NEXT TIME
+  to one line; then wording elsewhere; and last, when three lessons remain and the total is
+  still over, lesson 3, moved to NEXT TIME, with any WORTH line that cites it dropped. Never
+  cut the `≈`, `✔`, `✘` lines, the `►` or the lesson heading: they are what the reader
+  scans.
 
 ## 4. After it
 
@@ -197,7 +234,7 @@ After printing, append one line per lesson shown to `~/.cache/diff-lessons/<key>
 lines, the folder, the scratchpad draft, and change-briefing's one MR fetch.
 
 Then stop and wait. Answer a question in the same way: plain words first, a picture when
-there is a flow, `file:line` when it points into the code, a few lines. Give a `check:`
+there is a flow, `file:line` when it points into the code, a few lines. Give the `?`
 answer only when asked. A rerun on the same change teaches the next ideas; the earlier
 lessons come back through `again`.
 
