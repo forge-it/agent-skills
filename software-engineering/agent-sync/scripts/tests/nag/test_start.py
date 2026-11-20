@@ -25,10 +25,10 @@ class TestStart:
 
         wait_until(lambda: len(fake_herdr.notifications()) >= 3, "three repeated notifications")
 
-    def test_start_defaults_to_one_notification_every_five_minutes(self, nag_session: Session):
+    def test_start_defaults_to_one_notification_every_two_minutes(self, nag_session: Session):
         nag_session.run("start", "design", "--title", REVIEW_TITLE)
 
-        assert nag_session.nag_record("design")["every_seconds"] == 300.0
+        assert nag_session.nag_record("design")["every_seconds"] == 120.0
 
     def test_start_with_a_running_id_replaces_the_nag(self, nag_session: Session, fake_herdr: FakeHerdr):
         nag_session.run("start", "design", "--title", "first title", "--every", "60s")

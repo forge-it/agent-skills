@@ -47,7 +47,7 @@ STATE_HOME_ENVIRONMENT_VARIABLE = "XDG_STATE_HOME"
 STATE_SUBDIRECTORY = Path("agent-sync") / "nag"
 RECORD_SUFFIX = ".json"
 LOCK_SUFFIX = ".lock"
-DEFAULT_EVERY_SECONDS = 300.0
+DEFAULT_EVERY_SECONDS = 120.0
 MIN_EVERY_SECONDS_ENVIRONMENT_VARIABLE = "AGENT_SYNC_NAG_MIN_SECONDS"
 DEFAULT_MIN_EVERY_SECONDS = 30.0
 
@@ -394,7 +394,7 @@ def build_parser() -> argparse.ArgumentParser:
         type=parse_duration,
         default=DEFAULT_EVERY_SECONDS,
         metavar="DURATION",
-        help="repeat interval, at least 30s (default 5m)",
+        help="repeat interval, at least 30s (default 2m)",
     )
     start.add_argument(
         "--force", action="store_true", help="replace the nag of another live session (operator instruction only)"

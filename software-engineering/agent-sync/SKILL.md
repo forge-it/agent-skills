@@ -247,4 +247,4 @@ Route anything you cannot settle (a conflict whose intent you do not understand,
 a design question) to the advisor session the operator named, over `SendMessage`. The advisor is
 the only session that calls the operator, with `nag.py`. Without an advisor, nag the operator
 yourself: `nag.py start <id> --title "<pane>: <question>"`, and `nag.py stop <id>` once they
-answer.
+answer. The nag repeats every 2 minutes by default; `--every 10m` changes it.
