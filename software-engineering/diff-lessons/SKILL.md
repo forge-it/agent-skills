@@ -23,10 +23,12 @@ languages change.
 
 `lang:<language>` can stand anywhere in the argument (a git ref cannot hold a `:`); take it
 out, and what is left is the target. An empty `lang:` counts as absent. When the whole
-target is a language name and `git rev-parse --verify` fails on it, it is a `lang:` too
-(`/diff-lessons c++`). Names map to one key, used for the slug, the record's file name, the
-header and `lang:`: `c++`, `cpp` → `cpp`; `c#`, `csharp`, `cs` → `csharp`; `rs` → `rust`;
-`py` → `python`; any other language is its lowercase name.
+target is one of these names: `c++ cpp c# csharp cs rust rs python py c go java kotlin
+typescript ts javascript js`, and `git rev-parse --verify` fails on it, it is a `lang:` too
+(`/diff-lessons c++`), unless an explicit `lang:` is present. Names map to one key, used for
+the slug, the record's file name, the header and `lang:`: `c++`, `cpp` → `cpp`; `c#`,
+`csharp`, `cs` → `csharp`; `rs` → `rust`; `py` → `python`; `ts` → `typescript`; `js` →
+`javascript`; the rest are themselves.
 
 **The change.**
 
@@ -45,21 +47,28 @@ a source file, say "no source code changed" and stop.
 **Source files** are these extensions and no others: C++ `.cpp .cc .cxx .hpp .hh .inl`, and
 `.h` when the repository has a `.cpp`, `.cc` or `.cxx` file (else C); C# `.cs .razor`; Rust
 `.rs`; Python `.py`; C `.c`; Go `.go`; Java `.java`; Kotlin `.kt`; TypeScript `.ts .tsx`;
-JavaScript `.js .jsx`. Leave out paths under `obj/ bin/ third_party/ vendor/ node_modules/`,
+JavaScript `.js .jsx`. Leave out paths under `third_party/ vendor/ node_modules/`,
 `*.g.cs`, `*.Designer.cs`, files whose first 5 lines say auto-generated, anything
 `git check-attr linguist-generated linguist-vendored` marks, and binary entries; a rename
-counts under its new path.
+counts under its new path. (Untracked build output is already left out by `.gitignore`.)
+With `lang:` naming a language that has no added line, say `no <language> in this change;
+it changed: <language> (<n> lines)` and stop.
 
 **The language.** Rank the languages by added lines in source files: the reader's learning
 languages first, by added lines (a tie: more files, then alphabetical), then the others the
 same way. Evaluate them in that order and stop at the first with at least two qualifying
-ideas (section 2). When none reaches two, take the one with the most qualifying ideas. With
-`lang:`, take that language and never fall through. A language passed over for having
-nothing new is named in NEXT TIME as `moved from <language>: nothing new`.
+ideas (section 2). When none reaches two, take the one with the most qualifying ideas (a
+tie: first in rank order). With `lang:`, take that language and never fall through. A
+language passed over is named in NEXT TIME as `moved from <language>: <its slugs>`, or
+`nothing new` when it had none.
 
 **The standard**, read from the head's tree (`git -C <checkout> show <head>:<path>`; the
 working tree for an uncommitted change), in the changed file's nearest ancestor directory
-that holds the file, else the root:
+that holds the file, else the root. Look up from the chosen language's changed file with the
+most added lines, walking from its directory up to the root: the first file of the row that
+contains the setting wins. For C#, that is `LangVersion` in the nearest `.csproj`, then the
+nearest props file, then `TargetFramework(s)`. When the language's other changed files give
+another standard, add ` (+ others differ)`.
 
 | Language | Where | Value |
 |---|---|---|
@@ -79,9 +88,10 @@ known (a missing file means none). An idea qualifies when all four hold:
 - removing or changing it changes what the code does or whether it compiles;
 - its slug is not in the record;
 - for `cpp` and `csharp`: it has no counterpart in Rust or Python, or has a lookalike that
-  behaves differently. For `rust` and `python`: no line of the head's tree outside the
-  changed files uses its keyword or API (`git grep`), so it is not yet in the codebase the
-  reader knows.
+  behaves differently. For `rust`, `python` and any other language: no line of the head's
+  tree outside the changed files uses its keyword or API, so it is not yet in the codebase
+  the reader knows. The test is `git grep -w -F -e <name> <head> -- <source extensions>` with
+  the changed paths excluded; a hit in a comment or a string does not count.
 
 One construct per idea, never a bundle. Its slug is `<key>/<name>`: lowercase, `::` written
 as `-`, the language's keyword or type name otherwise verbatim (`cpp/unique_ptr`,
@@ -91,7 +101,7 @@ that names the same construct.
 Take `min(3, qualifying)` ideas. Order: the idea the change depends on most first; among
 equals, the more basic idea first, so a later lesson builds on an earlier one. Ideas that
 qualified and were not taught go on the NEXT TIME line. With fewer than two lessons, print the
-one or none there is, and after NEXT TIME the line
+one or none there is. With none, add after NEXT TIME the line
 `NOTHING NEW — no idea in this change is new to you (taught earlier, known, or the same in Rust or Python).`
 
 ## 3. Write the lessons
@@ -123,11 +133,13 @@ NEXT TIME
 <slug>, <slug> … (not taught yet) · moved from <language>: nothing new · also changed: <language> (<n> lines), run with lang:<language>
 ```
 
-The header is change-briefing's header line two without `<k> new`; the `vs` base and the
+The header is change-briefing's header line two without `<k> new`, its counts those of the
+whole change set; the `vs` base and the
 `committed | uncommitted | committed + uncommitted` rule are its own, except for an
 uncommitted tree against `HEAD` (section 1). A lesson's `path:line` and code come from the
 head's tree. NEXT TIME's three items are each left out when empty, and the part reads `none`
-when all are. With no lessons, leave out WORTH A SECOND LOOK.
+when all are; `also changed` skips a language named in `moved from`. With no lessons, leave
+out WORTH A SECOND LOOK.
 
 One lesson, as it should read (match the shape, not the topic):
 
@@ -136,12 +148,12 @@ LESSON 1 · cpp/std-move: a cast, not a move
 src/cache.cpp:12, 41-42
 ```cpp
 void process(std::unique_ptr<Buffer> p) { … }
-auto buf = std::make_unique<Buffer>(n);   // since C++14
+auto buf = std::make_unique<Buffer>(n);
 process(std::move(buf));
 ```
-A `unique_ptr` holds a heap value with exactly one owner, freed when the owner goes out of
-scope. `std::move` only marks `buf` as giveable: `process`'s by-value parameter `p` is what
-takes the value.
+A `unique_ptr` (made by `make_unique`, C++14) holds a heap value with one owner, freed when
+the owner goes out of scope. `std::move` only marks `buf` as giveable: `process`'s by-value
+parameter `p` is what takes the value.
 ```text
 before the call           while process() runs
 buf ──owns──► [Buffer]    buf ··· (empty)
@@ -174,8 +186,8 @@ check: while process() runs, is `buf` empty or full, and which line made it so?
   1500 or less. Over that, cut the longest lesson first, in this order: its `check:` to five
   words; its `≠` to one line; its "what it is" to two lines; its diagram to 6 lines; its code
   to 4 lines; then NEXT TIME to one line; then wording elsewhere; and last, when three
-  lessons remain and the total is still over, lesson 3, moved to NEXT TIME. Every other part
-  stays.
+  lessons remain and the total is still over, lesson 3, moved to NEXT TIME, with any WORTH
+  line that cites it dropped. Every other part stays.
 
 ## 4. After it
 
