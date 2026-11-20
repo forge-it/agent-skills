@@ -267,11 +267,12 @@ NEXT TIME
 - **Boxes.** The banner, the `✔`/`✘` pair and WORTH A SECOND LOOK are each a box in a
   ```` ```text ```` fence, exactly 70 columns wide: a top of `╭`, `─` and `╮` (WORTH's top
   carries its title after `╭─ `), rows of `│ `, the text padded with spaces to 66 columns, and
-  ` │`, and a bottom of `╰`, `─` and `╯`. A row's text is plain: no backticks. What does not fit
+  ` │`, and a bottom of `╰`, `─` and `╯`. A row's text is plain: no backticks; to fit 66 columns, drop articles and filler words first. What does not fit
   in 66 columns continues on the next row, indented 2 spaces; a long branch name in the
   banner is cut with `…`.
 - **Reach bar.** A 10-cell bar, `█` filled and `░` empty: the share of the language's added
-  source lines that use the idea (`m`: the added lines that contain its keyword or API;
+  source lines that use the idea (`m`: the added lines where the idea is at work, not a line that only names its keyword in
+  another role;
   `N`: all added source lines of the language), rounded to the nearest cell and at least one, then
   `<m> of <N> added lines`.
 - **Picture.** Rows are snapshots: `@<line>` is the state after that source line ran;
