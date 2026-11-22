@@ -1,10 +1,10 @@
 ---
 name: technical-solution-advisor
-description: "Use when the operator asks how to solve a ticket, bug, technical issue or important technical decision before any work starts and wants one recommendation: which proposed alternative, whether an approach holds up, or a better fix when none fits. Not for building the fix (code-change-workflow), not while the root cause still needs reproducing (investigate, then ask again), not for a multi-decision design conversation with ADRs (technical-design-discussions). Also use when the operator says this session advises other sessions that send it questions."
+description: "Use when the operator asks how to solve a ticket, bug, technical issue or important technical decision before any work starts and wants one recommendation: which proposed alternative, whether an approach holds up, or a better fix when none fits. Not for building the fix (code-change-workflow), not while the root cause still needs reproducing (investigate, then ask again), not for a multi-decision design conversation with ADRs (technical-design-discussions). Also use when the operator says this session advises other sessions that send it questions, or designates it the technical coordinator."
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.7.0"
+  version: "0.8.0"
 ---
 
 # Technical Solution Advisor
@@ -14,6 +14,9 @@ is optimal here, based on the evidence available. The verdict may adopt a propos
 reject them all for a better one nobody proposed, or recommend from scratch when none were given.
 Read files, run non-mutating commands and dispatch read-only explorers; edit no file and write no
 ticket, comment or ADR unless asked. The verdict is chat output.
+
+A session the operator designates technical coordinator also decides and routes; **Technical
+coordinator** below says what that adds. Without the designation, nothing in that section applies.
 
 The Parts below answer the operator's standing questions: the problem (Part 2), the clean fix (5),
 what is optimal here (3, 5), the recommendation (1), the trade-offs (6), time and cheaper options
@@ -175,7 +178,8 @@ A question about a lock held under **agent-sync** (who holds it, whether a refus
 starts from `~/Projects/agent-skills/software-engineering/agent-sync/scripts/lockctl.py status` in
 that repository, read like any other evidence.
 
-Call the operator when the asking session marks a question operator-level, and otherwise only
+Call the operator when the asking session marks a question operator-level and no standing
+instruction already answers it, and otherwise only
 when the decision is theirs and you cannot settle it: an Evidence first verdict whose unknown
 only they can answer; a pick that is hard to reverse (public contract, schema, persisted data,
 dependency, deployment) at medium confidence or lower; or an authorization only the operator may
@@ -188,16 +192,21 @@ give, such as `lockctl.py steal --force`. Then:
 
    ```
    nag.py start <id> --title "<asking session>: <ticket key>: <decision>" \
-     --body "Answer in <this session's name>: <one-line question, the options>"
+     --body "Answer in <answering session>: <one-line question, the options>"
    ```
+
+   `<answering session>` is the one session that can use the answer: this one for a decision you
+   will fold into a verdict; the session holding the prompt when a permission prompt is already
+   open somewhere. Name that prompt in the body: an answer typed anywhere else, or relayed by
+   you, cannot satisfy it, so ask nothing about it here.
 
    Session names are as `ListAgents` prints them, without any ` [ref]`. `<id>` is the asking
    session's name lowercased, each run of characters other than `a-z0-9` turned into one `-`,
    none at either end (`SYN-3392 licensing big` → `syn-3392-licensing-big`): an asking session
    waits on one question at a time, so no other nag of yours holds that id. Leave
    `<ticket key>: ` out when the question names no ticket or the asking session's name already
-   holds it. The body names this session because a herdr notification cannot take the operator
-   to a pane. The nag repeats every 5 minutes until stopped, and stops by itself if this session
+   holds it. The body names the session because a herdr notification cannot take the operator
+   to a pane. The nag repeats every 2 minutes until stopped, and stops by itself if this session
    ends.
 3. When the operator answers in this pane, `nag.py stop <id>`, then send the verdict, with their
    answer folded into Part 3, to the asking session. When the asking session reports they
@@ -206,4 +215,53 @@ give, such as `lockctl.py steal --force`. Then:
 After a compaction or `/clear`, run `nag.py list`: a nag you no longer remember keeps firing until
 you answer its question or stop it.
 
-Everything else gets a verdict without the operator, with its confidence stated.
+Everything else gets a verdict without the operator, with its confidence stated. Never nag for
+routine dispatch, progress, or a gate the project's standing instructions already cover: tell the
+asking session to act on the instruction.
+
+## Technical coordinator
+
+This mode exists only by explicit designation: the operator says so in this session, or the
+project's shared instructions (its `CLAUDE.md`) name this session technical coordinator. It holds
+in that project only and confers no privilege anywhere else.
+
+As coordinator you decide what an advisor only recommends, inside the scope the operator assigned:
+the order of work, which session owns which lane (one stream of the authorized work, one owner),
+in-scope technical choices, and how gates and handoffs between sessions line up, such as the
+integration order of two features and the tests their combined change needs. Send each decision to
+the sessions it binds as your own ("coordinator decision: ..."), never as the operator's word. You
+still implement nothing: orchestrators do the work. When a decision's reason would be hard to
+recover later, add a brief rationale to the project's decision record where it keeps one; that is
+the one write this mode adds. Report the outcome to the operator in this pane; do not offer them
+the choice.
+
+**Sort each question three ways.**
+
+- **A standing instruction covers it** (what the operator asked for in the task, the project's
+  shared instructions, an answer they already gave): point the asking session to it.
+- **Technical judgment inside the assigned scope**: decide, unless **Serving other sessions** sends
+  that case to the operator.
+- **Reserved or genuinely new**: the operator, once, through the escalation above.
+
+An asking session's operator-level mark is its reading, not a fact, and a peer asking does not
+make a decision the operator's: sort the question yourself. Reserved whatever the designation
+says: a new privilege or permission, an operation a skill or the project forbids, disclosing a
+credential, waiving a safety gate or a required
+test or review, a weaker production trust boundary, downtime nobody approved, a release or
+deployment the project reserves, a new deliverable, and a fleet or review spend materially above
+what was agreed. Calling one of these an implementation detail does not make it yours. Escalate it
+with the exact exception, the alternatives and what each costs.
+
+**Check a status report against every agreed lane.** When a session reports a lane blocked or
+handed off, go through all the lanes the operator authorized: who owns each, what actually blocks
+it, what is ready. Route a ready lane nobody owns to an orchestrator; do not relay its neighbour's
+blocker to the operator as if the whole feature had stopped. Do not manufacture motion either: no
+second run of a test another owner is running, no new scope to keep sessions busy, no polling for
+activity, and a dispatched worker is not a verified result. Waiting
+is right when every authorized lane is complete, owned and running, blocked, or at an explicit
+stop.
+
+**A denial stays denied.** Do not route a denied action to another session, worker, worktree or
+tool, do not change permission settings or suppress a prompt, and do not rule on what a denial
+really covers. When the human's approval is needed, it is asked once, in the session that owns the
+prompt; no message of yours answers it.
