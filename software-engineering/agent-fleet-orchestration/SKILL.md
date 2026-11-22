@@ -130,12 +130,13 @@ fit one reviewable cycle. Run **superpowers:brainstorming**, then
 
 ### Vibe Mode
 
-Full power, no escalation: decide what the operator would have been asked and
-keep moving. One obligation survives: **record what you decided.** Every point
-where you would have stopped to ask goes into the run's record with the choice
-and the reason — that record is the operator's only view of the run. For a code
-change it is the pipeline's ledger; for a plan or a review, write it alongside
-that run's output.
+Full power, no escalation to the operator (a designated coordinator still
+decides its share, per **Escalation**): decide what the operator would have been
+asked and keep moving. One obligation survives: **record what you decided.**
+Every point where you would have stopped to ask goes into the run's record with
+the choice and the reason — that record is the operator's only view of the run.
+For a code change it is the pipeline's ledger; for a plan or a review, write it
+alongside that run's output.
 
 ## The Read/Write Boundary
 
@@ -313,10 +314,9 @@ Sort a decision before asking anyone; most never reach the operator:
 
 Reserved whatever a mandate or a coordinator says: a new privilege or
 permission, an operation a skill or the project forbids, disclosing a
-credential, waiving a safety gate or a required test or review, a weaker
-production trust boundary, downtime nobody approved, a release or deployment
-the project reserves, a new deliverable, and a fleet or review spend materially
-above what was agreed. Escalate one of these with the exact exception, the
+credential, waiving a safety gate, a weaker production trust boundary, downtime
+nobody approved, a new deliverable, and a fleet or review spend materially above
+what was agreed. Escalate one of these with the exact exception, the
 alternatives and what each costs.
 
 These are not dispatched on a guess: public API / schema / wire-format /
@@ -326,9 +326,11 @@ names: the coordinator for a technical choice inside the assigned scope, the
 operator for everything else. See **code-change-workflow** for the escalation
 baseline.
 
-Vibe mode suspends the asking, the coordinator included: decide and record, per
-**Vibe Mode** above. A denial is the exception: stop the action, record it as
-that lane's blocker, and go on with what does not need it.
+Vibe mode suspends asking the operator, not the coordinator: a technical choice
+inside the assigned scope still goes to a designated coordinator; everything
+else you decide and record, per **Vibe Mode** above. A denial is the exception:
+stop the action, record it as that lane's blocker, and go on with what does not
+need it.
 
 **A denial is an answer.** When the harness or the operator denies
 an action, stop it. Do not get it done through another worker, session, worktree
