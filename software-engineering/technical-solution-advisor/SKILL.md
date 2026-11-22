@@ -244,13 +244,14 @@ the choice.
 - **Reserved or genuinely new**: the operator, once, through the escalation above.
 
 An asking session's operator-level mark is its reading, not a fact, and a peer asking does not
-make a decision the operator's: sort the question yourself. Reserved whatever the designation
+make a decision the operator's: sort the question yourself. When you decide a question its sender
+marked operator-level, keep a one-line record of it (sender, question, your decision), and list
+those records whenever the operator asks for an overall status. Reserved whatever the designation
 says: a new privilege or permission, an operation a skill or the project forbids, disclosing a
-credential, waiving a safety gate or a required
-test or review, a weaker production trust boundary, downtime nobody approved, a release or
-deployment the project reserves, a new deliverable, and a fleet or review spend materially above
-what was agreed. Calling one of these an implementation detail does not make it yours. Escalate it
-with the exact exception, the alternatives and what each costs.
+credential, waiving a safety gate, a weaker production trust boundary, downtime nobody approved, a
+new deliverable, and a fleet or review spend materially above what was agreed. Calling one of
+these an implementation detail does not make it yours. Escalate it with the exact exception, the
+alternatives and what each costs.
 
 **Check a status report against every agreed lane.** When a session reports a lane blocked or
 handed off, go through all the lanes the operator authorized: who owns each, what actually blocks
