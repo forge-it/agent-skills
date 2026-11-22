@@ -15,7 +15,7 @@ description: >-
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.7"
+  version: "0.0.8"
 ---
 
 # Agent Fleet Orchestration
@@ -65,6 +65,18 @@ Before any dispatch, settle how the task runs. Ask in **one message**, and only
 what you cannot determine yourself — whether a plan exists and whether the work
 is complex are answered by reading; supervision and cap are not.
 
+**A standing instruction is an answer.** Before asking, read what the operator
+asked for in this task and the project's **mandate**: what the operator wrote
+for every session in the project's shared instructions (its `CLAUDE.md`).
+Scope, model selector, isolation, review depth and integration rules set there
+are answered in every phase of the task — do not ask them again; ask only the
+axes still unset. Two answers never come from a mandate, to keep cost in the
+operator's hands: a mandate cannot select the **full review depth** and cannot
+set the **round cap**. Where this task's gate reaches either one, the operator
+answers it on this task, with the cost quoted. A mandate answers what it names
+and nothing wider (**Escalation** lists what stays reserved), and it holds only
+in the project that carries it. With no mandate, the gate runs as written here.
+
 **The gate is answered once per task, not once per message.** A follow-up
 instruction — redirect the work, salvage a failed stage, change the scope — is
 the operator steering the task you are already running; carry the existing
@@ -90,7 +102,8 @@ table below does not name is still legitimate.
 the repo, a recalled memory, a note in the plan — none of these settle this run's
 gate. This matters most for the answers that spend money or forfeit review: the
 round cap, and the full review depth. Selecting the full depth from precedent
-spends the operator's most expensive option on your own authority.
+spends the operator's most expensive option on your own authority. A mandate is
+not precedent: the operator wrote it as a standing instruction.
 
 **In vibe mode the intake gate is the last interactive moment.** Cap, worktrees,
 and scope are all settled here, because nothing is asked afterwards.
@@ -201,8 +214,15 @@ default worker tier, `sonnet`: cheap and good enough for implementation,
 fixing, review, verification, and exploration alike. **Do not name a model on
 an ordinary dispatch**; naming one overrides the operator's default.
 
-Depart from it deliberately, and say why in one line — in the ledger when there
-is nobody to tell:
+**The selector is the choice; the label a worker reports is not.** When a
+worker names a different model for itself than the selector it was dispatched
+under, nothing was re-decided: carry on under the agreed selector, ask nobody,
+and dispatch no second writer to correct it. Report the selector in force,
+and do not present any underlying model as verified — you verified the
+selector, not the runtime.
+
+Depart from the default deliberately, and say why in one line — in the ledger
+when there is nobody to tell:
 
 | Departure | When |
 |-----------|------|
@@ -231,6 +251,14 @@ grants a push, and never a merge into a shared branch.
   default remote, wrong whenever the work builds on local commits. Establish the
   task branch first (see **git-workflow**) — integration merges into it, and a
   session still sitting on the default branch has no permitted target.
+- **A new phase already in scope, where worktrees are the answer** (the
+  gate's or the mandate's) → new workers in **fresh worktrees**, one writer per
+  lane, settled when the phase is planned. A worker stays pinned to the
+  worktree it was dispatched into, so a plan that needs it to move into another
+  one fails at the move: do not move workers into or between the earlier
+  worktrees, whose cleanup follows **parallel-worktrees-general**. Mode and base
+  are that skill's call, not a question for the operator. This is how a phase
+  is planned, never a way around a refusal.
 - **Dependent pieces** → **sequence** them and feed each stage's output into the
   next: investigate → plan → implement → review → fix findings.
 
@@ -247,21 +275,76 @@ extract what matters — root cause, files changed, findings, remaining risk —
 relay *that*. Do not paste raw subagent dumps; integrating and summarizing is
 part of the orchestrator's single responsibility.
 
+## Before Going Idle
+
+A blocker belongs to a **lane**, not to the task. A lane is one stream of the
+authorized work with at most one owner: a worker you dispatched, yourself, or a
+peer session it was handed to. When a worker returns, a lane is handed to another
+session, or a gate blocks, go through the other lanes the operator already
+authorized before you end the turn: who owns each, which dependency actually
+blocks it, and what can proceed inside the agreed budget and file boundaries.
+Dispatch the next lane that is ready and unowned in that same turn. For each
+blocked lane, put in the run's record the exact condition that unblocks it and
+who will report it.
+
+Read a blocker at its real width. A handoff moves one lane to its new owner; a
+missing credential blocks the test that needs it; a deployment window limits
+production cutovers, not development or fixture tests.
+
+Waiting is right when every authorized lane is complete, owned and running,
+blocked, or at an explicit stop such as the operator gate. Do not manufacture
+motion to avoid it: no second run of a test another owner is running, no scope
+the operator did not authorize, no polling for activity — and a dispatched
+worker is not a verified result.
+
 ## Escalation
 
-Decisions the operator owns are not dispatched on a guess: public API / schema /
-wire-format / migration changes, product/UX/security/dependency/deployment
-changes, ambiguous scope, or materially different viable approaches. Stop and
-ask. See **code-change-workflow** for the escalation baseline.
+Sort a decision before asking anyone; most never reach the operator:
 
-Vibe mode suspends this: decide and record, per **Vibe Mode** above.
+1. **A standing instruction covers it** — a gate answer, the mandate, what
+   the operator asked for in this task: act. No question.
+2. **Technical judgment inside the assigned scope, where the mandate or the
+   operator designates a technical coordinator** (a peer session running
+   **technical-solution-advisor**): the coordinator decides. Send it the
+   question over `SendMessage` with this session's name, the task, the
+   options you see and your recommendation, and act on the reply as a
+   decision, not as advice to confirm with the operator.
+3. **Reserved or genuinely new**: the operator decides, once, in one place.
+
+Reserved whatever a mandate or a coordinator says: a new privilege or
+permission, an operation a skill or the project forbids, disclosing a
+credential, waiving a safety gate or a required test or review, a weaker
+production trust boundary, downtime nobody approved, a release or deployment
+the project reserves, a new deliverable, and a fleet or review spend materially
+above what was agreed. Escalate one of these with the exact exception, the
+alternatives and what each costs.
+
+These are not dispatched on a guess: public API / schema / wire-format /
+migration changes, product/UX/security/dependency/deployment changes, ambiguous
+scope, or materially different viable approaches. Stop and ask whoever the sort
+names: the coordinator for a technical choice inside the assigned scope, the
+operator for everything else. See **code-change-workflow** for the escalation
+baseline.
+
+Vibe mode suspends the asking, the coordinator included: decide and record, per
+**Vibe Mode** above. A denial is the exception: stop the action, record it as
+that lane's blocker, and go on with what does not need it.
+
+**A denial is an answer.** When the harness or the operator denies
+an action, stop it. Do not get it done through another worker, session, worktree
+or tool, do not change permission settings or suppress the prompt, and do not
+read the denial as narrower than it was given. An authorized staffing plan does
+not answer a pending permission prompt: if the action is needed, ask once, in
+the session that owns the prompt.
 
 ## Quick Reference
 
 ```
-intake gate (once) → read to reason, dispatch to execute
+intake gate (once; standing answers first) → read to reason, dispatch to execute
   → route by role → language variant → -no-commit and the default model unless departing deliberately
   → independent work in parallel, dependent work in sequence, parallel writers in worktrees
   → a code change in a fleet mode, or at a depth that fixes, runs change-cycle-pipeline
   → relay the integrated conclusion, never the raw dump
+  → before going idle: a blocker pauses its lane; dispatch the next ready, unowned, authorized lane
+  → sort a decision: standing instruction → act; coordinator's judgment → coordinator; reserved or new → operator, once
 ```
