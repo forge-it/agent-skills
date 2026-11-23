@@ -1,23 +1,47 @@
 ---
 name: syneto-release-promote
-description: Use when shipping a Syneto Central release after its release notes entry has been reviewed and accepted — merging the central-2.x dev branch into the prod branch across every contributing repository and pushing. Also use for asks phrased as "promote the release", "merge dev into prod", "ship the hotfix", "push the release branches", or "watch the release pipelines". Syneto-specific: assumes the Central repository family under /home/cristi/Projects.
+description: Use when shipping a Syneto Central release after its release notes entry has been reviewed and accepted — either merging the central-2.x dev branch into the prod branch across every contributing repository, or rolling prod onto the dev branch and cutting the next dev branch. Also use for asks phrased as "promote the release", "merge dev into prod", "ship the hotfix", "push the release branches", "move prod to central-2.x", "cut the next dev branch", or "watch the release pipelines". Syneto-specific: assumes the Central repository family under /home/cristi/Projects.
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.7"
+  version: "0.0.8"
 ---
 
 # Syneto Release Promote Skill
 
 ## Purpose
 
-Ship a Syneto Central release: merge the dev branch (`central-2.10`) into the prod
-branch (`central-2.9`) across every repository contributing to the release, and push.
+Ship a Syneto Central release, in one of two ways (see **Two Ways to Promote**):
+merge the dev branch (`central-2.10`) into the prod branch (`central-2.9`) across
+every contributing repository and push, or roll prod onto `central-2.10` and dev
+onto a newly cut `central-2.11`.
 
 This is the step **after** the release notes entry has been published and accepted.
 It is deliberately a separate skill from `syneto-release-notes`, which is read-only
-and must never touch a worktree. This one merges and pushes to shared prod branches
+and must never touch a worktree. This one pushes branches and changes deploy settings
 that trigger CI/CD.
+
+## Two Ways to Promote
+
+| | Merge promotion | Rollover promotion |
+|---|---|---|
+| What moves | `central-2.10` is merged into `central-2.9` in every contributing repository | Prod switches to `central-2.10`; `central-2.11` is cut for dev |
+| Prod runs afterwards | `:central-2.9` images, rebuilt with the dev content | `:central-2.10` images, already built |
+| Dev runs afterwards | `central-2.10`, unchanged | `central-2.11` |
+| Changes | Merge commits pushed to the prod branches | New branches, two `infra/central` variables, the infra prod merge, two deploys |
+| Procedure | `promote.sh`, the rest of this file | [rollover.md](rollover.md) |
+
+The operator chooses. When the ask names one ("merge dev into prod" → merge;
+"move prod to 2.10", "I need central-2.11" → rollover), use it. Otherwise ask which,
+before gathering any plan. Never switch from one way to the other mid-release
+without asking: the merge's `central-2.9` images and the rollover's `central-2.10`
+images can be the same code, but they are different tags, deployed by different
+steps.
+
+R1 (notes first), R10 (green pipelines) and **Watching the Pipelines** apply to both
+ways. The other rules describe the merge. Rollover step 4 is itself one ordinary
+merge of `central` through `promote.sh`, so Usage, the confirm gate, exit codes,
+R2–R9 and Failure Recovery cover that run.
 
 ## When to Apply
 
@@ -28,6 +52,7 @@ Do **not** apply:
 - Before the release notes entry exists and has been accepted (see R1)
 - To promote a single repository as a one-off — that is ordinary git, not a release
 - To the `central` IaaC repository on its own; it runs on a separate cadence
+  (rollover step 4 merges it as part of a release, which is not "on its own")
 
 ## Ordering Is Not Negotiable
 
@@ -35,13 +60,17 @@ Do **not** apply:
 syneto-release-notes  →  operator reviews the page  →  syneto-release-promote
 ```
 
-The merge **empties** the `prod..dev` range. Once promoted, the release can no
-longer be described from git: `acquire.sh` will report every range as 0 and exit 1
+A merge promotion **empties** the `prod..dev` range. Once promoted, the release
+can no longer be described from git: `acquire.sh` will report every range as 0 and exit 1
 with "already merged". The Confluence page is titled "Release notes - **plan**"
 precisely because it is written before the release ships.
 
-If you find yourself asked to write release notes for something already promoted,
-stop and say so — the ranges are gone and reconstructing them means digging merge
+A rollover leaves the range intact, but cutting `central-2.11` flips the derived
+pair to `central-2.10..central-2.11`. Notes written afterwards need the explicit
+pair (`acquire.sh central-2.9 central-2.10`).
+
+If you find yourself asked to write release notes for something already
+merge-promoted, stop and say so — the ranges are gone and reconstructing them means digging merge
 commits out of the prod branch by hand.
 
 ## Usage
@@ -87,8 +116,9 @@ that a confidently-worded sentence can talk a model into.
 
 ### 1. Never Promote Before the Notes Are Accepted (CRITICAL)
 
-The notes describe `prod..dev`; promotion destroys that range. Promoting first makes
-the release undescribable. Confirm the entry is published and the operator has
+The notes describe `prod..dev`. A merge destroys that range, and a rollover flips
+the derived pair. Promoting first makes the release undescribable, or describable
+only by hand. Confirm the entry is published and the operator has
 accepted it. "I'll write the notes after" is not recoverable.
 
 ### 2. Preflight the Whole Fleet Before Touching Any Repository (CRITICAL)
@@ -219,7 +249,9 @@ sends the operator down a recovery path that does nothing.
 ### 10. A Push Is Not Shipped Until Its Pipeline Is Green (CRITICAL)
 
 Pushing the prod branch starts one GitLab pipeline per repository; it is the
-pipeline, not the push, that builds and publishes the image that gets deployed. A
+pipeline, not the push, that builds and publishes the image that gets deployed. In a
+rollover, the pipelines are step 3's new-branch pipelines and the deploys in steps 4
+and 6. A
 `DONE` line from `promote.sh` means the merge reached origin — nothing more. After
 every `--push`, watch each promoted repository's pipeline to completion (see
 **Watching the Pipelines**) and report the release as shipped only when all of them
@@ -249,19 +281,22 @@ glab auth status                      # the gitlab.com 401 in this output is a s
 Without the global host, `glab api` silently targets gitlab.com and every call
 returns 401; `--hostname gitlab.syneto.eu` works per call as a fallback.
 
-**Resolve each pipeline from the pushed merge commit**, not from "latest pipeline on
-the branch" — a later push to the same branch would otherwise be watched instead:
+**Resolve each pipeline from the pushed commit and its branch together**, not from
+"latest pipeline on the branch", where a later push to the same branch would be
+watched instead. Not from the SHA alone either: a newly cut branch shares its SHA
+with the branch it was cut from, so the SHA alone returns that branch's old pipeline.
+`<project>` is the URL-encoded GitLab path (`central%2Frest-api`, `infra%2Fcentral`):
 
 ```bash
-sha=$(git -C <root>/<repo> rev-parse origin/<prod>)
-glab api "projects/central%2F<repo>/pipelines?sha=$sha" | jq -r '.[] | "\(.id) \(.status) \(.web_url)"'
+sha=$(git -C <root>/<repo> rev-parse origin/<branch>)
+glab api "projects/<project>/pipelines?ref=<branch>&sha=$sha" | jq -r '.[] | "\(.id) \(.status) \(.web_url)"'
 ```
 
 **Arm one watcher per pipeline id** with **ci-pipeline-watch**: one `Monitor` per
 pipeline, 30-minute timeout, armed again on expiry, running
 
 ```bash
-uv run --quiet --no-project ~/.claude/skills/ci-pipeline-watch/scripts/ci_watch.py gitlab central/<repo> <pipeline-id>
+uv run --quiet --no-project ~/.claude/skills/ci-pipeline-watch/scripts/ci_watch.py gitlab <group>/<repo> <pipeline-id>   # e.g. central/rest-api, infra/central
 ```
 
 It emits a blocking failure the moment it lands and the pipeline's end, and keeps
@@ -275,9 +310,9 @@ that repository has not shipped.
 **Triage a blocking failure immediately:**
 
 ```bash
-glab api "projects/central%2F<repo>/pipelines/<id>/test_report" \
+glab api "projects/<project>/pipelines/<id>/test_report" \
   | jq -r '.test_suites[].test_cases[] | select(.status=="failed" or .status=="error") | "\(.classname)\n\(.system_output)"'
-glab api "projects/central%2F<repo>/jobs/<job-id>/trace" | tail -80     # non-test failures
+glab api "projects/<project>/jobs/<job-id>/trace" | tail -80     # non-test failures
 ```
 
 The tail of a test job's trace is usually React/console warnings, not the failure —
@@ -292,7 +327,7 @@ read the JUnit report first. Then decide flake versus real before touching anyth
 
 Identical tree, passing on dev, untouched by the release → a flake. This is the one
 fix applied without waiting for his pick: retry the job
-(`glab api -X POST "projects/central%2F<repo>/jobs/<job-id>/retry"`) and send the
+(`glab api -X POST "projects/<project>/jobs/<job-id>/retry"`) and send the
 failure report with option 3 marked done and the three checks as its evidence. If the
 pipeline is still running, its watcher follows the retry — retried jobs replace the
 original in the jobs listing; if it already ended, arm the same `ci_watch.py` command
@@ -345,3 +380,6 @@ auditable merge commit and `git revert -m 1 <merge>` works. Revert as a new comm
 | Reporting the release shipped after `--push` without watching pipelines | A red test job skips `publish-image`; nothing deploys, and the report says it did |
 | One watch loop over every pipeline, reporting only at the end | A failure sits unseen until the slowest pipeline finishes |
 | Retrying a failed job without checking tree identity against the dev tip | Retries a real defect into green |
+| Picking merge or rollover without the operator's choice | Ships to prod under the wrong tag, through the wrong steps |
+| Rollover: dropping hotfixes that are on `central-2.9` but not on `central-2.10` | Prod loses fixes it already had |
+| Rollover: switching dev before every `:central-2.11` image exists | The dev deploy cannot pull the missing images |
