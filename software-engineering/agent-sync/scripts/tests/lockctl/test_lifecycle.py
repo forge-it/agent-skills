@@ -13,11 +13,13 @@ from tests.utils.constants import (
     WAIT_FOR_MARKER_COMMAND,
 )
 from tests.utils.helpers import (
+    REQUIRES_PROCESS_LIMITS,
     FakeHerdr,
     Session,
     collect_output,
     file_descriptors_exhausted,
     process_is_running,
+    read_descriptor_target,
     start_holder_whose_acquirer_is_gone,
     wait_for_recorded_herdr_status,
     wait_until,
@@ -38,8 +40,8 @@ class TestHolderLifetime:
 
         holder_pid = first_session.record(INTEGRATE_LOCK)["holder_pid"]
         assert os.getsid(holder_pid) == holder_pid
-        assert Path(f"/proc/{holder_pid}/fd/1").resolve() == Path(os.devnull)
-        assert Path(f"/proc/{holder_pid}/fd/2").resolve() == Path(os.devnull)
+        assert read_descriptor_target(holder_pid, 1) == Path(os.devnull)
+        assert read_descriptor_target(holder_pid, 2) == Path(os.devnull)
 
     def test_lock_is_freed_when_the_owner_process_dies(
         self, first_session: Session, second_session: Session, owner_process
@@ -145,6 +147,7 @@ class TestHolderResilience:
         assert process_is_running(holder_pid)
         assert first_session.run("check", INTEGRATE_LOCK).returncode == 0
 
+    @REQUIRES_PROCESS_LIMITS
     def test_holder_keeps_holding_when_it_cannot_open_the_files_it_needs_to_check_on_its_owner(
         self, first_session: Session
     ):

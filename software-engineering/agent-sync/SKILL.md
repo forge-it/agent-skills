@@ -25,12 +25,16 @@ adds no session: the coordination lives in two scripts every session calls.
 | `scripts/nag.py` | repeated herdr notification until the operator answers |
 
 Call them by absolute path
-(`~/Projects/agent-skills/software-engineering/agent-sync/scripts/lockctl.py`). Lock state lives
+(`~/.claude/skills/agent-sync/scripts/lockctl.py`). Lock state lives
 in `<git-common-dir>/agent-sync/`, so every worktree of the repository sees the same locks, and
 nothing is tracked or written into the working tree. Each subcommand's `--help` says what it
 prints. Exit 75 means busy (held by someone else, the wait ran out, a steal refused, a nag id
 taken). `lockctl.py run` passes its command's exit code through, so a 75 from `run` is
 lockctl's own only when stderr says `lock <name> is held by`.
+
+Platform: both scripts run on Linux (procfs) and macOS (libproc) and need Python 3.11 or newer.
+On a host whose `python3` is older (the macOS system one is 3.9), run them with a 3.11+
+interpreter, for example `python3.12 ~/.claude/skills/agent-sync/scripts/lockctl.py status`.
 
 ## Two routes to `main`
 
@@ -216,7 +220,7 @@ A worker gets the exact command in its brief, reset included, and runs it with
 `run_in_background`:
 
 ```
-~/Projects/agent-skills/software-engineering/agent-sync/scripts/lockctl.py run stack --wait 9m --purpose "<branch> suite" -- \
+~/.claude/skills/agent-sync/scripts/lockctl.py run stack --wait 9m --purpose "<branch> suite" -- \
   sh -c '<reset> && <bring up> && <suite>'
 ```
 

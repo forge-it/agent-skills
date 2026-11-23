@@ -175,7 +175,7 @@ its own. Each question is its own verdict: do not carry a pick from one sender's
 another's.
 
 A question about a lock held under **agent-sync** (who holds it, whether a refused steal is wrong)
-starts from `~/Projects/agent-skills/software-engineering/agent-sync/scripts/lockctl.py status` in
+starts from `~/.claude/skills/agent-sync/scripts/lockctl.py status` in
 that repository, read like any other evidence.
 
 Call the operator when the asking session marks a question operator-level and no standing
@@ -188,7 +188,7 @@ give, such as `lockctl.py steal --force`. Then:
 1. Tell the asking session it is escalated and what it may keep doing meanwhile.
 2. Nag the operator with the `nag` from `~/.bashrc`. A Claude Code shell does not load that
    function, so run the script it wraps,
-   `~/Projects/agent-skills/software-engineering/agent-sync/scripts/nag.py` (`nag.py` below):
+   `~/.claude/skills/agent-sync/scripts/nag.py` (`nag.py` below):
 
    ```
    nag.py start <id> --title "<asking session>: <ticket key>: <decision>" \

@@ -9,13 +9,23 @@ import select
 import shutil
 import signal
 import subprocess
+import sys
 import threading
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import IntEnum, StrEnum
 from pathlib import Path
+from typing import NoReturn
+
+from process_table_darwin import (
+    ProcessStatus,
+    list_libproc_group_pids,
+    parse_launch_names,
+    read_launch_arguments,
+    read_libproc_process,
+)
 
 OWNER_PROCESS_NAME = "claude"
 OWNER_PID_ENVIRONMENT_VARIABLE = "AGENT_SYNC_OWNER_PID"
@@ -35,8 +45,17 @@ ERROR_REPLY_PREFIX = "error: "
 STAT_START_TICKS_INDEX = 19
 STAT_PROCESS_GROUP_INDEX = 2
 ZOMBIE_STATE = "Z"
+UNKNOWN_STATE = "?"
+LIBPROC_STATE_LETTERS = {
+    ProcessStatus.IDLE: "I",
+    ProcessStatus.RUNNING: "R",
+    ProcessStatus.SLEEPING: "S",
+    ProcessStatus.STOPPED: "T",
+    ProcessStatus.ZOMBIE: ZOMBIE_STATE,
+}
 UNREADABLE_STAT_ERRORS = (OSError, ValueError, IndexError)
 PROCESS_DIRECTORY = Path("/proc")
+SUPPORTED_PLATFORMS = "Linux (procfs) and macOS (libproc)"
 LOWEST_SIGNALLABLE_GROUP_ID = 2
 STOP_SIGNALS = (signal.SIGTERM, signal.SIGINT, signal.SIGHUP)
 DURATION_PATTERN = re.compile(r"(\d+(?:\.\d+)?)([smh])")
@@ -107,6 +126,18 @@ class ProcessStat:
 
 
 @dataclass(frozen=True)
+class ProcessBackend:
+    """What agent-sync asks the operating system about processes, answered for one platform. The process
+    table is read nowhere else, so a platform is supported once it can answer these three questions.
+    `has_owner_name` is given the stat it already read, because a platform may need more than the name
+    in the stat to tell a process by the name it was started under."""
+
+    read_stat: Callable[[int], ProcessStat | None]
+    find_group_members: Callable[[int], list[int]]
+    has_owner_name: Callable[[int, ProcessStat], bool]
+
+
+@dataclass(frozen=True)
 class PaneReading:
     """`state_change_sequence` is herdr's `state_change_seq`: it moves on every status change, so
     an unchanged value proves the pane did not work in between two readings that both show it idle."""
@@ -128,25 +159,114 @@ def parse_process_stat(raw_stat: str) -> ProcessStat:
     )
 
 
-def read_process_stat(pid: int) -> ProcessStat | None:
-    """None when the process is gone. A read that fails for any other reason (descriptors or memory
-    exhausted, access denied) raises: it says nothing about whether the process lives."""
+def read_procfs_stat(pid: int) -> ProcessStat | None:
     try:
         return parse_process_stat((PROCESS_DIRECTORY / str(pid) / "stat").read_text(errors="replace"))
     except (FileNotFoundError, ProcessLookupError):
         return None
 
 
+def find_procfs_group_members(group_id: int) -> list[int]:
+    """Found by scanning procfs, because `killpg(group, 0)` also succeeds for zombies that nobody has
+    reaped yet."""
+    members = []
+    for stat_file in PROCESS_DIRECTORY.glob("[0-9]*/stat"):
+        try:
+            stat = parse_process_stat(stat_file.read_text(errors="replace"))
+        except UNREADABLE_STAT_ERRORS:
+            continue
+        if stat.process_group_id == group_id and stat.state != ZOMBIE_STATE:
+            members.append(int(stat_file.parent.name))
+    return members
+
+
+def has_procfs_owner_name(pid: int, stat: ProcessStat) -> bool:
+    """Linux names a process after the path it was executed by, symlink included, so the stat has it."""
+    return stat.name == OWNER_PROCESS_NAME
+
+
+def read_libproc_stat(pid: int) -> ProcessStat | None:
+    process = read_libproc_process(pid)
+    if not process:
+        return None
+    return ProcessStat(
+        name=process.command_name,
+        state=LIBPROC_STATE_LETTERS.get(process.status, UNKNOWN_STATE),
+        parent_pid=process.parent_pid,
+        process_group_id=process.process_group_id,
+        start_ticks=process.start_microseconds,
+    )
+
+
+def find_libproc_group_members(group_id: int) -> list[int]:
+    """libproc lists the pids of a group, zombies included. Each is read again, because a pid can exit
+    or change group between the listing and the reading."""
+    members = []
+    for pid in list_libproc_group_pids(group_id):
+        try:
+            stat = read_libproc_stat(pid)
+        except UNREADABLE_STAT_ERRORS:
+            continue
+        if stat and stat.process_group_id == group_id and stat.state != ZOMBIE_STATE:
+            members.append(pid)
+    return members
+
+
+def has_libproc_owner_name(pid: int, stat: ProcessStat) -> bool:
+    """macOS names a process after the file it executed, symlinks resolved: `claude` is a symlink to a
+    versioned binary, so the kernel name is that version. The name the process was started under is
+    in its saved launch arguments. A process whose launch arguments cannot be read does not match."""
+    if stat.name == OWNER_PROCESS_NAME:
+        return True
+    try:
+        return OWNER_PROCESS_NAME in parse_launch_names(read_launch_arguments(pid))
+    except OSError:
+        return False
+
+
+PROCFS_BACKEND = ProcessBackend(read_procfs_stat, find_procfs_group_members, has_procfs_owner_name)
+LIBPROC_BACKEND = ProcessBackend(read_libproc_stat, find_libproc_group_members, has_libproc_owner_name)
+
+
+def build_unsupported_backend(platform_name: str) -> ProcessBackend:
+    """Importing must still work on any platform, so that `--help` does: the refusal comes with the first
+    question about a process."""
+
+    def refuse(*ignored_arguments: object) -> NoReturn:
+        raise EnvironmentProblem(f"agent-sync supports {SUPPORTED_PLATFORMS}, not {platform_name!r}")
+
+    return ProcessBackend(refuse, refuse, refuse)
+
+
+def select_process_backend(platform_name: str) -> ProcessBackend:
+    if platform_name.startswith("linux"):
+        return PROCFS_BACKEND
+    if platform_name == "darwin":
+        return LIBPROC_BACKEND
+    return build_unsupported_backend(platform_name)
+
+
+PROCESS_BACKEND = select_process_backend(sys.platform)
+
+
+def read_process_stat(pid: int) -> ProcessStat | None:
+    """None when the process is gone. A read that fails for any other reason (descriptors or memory
+    exhausted, access denied) raises: it says nothing about whether the process lives."""
+    return PROCESS_BACKEND.read_stat(pid)
+
+
 def read_own_identity() -> ProcessIdentity:
     stat = read_process_stat(os.getpid())
     if not stat:
-        raise EnvironmentProblem("cannot read /proc/self/stat: agent-sync needs Linux procfs")
+        raise EnvironmentProblem(
+            f"cannot read the process table entry of pid {os.getpid()}: agent-sync supports {SUPPORTED_PLATFORMS}"
+        )
     return ProcessIdentity(os.getpid(), stat.start_ticks)
 
 
 def is_same_process_alive(identity: ProcessIdentity) -> bool:
-    """A process whose /proc entry cannot be read, for any reason but its absence, counts as alive:
-    callers act on "gone" by freeing a lock or stopping a command, and a shortage of descriptors
+    """A process whose process table entry cannot be read, for any reason but its absence, counts as
+    alive: callers act on "gone" by freeing a lock or stopping a command, and a shortage of descriptors
     must not do that while the owner lives. They ask again at their next poll."""
     try:
         stat = read_process_stat(identity.pid)
@@ -164,7 +284,12 @@ def find_owner_process() -> ProcessIdentity:
     if override:
         if not override.isdigit():
             raise EnvironmentProblem(f"{OWNER_PID_ENVIRONMENT_VARIABLE} must be a process id, got {override!r}")
-        override_stat = read_process_stat(int(override))
+        try:
+            override_stat = read_process_stat(int(override))
+        except PermissionError:
+            raise EnvironmentProblem(
+                f"{OWNER_PID_ENVIRONMENT_VARIABLE}={override} is a process of another user, which cannot be inspected"
+            ) from None
         if not override_stat or override_stat.state == ZOMBIE_STATE:
             raise EnvironmentProblem(f"{OWNER_PID_ENVIRONMENT_VARIABLE}={override} is not a running process")
         return ProcessIdentity(int(override), override_stat.start_ticks)
@@ -174,10 +299,15 @@ def find_owner_process() -> ProcessIdentity:
         stat = read_process_stat(process_id)
         if not stat or stat.parent_pid <= 1:
             break
-        parent_stat = read_process_stat(stat.parent_pid)
+        try:
+            parent_stat = read_process_stat(stat.parent_pid)
+        except PermissionError:
+            # macOS describes only the caller's own processes, and `login` between a terminal and its
+            # shell belongs to root: the walk cannot go on, and such an ancestor is nobody's session
+            break
         if not parent_stat:
             break
-        if parent_stat.name == OWNER_PROCESS_NAME:
+        if PROCESS_BACKEND.has_owner_name(stat.parent_pid, parent_stat):
             return ProcessIdentity(stat.parent_pid, parent_stat.start_ticks)
         process_id = stat.parent_pid
 
@@ -217,17 +347,8 @@ def terminate_process(identity: ProcessIdentity, grace_seconds: float = TERMINAT
 
 
 def find_process_group_members(group_id: int) -> list[int]:
-    """Pids of the live processes of a process group. Found by scanning procfs, because
-    `killpg(group, 0)` also succeeds for zombies that nobody has reaped yet."""
-    members = []
-    for stat_file in PROCESS_DIRECTORY.glob("[0-9]*/stat"):
-        try:
-            stat = parse_process_stat(stat_file.read_text(errors="replace"))
-        except UNREADABLE_STAT_ERRORS:
-            continue
-        if stat.process_group_id == group_id and stat.state != ZOMBIE_STATE:
-            members.append(int(stat_file.parent.name))
-    return members
+    """Pids of the live processes of a process group; zombies nobody has reaped yet are not members."""
+    return PROCESS_BACKEND.find_group_members(group_id)
 
 
 def find_group_members_of(group: ProcessGroupIdentity) -> list[int]:

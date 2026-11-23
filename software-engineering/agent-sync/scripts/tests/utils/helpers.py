@@ -15,6 +15,9 @@ from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
 
+import pytest
+from agent_sync_common import ZOMBIE_STATE, read_process_stat
+
 from tests.utils.constants import (
     DEFAULT_COMMAND_TIMEOUT_SECONDS,
     FAST_POLL_ENVIRONMENT,
@@ -27,8 +30,11 @@ from tests.utils.constants import (
 )
 from tests.utils.samples import FAKE_HERDR_SCRIPT, GIT_SPY_SCRIPT, HELD_RECORD_TEMPLATE
 
-STAT_START_TICKS_INDEX = 19
 POACHER_JOIN_SECONDS = 2.0
+REQUIRES_PROCESS_LIMITS = pytest.mark.skipif(
+    not hasattr(resource, "prlimit"),
+    reason="resource.prlimit, which lowers the descriptor limit of another process, exists on Linux only",
+)
 
 
 @dataclass(frozen=True)
@@ -334,16 +340,30 @@ def read_json(path: Path) -> dict | None:
 
 
 def read_start_ticks(pid: int) -> int:
-    raw_stat = Path(f"/proc/{pid}/stat").read_text()
-    return int(raw_stat.rsplit(")", 1)[1].split()[STAT_START_TICKS_INDEX])
+    stat = read_process_stat(pid)
+    assert stat, f"process {pid} is gone, so it has no start time"
+    return stat.start_ticks
 
 
 def process_is_running(pid: int) -> bool:
     try:
-        raw_stat = Path(f"/proc/{pid}/stat").read_text()
+        stat = read_process_stat(pid)
     except OSError:
         return False
-    return raw_stat.rsplit(")", 1)[1].split()[0] != "Z"
+    return bool(stat) and stat.state != ZOMBIE_STATE
+
+
+def read_descriptor_target(pid: int, descriptor: int) -> Path:
+    """The file a process has open as `descriptor`. Linux says so in procfs; macOS has no such tree, so
+    lsof does."""
+    if sys.platform != "darwin":
+        return Path(f"/proc/{pid}/fd/{descriptor}").resolve()
+    listing = subprocess.run(
+        ["lsof", "-a", "-p", str(pid), "-d", str(descriptor), "-Fn"], capture_output=True, text=True, check=True
+    ).stdout
+    targets = [line.removeprefix("n") for line in listing.splitlines() if line.startswith("n")]
+    assert targets, f"lsof found no descriptor {descriptor} open in process {pid}"
+    return Path(targets[0])
 
 
 @contextmanager
@@ -503,16 +523,18 @@ def leave_an_orphaned_command(session: Session, lock: str, pid_file: Path) -> Or
 
 
 def plant_activity_of_a_dead_run(session: Session, lock: str, process_group_id: int, leader_start_ticks: int):
-    """An activity record of a `run` process that no longer exists, naming a process group."""
+    """An activity record of a `run` process that no longer exists, naming a process group. The record
+    names this test's own pid with a start time that is not ours: a pid reused by another process, a pid
+    that every platform may inspect (macOS refuses to describe pid 1, which belongs to root)."""
     activities_directory = session.state_directory / f"{lock}.activities"
     activities_directory.mkdir(exist_ok=True)
     activity = {
         "lock": lock,
-        "run_pid": 1,
+        "run_pid": os.getpid(),
         "run_start_ticks": 1,
         "command": "a command whose group id was reused",
         "started_at": 0,
         "process_group_id": process_group_id,
         "process_group_leader_start_ticks": leader_start_ticks,
     }
-    (activities_directory / "1-1.json").write_text(json.dumps(activity))
+    (activities_directory / f"{os.getpid()}-1.json").write_text(json.dumps(activity))

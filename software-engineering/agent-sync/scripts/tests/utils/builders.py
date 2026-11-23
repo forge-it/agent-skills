@@ -1,5 +1,6 @@
 import json
 import shutil
+import sys
 from pathlib import Path
 
 from agent_sync_common import ProcessIdentity
@@ -70,9 +71,16 @@ def write_stat_of_a_process_named_in_invalid_utf8(process_directory: Path, pid: 
 
 
 def build_claude_named_shell(directory: Path) -> Path:
+    """A bash that runs as `claude`. Linux names the process after the path it was executed by, so a
+    copy is enough. Apple Silicon kills a copy of a system binary, so macOS gets a symlink, which is how
+    the real `claude` is launched: the kernel names the process after the target (`bash`) and only
+    its argv[0] says `claude`."""
     directory.mkdir(parents=True)
     claude_binary = directory / "claude"
-    shutil.copy2(BASH_BINARY, claude_binary)
+    if sys.platform == "darwin":
+        claude_binary.symlink_to(BASH_BINARY)
+    else:
+        shutil.copy2(BASH_BINARY, claude_binary)
     return claude_binary
 
 

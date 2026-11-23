@@ -5,6 +5,7 @@ from pathlib import Path
 
 from tests.utils.constants import (
     BUSY_EXIT_CODE,
+    EXEC_AFTER_GRANDCHILD_COMMAND,
     FIRST_PANE_ID,
     GRANDCHILD_COMMAND,
     INTEGRATE_LOCK,
@@ -17,6 +18,7 @@ from tests.utils.constants import (
     WAIT_FOR_MARKER_COMMAND,
 )
 from tests.utils.helpers import (
+    REQUIRES_PROCESS_LIMITS,
     FakeHerdr,
     Session,
     collect_output,
@@ -146,6 +148,7 @@ class TestRun:
         assert collect_output(running).returncode == 0
         assert finished.exists()
 
+    @REQUIRES_PROCESS_LIMITS
     def test_run_does_not_stop_its_command_when_it_cannot_open_the_files_it_needs_to_check_on_its_owner(
         self, first_session: Session, tmp_path: Path
     ):
@@ -292,7 +295,8 @@ class TestRunInsideAcquiredLock:
         first_session.run("acquire", STACK_LOCK)
         holder_pid = first_session.record(STACK_LOCK)["holder_pid"]
         pid_file = tmp_path / "grandchild-pid"
-        running = first_session.popen("run", STACK_LOCK, "--", "sh", "-c", GRANDCHILD_COMMAND.format(pid_file=pid_file))
+        command = EXEC_AFTER_GRANDCHILD_COMMAND.format(pid_file=pid_file)
+        running = first_session.popen("run", STACK_LOCK, "--", "sh", "-c", command)
         grandchild_pid = read_pid_file(pid_file)
         wait_for_command_to_run_under(first_session, STACK_LOCK)
 

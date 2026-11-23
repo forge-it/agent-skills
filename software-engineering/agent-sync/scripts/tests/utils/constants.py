@@ -51,6 +51,9 @@ INHERITED_ENVIRONMENT_PREFIXES = ("AGENT_SYNC_", "HERDR_")
 
 WAIT_FOR_MARKER_COMMAND = "while [ ! -f {marker} ]; do sleep 0.05; done"
 GRANDCHILD_COMMAND = "sleep 600 & echo $! > {pid_file}; wait"
+# A shell waiting on its background child can finish with status 0 when SIGTERM reaches the child first, on
+# dash and on bash 3.2 alike, so the foreground process becomes one that SIGTERM kills outright.
+EXEC_AFTER_GRANDCHILD_COMMAND = "sleep 600 & echo $! > {pid_file}; exec sleep 600"
 SIGTERM_IGNORING_GRANDCHILD_COMMAND = "trap '' TERM; sleep 600 & echo $! > {pid_file}; wait"
 SLOW_TERMINATION_COMMAND = (
     "trap 'sleep 1; touch {gone_marker}; exit 0' TERM; touch {ready_marker}; while true; do sleep 0.1; done"

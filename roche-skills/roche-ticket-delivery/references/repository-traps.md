@@ -47,7 +47,9 @@ orchestrator's Docker session (SKILL.md, *Working rules*): one session at a time
 - **Focused commands (writers and investigators):** the Rust agents iterate with
   `cargo check`, `cargo clippy` and focused `cargo test -p <crate> [--test <target>] [<filter>]`.
   Run them in the builder image, from the root of the tree under test, under the lock:
-  `DOCKER_DEFAULT_PLATFORM=linux/amd64 docker run --rm -v "$PWD":/src -v rdnx-cargo-registry:/root/.cargo/registry -v <target volume>:/src/target -w /src rdnx-builder:dev cargo <subcommand> --locked <args>`.
+  `DOCKER_DEFAULT_PLATFORM=linux/amd64 docker run --rm -v "$PWD":/src -v rdnx-cargo-registry:/root/.cargo/registry -v <target volume>:/src/target -v "$PWD/.cargo-home/config.toml":/root/.cargo/config.toml:ro -v "$PWD/.cargo-home/credentials.toml":/root/.cargo/credentials.toml:ro -w /src rdnx-builder:dev cargo <subcommand> --locked <args>`
+  (the mounts of `builder-run` in `just/quality-gate.just`: `.cargo-home/` points cargo at Artifactory; it is
+  git-ignored, so a linked worktree copies it from the main checkout first).
   `rdnx-builder:dev` must exist, so run the gate once first. The full gate still runs once
   before the worker reports.
 - **Formatter (writers only):** the same `docker run` line ending in `cargo fmt --all`,

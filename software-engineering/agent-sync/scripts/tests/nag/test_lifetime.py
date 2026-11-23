@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from tests.utils.helpers import Session, process_is_running, wait_until
+from tests.utils.helpers import Session, process_is_running, read_descriptor_target, wait_until
 
 
 class TestNagLifetime:
@@ -20,7 +20,7 @@ class TestNagLifetime:
 
         loop_pid = nag_session.nag_record("design")["nagger_pid"]
         assert os.getsid(loop_pid) == loop_pid
-        assert Path(f"/proc/{loop_pid}/fd/1").resolve() == Path(os.devnull)
+        assert read_descriptor_target(loop_pid, 1) == Path(os.devnull)
 
     def test_nag_without_an_owner_process_is_an_environment_error(self, nag_session: Session):
         failed = nag_session.run(
