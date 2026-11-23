@@ -4,7 +4,7 @@ description: Use when shipping a Syneto Central release after its release notes 
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.8"
+  version: "0.0.9"
 ---
 
 # Syneto Release Promote Skill
@@ -12,9 +12,14 @@ metadata:
 ## Purpose
 
 Ship a Syneto Central release, in one of two ways (see **Two Ways to Promote**):
-merge the dev branch (`central-2.10`) into the prod branch (`central-2.9`) across
-every contributing repository and push, or roll prod onto `central-2.10` and dev
-onto a newly cut `central-2.11`.
+merge the dev branch into the prod branch across every contributing repository and
+push, or roll prod onto the dev branch and dev onto a newly cut branch.
+
+Branch names move every release. Below, `central-N` is the dev branch being
+promoted, `central-N-1` the current prod branch and `central-N+1` the next one. For
+example, prod / dev / next is 2.9 / 2.10 / 2.11, and the release after that is
+2.10 / 2.11 / 2.12. Concrete names in
+the merge rules further down are examples.
 
 This is the step **after** the release notes entry has been published and accepted.
 It is deliberately a separate skill from `syneto-release-notes`, which is read-only
@@ -25,21 +30,21 @@ that trigger CI/CD.
 
 | | Merge promotion | Rollover promotion |
 |---|---|---|
-| What moves | `central-2.10` is merged into `central-2.9` in every contributing repository | Prod switches to `central-2.10`; `central-2.11` is cut for dev |
-| Prod runs afterwards | `:central-2.9` images, rebuilt with the dev content | `:central-2.10` images, already built |
-| Dev runs afterwards | `central-2.10`, unchanged | `central-2.11` |
-| Changes | Merge commits pushed to the prod branches | New branches, two `infra/central` variables, the infra prod merge, two deploys |
+| What moves | `central-N` is merged into `central-N-1` in every contributing repository | `central-N+1` is cut; dev switches to it, then prod switches to `central-N` |
+| Prod runs afterwards | `:central-N-1` images, rebuilt with the dev content | `:central-N` images, already built |
+| Dev runs afterwards | `central-N`, unchanged | `central-N+1` |
+| Changes | Merge commits pushed to the prod branches | New branches, two `infra/central` variables, the infra prod merge, two deploys (dev first) |
 | Procedure | `promote.sh`, the rest of this file | [rollover.md](rollover.md) |
 
 The operator chooses. When the ask names one ("merge dev into prod" → merge;
-"move prod to 2.10", "I need central-2.11" → rollover), use it. Otherwise ask which,
+"move prod to central-N", "I need central-N+1" → rollover), use it. Otherwise ask which,
 before gathering any plan. Never switch from one way to the other mid-release
-without asking: the merge's `central-2.9` images and the rollover's `central-2.10`
+without asking: the merge's `:central-N-1` images and the rollover's `:central-N`
 images can be the same code, but they are different tags, deployed by different
 steps.
 
 R1 (notes first), R10 (green pipelines) and **Watching the Pipelines** apply to both
-ways. The other rules describe the merge. Rollover step 4 is itself one ordinary
+ways. The other rules describe the merge. Rollover step 5 includes one ordinary
 merge of `central` through `promote.sh`, so Usage, the confirm gate, exit codes,
 R2–R9 and Failure Recovery cover that run.
 
@@ -52,7 +57,7 @@ Do **not** apply:
 - Before the release notes entry exists and has been accepted (see R1)
 - To promote a single repository as a one-off — that is ordinary git, not a release
 - To the `central` IaaC repository on its own; it runs on a separate cadence
-  (rollover step 4 merges it as part of a release, which is not "on its own")
+  (rollover step 5 merges it as part of a release, which is not "on its own")
 
 ## Ordering Is Not Negotiable
 
@@ -65,9 +70,9 @@ can no longer be described from git: `acquire.sh` will report every range as 0 a
 with "already merged". The Confluence page is titled "Release notes - **plan**"
 precisely because it is written before the release ships.
 
-A rollover leaves the range intact, but cutting `central-2.11` flips the derived
-pair to `central-2.10..central-2.11`. Notes written afterwards need the explicit
-pair (`acquire.sh central-2.9 central-2.10`).
+A rollover leaves the range intact, but cutting `central-N+1` flips the derived
+pair to `central-N..central-N+1`. Notes written afterwards need the explicit pair
+(`acquire.sh central-N-1 central-N`, for example `acquire.sh central-2.9 central-2.10`).
 
 If you find yourself asked to write release notes for something already
 merge-promoted, stop and say so — the ranges are gone and reconstructing them means digging merge
@@ -90,7 +95,7 @@ Mode flags are mutually exclusive — `--check --push` is an error, not a push.
 
 | Variable | Effect |
 |---|---|
-| `SYNETO_PROMOTE_CONFIRM` | Must equal the dev branch name or `--push` refuses. The consent gate. |
+| `SYNETO_PROMOTE_CONFIRM` | Must equal the dev branch name or `--push` refuses. The consent gate. In a rollover that is `central-N+1` once it is cut (rollover step 5 item 4). |
 | `SYNETO_PROJECTS_ROOT` | Checkout root; defaults to `/home/cristi/Projects`. |
 | `SYNETO_SKIP_FETCH` | Preflight only. **Refused** in `--merge`/`--push`. |
 | `SYNETO_PROMOTE_PAIR` | `"<prod> <dev>"`; validated for shape and ordering. |
@@ -251,7 +256,7 @@ sends the operator down a recovery path that does nothing.
 Pushing the prod branch starts one GitLab pipeline per repository; it is the
 pipeline, not the push, that builds and publishes the image that gets deployed. In a
 rollover, the pipelines are step 3's new-branch pipelines and the deploys in steps 4
-and 6. A
+(dev) and 5 (prod). A
 `DONE` line from `promote.sh` means the merge reached origin — nothing more. After
 every `--push`, watch each promoted repository's pipeline to completion (see
 **Watching the Pipelines**) and report the release as shipped only when all of them
@@ -381,5 +386,7 @@ auditable merge commit and `git revert -m 1 <merge>` works. Revert as a new comm
 | One watch loop over every pipeline, reporting only at the end | A failure sits unseen until the slowest pipeline finishes |
 | Retrying a failed job without checking tree identity against the dev tip | Retries a real defect into green |
 | Picking merge or rollover without the operator's choice | Ships to prod under the wrong tag, through the wrong steps |
-| Rollover: dropping hotfixes that are on `central-2.9` but not on `central-2.10` | Prod loses fixes it already had |
-| Rollover: switching dev before every `:central-2.11` image exists | The dev deploy cannot pull the missing images |
+| Rollover: dropping hotfixes that are on `central-N-1` but not on `central-N` | Prod loses fixes it already had |
+| Rollover: switching dev before every `:central-N+1` image exists | The dev deploy cannot pull the missing images |
+| Rollover: switching prod before dev is deployed and checked | A problem the dev deploy would have shown reaches prod |
+| Rollover: reusing branch names from an earlier release | Cuts, switches or confirms the wrong branches; read them from the variables each time |
