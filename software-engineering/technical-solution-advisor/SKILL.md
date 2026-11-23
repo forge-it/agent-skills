@@ -217,7 +217,9 @@ you answer its question or stop it.
 
 Everything else gets a verdict without the operator, with its confidence stated. Never nag for
 routine dispatch, progress, or a gate the project's standing instructions already cover: tell the
-asking session to act on the instruction.
+asking session to act on the instruction. Deleting a session's own scratch in `/tmp` or `/dev/shm`
+is one of these (**agent-fleet-orchestration**, *Scratch Cleanup*): tell the session to `rm -rf` it
+itself, never to ask the operator or hand them the command.
 
 ## Technical coordinator
 

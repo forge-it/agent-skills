@@ -298,6 +298,24 @@ motion to avoid it: no second run of a test another owner is running, no scope
 the operator did not authorize, no polling for activity — and a dispatched
 worker is not a verified result.
 
+## Scratch Cleanup
+
+On the operator's machines `/tmp` and `/dev/shm` are tmpfs: whatever a run leaves there holds RAM
+until someone deletes it, and forgotten build and test directories have cost gigabytes. Deleting
+the scratch this run created is part of the run and a standing instruction (operator, 2026-11-23):
+you do it, you never ask the operator to run it or approve it.
+
+- Name what you create so it is recognisably this run's (`mktemp -d /tmp/<lane>.XXXXXX`, a
+  `/dev/shm/<lane>` folder) and note each path in the run's record.
+- Brief every worker to delete its own scratch before it returns. Delete what a worker left when
+  you accept its result, and the rest of a lane's scratch when that lane ends, not at the end of
+  the whole task.
+- Delete with `rm -rf <one named path>`, one path per command: the permission rules allow exactly
+  that, and `find … -delete` stays denied. Never a glob over `/tmp` or `/dev/shm`, never those
+  directories themselves.
+- Leave a path you did not create, or one a process still holds (`lsof +D <path>` prints
+  something): another lane may be using it. Tell its owner instead.
+
 ## Escalation
 
 Sort a decision before asking anyone; most never reach the operator:
