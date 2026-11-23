@@ -56,18 +56,30 @@ before prod moves. A dev problem stops the rollover before prod is touched.
 
 Gather all of this and show it before anything changes:
 
-1. **Branch names.** Read the current values of both variables (item 8). Anchor
-   on prod: its value is `central-N-1`, and `central-N` / `central-N+1` are the
-   next two minor versions. The state then tells where the rollover stands:
+1. **Branch names.** Read the current values of both variables (item 8) and list
+   the `central-*` branches in GitLab in version order. Anchor on prod: its value
+   is `central-N-1`, and `central-N` is the lowest branch above it. If a branch
+   already exists above `central-N`, that branch is `central-N+1`, cut by an
+   earlier run, possibly under a name the operator chose. Otherwise `central-N+1`
+   is the name to propose for the cut: the next minor version after `central-N`.
+   The state then tells where the rollover stands:
    - Dev on `central-N` and no `central-N+1` branch: a fresh start.
    - Dev on `central-N` and `central-N+1` exists: resume at step 3, which skips
      branches already at the planned SHA, or at step 4.
    - Dev on `central-N+1`: resume at step 5.
+   - Any other combination: stop and ask.
 
-   A prod value of `central-N` with dev on `central-N+1` means step 5 item 2 has
-   run: anchor N on dev instead (`central-N+1` = dev's value) and resume at step 5
-   item 3. Check that the two highest `central-*` branches in GitLab fit the state.
-   Any other combination: stop and ask.
+   A rollover that stopped after step 5 item 2 (prod already on the old dev branch,
+   dev on the new one, nothing above it) looks exactly like a fresh start of the
+   next release. When prod and dev sit on adjacent branches with nothing above
+   them, ask the operator which it is. If it is a resume, anchor on dev instead
+   (`central-N+1` = dev's value) and resume at step 5 item 3.
+
+   Print all three names in the plan, for example "prod `central-2.9`, dev
+   `central-2.10`, will cut `central-2.11`". The operator's go-ahead confirms them.
+   If they name a different next branch, such as `central-3.0` for a major
+   version, use their name as `central-N+1` everywhere below. The name must have
+   the form `central-<major>.<minor>`, which is all the scripts recognize.
 2. **Projects to cut.** Every GitLab project with a `central-N` branch, read from
    GitLab and not from local clones. A project nobody has cloned still ships an
    image. List the candidates with
@@ -100,6 +112,7 @@ Gather all of this and show it before anything changes:
    pinned and does not move with the rollover.
 7. **Infra range and variables.** Run `promote.sh --check central`. It fetches,
    then prints `production-on-prem..dev-on-prem` with its tickets and preflight.
+   Record the `dev-on-prem` tip SHA (`git -C <root>/central rev-parse origin/dev-on-prem`).
    Then diff the variable reads between the two branches, compare them with the
    `infra/central` variables, and list any variable prod does not define:
    - A missing `os.environ[...]` or `__get_required_envvar(...)` read fails the prod
@@ -169,6 +182,8 @@ rollover here: prod has not moved. To undo, set `CURRENT_RELEASE_BRANCH` back to
    tip differs from the plan, or its pipeline isn't green, go back to the operator
    with the new commits. Record each `:central-N` image's Harbor digest. Those are
    the digests prod must end up running.
+
+   The infra range is re-checked in item 4, right before the push.
 2. **Set the prod variable and read it back:**
    ```bash
    glab api -X PUT "projects/infra%2Fcentral/variables/CURRENT_RELEASE_BRANCH_PROD" -f value=<N>
@@ -182,7 +197,19 @@ rollover here: prod has not moved. To undo, set `CURRENT_RELEASE_BRANCH` back to
    glab api -X POST "projects/infra%2Fcentral/variables" -f key=<KEY> -f value=<value> -f protected=true
    ```
    A value that only prod should see goes in as `<KEY>_PROD`.
-4. **Bring infra prod up to date:**
+4. **Bring infra prod up to date.** First, right before the push, re-check the
+   infra range against plan item 7:
+   ```bash
+   git -C <root>/central fetch --refmap= origin '+refs/heads/dev-on-prem:refs/remotes/origin/dev-on-prem' \
+     && git -C <root>/central log --oneline <tip from plan item 7>...origin/dev-on-prem
+   ```
+   The fetch must succeed. A failed fetch leaves the old ref, the log comes back
+   empty and looks like an all-clear. If the log lists any commit, show it to the
+   operator and wait for their answer before pushing. Otherwise a commit that
+   landed on `dev-on-prem` after the plan ships to prod without anyone having seen
+   it. The three dots also show commits removed by a rewrite of the branch.
+
+   Then push:
    ```bash
    SYNETO_PROMOTE_CONFIRM=<N+1> promote.sh --push central
    ```

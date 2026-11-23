@@ -4,7 +4,7 @@ description: Use when shipping a Syneto Central release after its release notes 
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.0.9"
+  version: "0.0.10"
 ---
 
 # Syneto Release Promote Skill
