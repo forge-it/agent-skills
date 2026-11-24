@@ -321,6 +321,10 @@ you do it, you never ask the operator to run it or approve it.
 - Delete with `rm -rf <one named path>`, one path per command: the permission rules allow exactly
   that, and `find … -delete` stays denied. Never a glob over `/tmp` or `/dev/shm`, never those
   directories themselves.
+- Write that path literally, never through a bare shell variable (`rm $S/*.bak`): Claude Code's
+  built-in "possibly-empty variable path" check prompts the operator on it whatever the allow
+  rules say, and only a literal path matches them. When a variable is unavoidable, use
+  `"${S:?}"`. Put the same rule in every worker brief.
 - Leave a path you did not create, or one a process still holds (`lsof +D <path>` prints
   something): another lane may be using it. Tell its owner instead.
 
