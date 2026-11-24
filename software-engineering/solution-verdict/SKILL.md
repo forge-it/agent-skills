@@ -27,7 +27,7 @@ operator names.
 | Left out | Value |
 |---|---|
 | the model | `opus`: the operator's standing choice for this lens (roche-mr-review's model table), which wins over the global reviewer default |
-| the effort | `medium` |
+| the effort | `high` (`medium` is the only sanctioned lower setting) |
 
 Pass both explicitly on the dispatch. A model or effort named here wins over the global
 defaults, because the operator named it.

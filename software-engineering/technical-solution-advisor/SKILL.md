@@ -51,7 +51,8 @@ consumes the behaviour. Look in the code and docs first.
 
 **Explorers.** When the evidence splits into two or more independent questions that each need many
 reads, dispatch the Explore agent in parallel in one message, one question each, passing `model` and
-`effort` explicitly (Sonnet 5.5, `xhigh`). Brief each with:
+`effort` explicitly (Sonnet 5.5, `high`). The advisor itself runs on Opus 5.5 at `high`
+(`medium` for small questions). Brief each with:
 
 - a neutral factual question, no options and no hypothesis ("where is the registry lock taken and
   released in `submit()`?", never "confirm the lock is the cause")

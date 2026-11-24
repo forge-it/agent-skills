@@ -211,9 +211,17 @@ Model resolution on a dispatch runs: the `model` you pass → the agent
 definition's `model:` line → `CLAUDE_CODE_SUBAGENT_MODEL` → the session's own
 model. Agent definitions carry no `model:` line, by convention, so a dispatch
 that names no model lands on `CLAUDE_CODE_SUBAGENT_MODEL` — the operator's
-default worker tier, `sonnet`: cheap and good enough for implementation,
-fixing, review, verification, and exploration alike. **Do not name a model on
-an ordinary dispatch**; naming one overrides the operator's default.
+default worker tier, `sonnet` (effort `high`). The operator's routing:
+
+| Role | Model | Effort |
+|------|-------|--------|
+| Implementor, fixer, test writer, explorer | `sonnet` (default, name nothing) | `high` |
+| Code reviewer | `haiku` | `xhigh` |
+| Code reviewer for a risky change (concurrency, auth, schema, migration, public API, wire format) or a security review | `opus` | `medium` |
+| Refuter / finding verifier | `haiku` | `max` |
+
+Pass `model` and `effort` explicitly on every reviewer and refuter dispatch;
+leave coders on the default.
 
 **The selector is the choice; the label a worker reports is not.** When a
 worker names a different model for itself than the selector it was dispatched
@@ -227,11 +235,11 @@ when there is nobody to tell:
 
 | Departure | When |
 |-----------|------|
-| `opus` on one dispatch | A cheap miss would be expensive and hard to see: a concurrency or authorization defect to localize; a verifier ruling on a finding whose fix is hard to reverse — schema, migration, public API, wire format; the fixer applying such a fix |
+| `opus` `medium` on one non-review dispatch | A cheap miss would be expensive and hard to see: a concurrency or authorization defect to localize; the fixer applying a fix that is hard to reverse — schema, migration, public API, wire format |
 | `fable` | **Only when the operator explicitly asks for it on this task.** It is reserved for the rare work they name; the stakes as you read them are never a reason |
 
-The orchestrator itself runs on the Opus tier or above — the session's choice,
-not this skill's.
+The orchestrator itself runs on Opus 5.5 at `medium` (`low` for mechanical
+runs) — the session's choice, not this skill's.
 
 **Commit vs no-commit:** default to the **`-no-commit`** variant so the operator
 reviews the dirty worktree before anything is committed. Use commit variants only
