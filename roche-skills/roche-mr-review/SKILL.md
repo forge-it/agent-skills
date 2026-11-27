@@ -4,7 +4,7 @@ description: Use when the operator asks to review a GitLab merge request on code
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.3.0"
+  version: "0.3.1"
 ---
 
 # Roche MR Review
@@ -280,10 +280,11 @@ Give him the file's path; he sends it himself if he wants to. Sending over Micro
 will be added to this stage later.
 
 When he closes the review, remove the worktree with
-`git -C <repository> worktree remove <run>/wt`, and any build cache the repository's entry
-says the gate created for this run. Tell him of any shared image the gate rebuilt from the
-MR's files (the entry names them). Keep the run directory: its notes and `posted.json`
-still allow later edits.
+`git -C <repository> worktree remove --force <run>/wt` (the review never edits it, and
+`--force` also takes any untracked file the gate left that is not gitignored), and any
+build cache the repository's entry says the gate created for this run. Tell him of any
+shared image the gate rebuilt from the MR's files (the entry names them). Keep the run
+directory: its notes and `posted.json` still allow later edits.
 
 ## Stack table
 

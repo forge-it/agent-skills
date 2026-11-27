@@ -16,12 +16,12 @@ description: >-
   (Mode D is the sanctioned single-writer exception), Edit/Write failing
   outside the agent CWD, colliding diffs, shared Docker/e2e infrastructure
   clobbered by concurrent test runs,
-  merged worktrees left consuming disk, and force-removed worktrees losing
-  uncommitted work.
+  merged, cherry-picked, or abandoned worktrees left consuming disk, and
+  force-removed worktrees losing unintegrated source edits.
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.4"
+  version: "0.0.5"
 ---
 
 # Parallel Worktrees
@@ -176,7 +176,12 @@ Do not use isolation: "worktree" for this worker or any nested worker.
 You are the single writer in this worktree: do not dispatch any worker
 that edits files. Read-only explorers are the only dispatch permitted.
 The orchestrator checkout and other worktrees are off-limits.
+Build only into the project's standard output directories (target/, dist/,
+node_modules/, .venv/); never create an extra untracked build directory or
+virtualenv.
 ```
+
+Put that last line in every Mode C prompt too.
 
 Mode B works because `.claude/worktrees/<slug>` is still under the
 orchestrator repository root, so absolute paths there are valid for file tools
@@ -221,7 +226,10 @@ Keep all agent worktrees under `.claude/worktrees/` unless the operator asks
 otherwise, and confirm the repository ignores them. If `.gitignore` does not
 already cover `.claude/worktrees/`, add that entry before creating the first
 worktree; otherwise every worktree shows up as untracked noise in every other
-checkout.
+checkout. A worktree the session creates anywhere else — a sibling directory
+such as `<repo>-<ticket>`, a path under `/tmp` — is still the session's to
+clean up under Cleanup, the moment its work lands or is abandoned;
+`git worktree list` shows it whatever its path.
 
 ## Create Worktrees (Mode B only)
 
@@ -260,6 +268,8 @@ Worker rules:
 - Do not edit the main checkout or another worker's worktree.
 - Do not run `git stash` for handoff. Stashes are easy to confuse across linked worktrees.
 - Do not commit, merge, delete branches, remove worktrees, or push unless explicitly instructed.
+- Build only into the project's standard output directories; never create an extra untracked
+  build directory (a second `target-<name>/`, an alternate virtualenv).
 
 Orchestrator rules:
 
@@ -317,6 +327,11 @@ just <component>-env        # e.g. 'just core-env', 'just web-env'
 # If the project has an npm-managed frontend in a subdirectory:
 [ -d <frontend-dir>/node_modules ] || npm --prefix <frontend-dir> install
 ```
+
+Build into the project's standard output directories (`target/`, `dist/`,
+`node_modules/`, `.venv/`). Never create an extra untracked build directory
+inside a worktree (a second `target-<name>/`, an alternate virtualenv): each
+one duplicates gigabytes and shows up as untracked clutter at cleanup.
 
 Do not copy local secrets into every worktree by default. Use the
 template-generated env files unless the task specifically requires
@@ -490,61 +505,114 @@ every merge. If those suites fail at that stage, the worker worktrees are
 already removed; report the failure and the state of the integrated branch to
 the operator, and do not attempt an automatic rollback.
 
-After a worker branch is merged into the target branch, whether the target is
-`main` or a feature branch, immediately remove that worker's worktree and
-delete its worker branch before returning to monitor the remaining workers.
-Treat merge, validation, and cleanup as one integration unit; do not leave
-merged worktrees around waiting for a separate operator cleanup request.
+After a worker's work lands on the target branch — merged, cherry-picked,
+squashed, rebased, or applied as a patch, whether the target is `main` or a
+feature branch — or is deliberately discarded, immediately remove that
+worker's worktree and delete its worker branch before returning to monitor
+the remaining workers. Treat merge, validation, and cleanup as one integration
+unit; do not leave finished worktrees around waiting for a separate operator
+cleanup request. This holds for every `isolation: "worktree"` (Mode C)
+`agent-*` worktree too: the orchestrator that dispatched it owns its removal.
 
 ## Cleanup
 
 Mode D creates no linked worktree, so it has no worktree cleanup step. Do not
 run `git worktree remove` as part of a Mode-D completion. Everything below
-applies to Modes B and C.
+applies to Modes B and C, and to any other worktree the session created,
+wherever it lives.
 
-The timing rule lives in Integrate: merge, validation, and cleanup are one
-integration unit, and a worktree whose changes are integrated or deliberately
-discarded is removed immediately, without waiting for the operator to ask.
-This section covers the removal mechanics. Each worktree carries its own
-build artifacts — a Rust `target/` directory, `node_modules`, a virtualenv —
-which can consume tens of gigabytes per worktree, so keeping finished
-worktrees around wastes disk quickly.
+The timing rule lives in Integrate: a worktree whose work landed or was
+deliberately discarded is removed immediately, without waiting for the
+operator to ask. Operator preference: force-remove a verified worktree rather
+than leave it on disk. Each worktree carries its own build and dependency
+artifacts — `target/`, `node_modules/`, `.venv/`, build output — worth tens of
+gigabytes, so one left behind is expensive whatever the language.
 
-Never delete a linked worktree with `rm -rf`. Inspect first:
+### Verify, then force-remove
+
+Check three things, from the main checkout:
+
+1. **The work landed or was abandoned.** Any one of these is enough:
+   - `git merge-base --is-ancestor <worker-branch> <target>` succeeds;
+   - `git cherry <target> <worker-branch>` prints no `+` line (every commit
+     has a patch-equivalent on the target, as after a cherry-pick or rebase);
+   - you integrated it yourself this session by squash, cherry-pick, or patch,
+     and the integrated tree passed validation;
+   - the forge shows its pull or merge request merged, and the branch tip
+     equals the head commit the forge merged (a squash merge done there);
+   - every file the branch touched already matches the target (a squash or
+     cherry-pick done earlier, by anyone):
+     `git diff --quiet <target> <worker-branch> -- $(git diff --name-only
+     $(git merge-base <target> <worker-branch>) <worker-branch>)` succeeds;
+   - the work was deliberately discarded or superseded.
+
+   A failed ancestry check alone never means the work is missing: after a
+   cherry-pick, squash, or rebase it fails although the work is on the target.
+   Try the other evidence before stopping.
+2. **No unintegrated source edits.** A branch with no commits passes check 1
+   trivially, so for an uncommitted worker this check is the only guard. Read
+   `git -C <worktree-path> status --short --untracked-files=all`. A modified,
+   deleted, or untracked source file blocks removal unless its content is
+   already where the work landed:
+   - on the target: `git -C <worktree-path> show <target>:<path> 2>/dev/null
+     | cmp -s - <worktree-path>/<path>` succeeds (for a deletion,
+     `git -C <worktree-path> cat-file -e <target>:<path>` fails);
+   - in the checkout a patch was applied to:
+     `cmp -s <worktree-path>/<path> <checkout>/<path>` succeeds.
+
+   Not `git diff <target> -- <path>`: it skips untracked files and reports a
+   new file as matching. Untracked or ignored build, dependency, env, and log
+   artifacts — `target*/`, `build/`, `dist/`, `node_modules/`, `.venv/`,
+   `.env`, scratch logs — never block removal.
+3. **Nothing still uses the path.** No live agent session owns it (the worker
+   returned or was stopped), and no process or container has it as working
+   directory or bind mount:
+
+   ```bash
+   lsof -d cwd 2>/dev/null | grep -F "<worktree-path>"
+   docker ps --no-trunc --format '{{.Names}} {{.Mounts}}' | grep -F "<worktree-path>"
+   ```
+
+   Rebind or stop a shared stack that mounts it before removing.
+
+Then remove it, whatever untracked artifacts it still holds:
 
 ```bash
-git worktree list --porcelain
-git -C <worktree-path> status --short
-```
-
-A worker integrated by patch leaves its worktree dirty — the changes were
-extracted into the patch, not committed. Once the applied patch has been
-validated in the orchestrator checkout, discard the worker copy so removal
-can proceed without `--force`:
-
-```bash
-git -C <worktree-path> reset --hard
-git -C <worktree-path> clean -fd
-```
-
-If the worktree is clean and its branch is merged or no longer needed, remove
-the actual worktree path and branch:
-
-```bash
-git worktree remove <worktree-path>
-git branch -d <worker-branch>
+git worktree unlock "<worktree-path>" 2>/dev/null || true
+git worktree remove --force "<worktree-path>"
 git worktree prune
+git branch -D "<worker-branch>" 2>/dev/null || true
 ```
 
-If `git worktree list` marks a worktree `locked`, the worktree has a lockfile
-that blocks removal. For auto-isolation worktrees created by
-`isolation: "worktree"`, the lock is held while the agent session is alive;
-for worktrees locked manually with `git worktree lock`, no process may be
-involved at all. In either case, do not unlock or force-remove it unless the
-operator confirms the owning session (if any) is dead and the changes are
-disposable. To clean up a stale auto-isolation worktree from a stopped/killed
-agent, the lockfile is at `.git/worktrees/<id>/locked` — once the agent PID is
-gone, `git worktree remove --force <path>` works.
+If `remove --force` itself fails (root-owned files a container wrote, say),
+report the error and the path; do not fall back to `rm -rf`.
 
-Use `git worktree remove --force` and `git branch -D` only after preserving or
-deliberately discarding every needed diff.
+`unlock` is needed because `isolation: "worktree"` worktrees are locked, and a
+single `--force` refuses a locked worktree. `--force` removes untracked and
+ignored artifacts with the directory; plain `git worktree remove` refuses
+over any untracked file that is not gitignored (an ad-hoc `target-x/`, a
+stray log) and leaves the whole tree behind. `-D` because a squashed or
+cherry-picked branch never looks merged to git. Where a project skill forbids
+`git worktree prune` (it can touch other sessions' entries), skip it:
+`remove` already drops this worktree's own entry.
+
+Never delete a linked worktree with `rm -rf`: outside the few scratch paths
+the permission rules allow, the harness denies it; everywhere it skips the
+checks above and leaves the worktree registered (a dangling, possibly locked
+entry). `git worktree remove --force` deletes the same files through git.
+
+Stop and report, instead of removing, when check 1 finds no evidence the
+work landed or was abandoned, check 2 finds an unintegrated source edit, or
+check 3 finds a live owner. Nothing else keeps a finished worktree on disk.
+An `agent-*` tree's lock belongs to the subagent you dispatched: once that
+subagent has returned or been stopped, the lock is stale and the tree is yours
+to remove. What is not yours: a worktree neither you nor a worker you
+dispatched created, or one locked by a live session that is not your worker.
+
+### Parking a worktree
+
+When a worktree must stay on disk without active work (on hold, waiting on an
+operator decision, an open pull request), clear its heavy caches first:
+`cargo clean`, or the project's clean recipe (`just clean`, `make clean`,
+`npm run clean`). Not `git clean -X`: it also deletes ignored local files
+such as `.env`.

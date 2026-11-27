@@ -4,7 +4,7 @@ description: Use when the operator asks to review a GitLab merge request on gitl
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.3.0"
+  version: "0.3.1"
 ---
 
 # Syneto MR Review
@@ -203,8 +203,10 @@ In auto mode the permission classifier may refuse to open the conversation, and 
 extension may not be connected at all. Either way the send cannot happen from here: tell him
 what blocked it and wait for him to allow it or reconnect, then send.
 
-When he closes the review, remove the worktree with `git -C <repository> worktree remove
-<run>/wt`. Keep the run directory: its notes and `posted.json` still allow later edits.
+When he closes the review, remove the worktree with `git -C <repository> worktree remove --force
+<run>/wt`: the review never edits it, and `--force` also takes any untracked file the gate left
+that is not gitignored. Keep the run directory: its notes and `posted.json` still allow later
+edits.
 
 ## Stack table
 

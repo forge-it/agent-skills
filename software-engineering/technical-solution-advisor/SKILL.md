@@ -4,7 +4,7 @@ description: "Use when the operator asks how to solve a ticket, bug, technical i
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.8.0"
+  version: "0.8.1"
 ---
 
 # Technical Solution Advisor
@@ -220,7 +220,8 @@ Everything else gets a verdict without the operator, with its confidence stated.
 routine dispatch, progress, or a gate the project's standing instructions already cover: tell the
 asking session to act on the instruction. Deleting a session's own scratch in `/tmp` or `/dev/shm`
 is one of these (**agent-fleet-orchestration**, *Scratch Cleanup*): tell the session to `rm -rf` it
-itself, never to ask the operator or hand them the command.
+itself (a git worktree there: `git worktree remove --force`, per **parallel-worktrees-general**
+*Cleanup*), never to ask the operator or hand them the command.
 
 ## Technical coordinator
 

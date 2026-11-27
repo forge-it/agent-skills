@@ -68,16 +68,20 @@ change. When it does not apply cleanly, stop and tell him.
 
 Before removing anything, every path in
 `git -C <worktree> status --short --untracked-files=all` must appear in
-`git -C <repo> status --short --untracked-files=all`. Plain `--short` shows a new directory
-as one `?? dir/` line. A missing path means the patch left it out and the worktree holds its
-only copy: stop and tell him. This comparison is the validation that *Cleanup* asks for
-before it discards the worker copy.
+`git -C <repo> status --short --untracked-files=all`, except build, dependency, env and log
+artifacts (`target*/`, `build/`, `dist/`, `node_modules/`, `.venv/`,
+`.env`, logs), which never count. Plain
+`--short` shows a new directory as one `?? dir/` line. A missing path means the patch left
+it out and the worktree holds its only copy: stop and tell him. This comparison is
+*Cleanup*'s check 2 and stands in for its check-1 validation: the final gate runs after
+removal, below.
 
-Then discard the worker copy and remove it: `git -C <worktree> reset --hard`,
-`git -C <worktree> clean -fd`, `git -C <repo> worktree remove .claude/worktrees/<KEY>`,
+Then remove the worker copy: `git -C <repo> worktree unlock .claude/worktrees/<KEY>
+2>/dev/null || true`, `git -C <repo> worktree remove --force .claude/worktrees/<KEY>` (it
+takes the patched files and every build artifact with it),
 `git -C <repo> branch -d <KEY>-wt`, and `docker volume rm rdnx-target-<KEY>`. Never run
-`git worktree prune`, which **parallel-worktrees-general** *Cleanup* ends with: it touches
-other tickets' worktrees (SKILL.md, stage 11). The patch file stays in `<run>`.
+`git worktree prune`, which **parallel-worktrees-general** *Cleanup*'s removal block runs:
+it touches other tickets' worktrees (SKILL.md, stage 11). The patch file stays in `<run>`.
 
 Only then, under the Docker lock, dispatch the final-gate agent (SKILL.md, *Models*) in the
 main worktree. Its brief is the cycle Brief with the main worktree's commands in place of

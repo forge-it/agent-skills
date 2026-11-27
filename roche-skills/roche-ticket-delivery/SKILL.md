@@ -10,7 +10,7 @@ description: >-
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.1.2"
+  version: "0.1.3"
 ---
 
 # Roche Ticket Delivery
@@ -741,7 +741,11 @@ however stale it looks: another ticket's worktree, a review checkout, an entry g
 First prove nothing is lost:
 - the local branch tip must equal the `sha` field of
   `glab mr view <branch> -R <group>/<repo> -F json`, the commit GitLab merged
-- `git -C <path> status --short` must be empty in every checkout on that branch
+- `git -C <path> status --short --untracked-files=no` must be empty in every checkout on
+  that branch, and every `??` line of plain `--short` must be a build, dependency, env or log
+  artifact (`target*/`, `build/`, `dist/`, `node_modules/`, `.venv/`,
+  `.env`, a scratch log); an untracked source
+  file stops you like a tracked change does
 - for a linked worktree, list what still runs inside it, such as his terminal, his editor's
   language server or a container: `lsof -d cwd 2>/dev/null | grep -F "<worktree>"` and
   `docker ps --no-trunc --format '{{.Names}} {{.Mounts}}' | grep -F "<worktree>"`
@@ -749,7 +753,11 @@ First prove nothing is lost:
 When a check fails or a process shows up, stop and tell him what you found: never remove a
 tree from under his tools. Then, in this order:
 
-- a linked worktree: `git -C <repo> worktree remove .claude/worktrees/<KEY>`, then
+- a linked worktree, wherever it lives (`.claude/worktrees/<KEY>`, a sibling
+  `<repo>-<KEY>` directory, `/tmp`): `git -C <repo> worktree unlock <worktree> 2>/dev/null ||
+  true`, then `git -C <repo> worktree remove --force <worktree>` (`--force` takes the
+  untracked artifacts with it; plain `remove` refuses over any untracked file that is not
+  gitignored, or a modified tracked file, and leaves the tree behind), then
   `docker volume rm rdnx-target-<KEY>` when the worktree had its own target volume
 - a main checkout still on the work branch (the main-worktree choice, or after a
   merge-back): `git -C <repo> checkout <base>`, then `git -C <repo> pull --ff-only`. A main
@@ -862,7 +870,8 @@ Every dispatch that touches a repository carries:
   not at `HEAD`. When you still need another revision on disk (a bisect, a failure the
   brief does not list), add a temporary
   worktree with `git -C <repo> worktree add --detach .claude/worktrees/<name> <rev>` and
-  remove it with `git -C <repo> worktree remove` before you report. In rdnx, a temporary
+  remove it with `git -C <repo> worktree remove --force .claude/worktrees/<name>` before you
+  report. In rdnx, a temporary
   worktree has no generated fixtures: before running the gate there, run
   `DOCKER_DEFAULT_PLATFORM=linux/amd64 just test-adapter-fixtures` in it, and give it its own target volume
   `rdnx-target-<KEY>-<name>`, removed with `docker volume rm` together with the worktree. A

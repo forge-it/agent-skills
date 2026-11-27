@@ -71,12 +71,17 @@ When it does not apply cleanly, stop and tell him.
 
 Before removing anything, every path in `git -C <worktree> status --short --untracked-files=all`
 must appear in `git -C <repo> status --short --untracked-files=all` (plain `--short` shows a
-new directory as one `?? dir/` line). A missing path means the patch left it out and the
-worktree holds its only copy: stop and tell him. This comparison is the validation *Cleanup*
-asks for before it discards the worker copy.
+new directory as one `?? dir/` line), except build, dependency, env and log artifacts
+(`target*/`, `build/`, `dist/`, `node_modules/`, `.venv/`,
+`.env`, logs), which never count. A missing path
+means the patch left it out and the worktree holds its only copy: stop and tell him. This
+comparison is *Cleanup*'s check 2 and stands in for its check-1 validation: the gate runs
+after removal, below.
 
 Then remove the linked worktree and its branch as **parallel-worktrees-general** *Cleanup*
-describes (the patch is applied, and its file stays in `<run>`). Only then run the gate, and
+describes (the patch is applied, and its file stays in `<run>`), but skip its
+`git worktree prune`: it touches other tickets' worktrees (SKILL.md, stage 11). Only then
+run the gate, and
 any Docker-backed tier the plan schedules (under SKILL.md's Docker rule), once in the main
 worktree: while the linked worktree exists, central-api's Jest glob also
 collects `.claude/worktrees/<KEY>/build`. A red result goes into the stage 8 report as open:

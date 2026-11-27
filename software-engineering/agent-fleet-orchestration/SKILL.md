@@ -15,7 +15,7 @@ description: >-
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.0.8"
+  version: "0.0.9"
 ---
 
 # Agent Fleet Orchestration
@@ -260,6 +260,13 @@ grants a push, and never a merge into a shared branch.
   default remote, wrong whenever the work builds on local commits. Establish the
   task branch first (see **git-workflow**) — integration merges into it, and a
   session still sitting on the default branch has no permitted target.
+  **Every worktree your workers ran in is yours to remove** — each
+  `isolation: "worktree"` `agent-*` tree, each worktree you created, wherever
+  it lives (`.claude/worktrees/`, a sibling `<repo>-<ticket>` directory,
+  `/tmp`). Remove it the moment you merge, cherry-pick, squash, apply as a patch, or discard its
+  work, with the verify-then-force-remove steps in
+  **parallel-worktrees-general** *Cleanup*. A failed `is-ancestor` check after
+  a cherry-pick or squash is not a reason to keep it.
 - **A new phase already in scope, where worktrees are the answer** (the
   gate's or the mandate's) → new workers in **fresh worktrees**, one writer per
   lane, settled when the phase is planned. A worker stays pinned to the
@@ -325,6 +332,9 @@ you do it, you never ask the operator to run it or approve it.
   built-in "possibly-empty variable path" check prompts the operator on it whatever the allow
   rules say, and only a literal path matches them. When a variable is unavoidable, use
   `"${S:?}"`. Put the same rule in every worker brief.
+- A git worktree or clone under `/tmp` is scratch too. Remove a worktree with
+  `git worktree remove --force`, not `rm -rf` (**parallel-worktrees-general**
+  *Cleanup*); delete a plain clone like any other scratch path.
 - Leave a path you did not create, or one a process still holds (`lsof +D <path>` prints
   something): another lane may be using it. Tell its owner instead.
 

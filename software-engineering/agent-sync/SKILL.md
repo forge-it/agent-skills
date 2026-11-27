@@ -9,7 +9,7 @@ description: >-
 license: MIT
 metadata:
   author: cristian.ciortea@syneto.eu
-  version: "0.2.1"
+  version: "0.2.2"
 ---
 
 # Agent Sync
@@ -59,7 +59,7 @@ departures. Everything else in those skills stands.
 | parallel-worktrees-general | Mode A (orchestrator edits) and Mode D (worker in the current checkout) | off: nobody edits the shared checkout outside a unit; resolving a merge conflict inside a unit is the only direct edit |
 | parallel-worktrees-general | Mode B bases a worktree on `HEAD` | `git fetch`, then base it on `origin/main`: the shared `HEAD` may carry another session's unpushed merge |
 | parallel-worktrees-general | never rebase a running worker | a running worker may rebase its own worktree onto `origin/main` when told to; once its task's pull request is open, only at the Rebase points |
-| parallel-worktrees-general | a handoff is merged at once, and its worktree removed in the same unit | pull request: a handoff goes to The pull-request route; the worktree and branch stay until the pull request merges or the operator abandons it, then are removed at once |
+| parallel-worktrees-general | a handoff is merged at once, and its worktree removed in the same unit | pull request: a handoff goes to The pull-request route; the worktree and branch stay, parked as **parallel-worktrees-general** *Cleanup* describes, until the pull request merges or the operator abandons it, then are removed at once |
 | parallel-worktrees-general | Docker-backed suites and stack up/down are forbidden in worker worktrees and run once after the last merge | a worker runs the stack suite in its worktree before its unit or pull request, and again before every later push to a pull-request branch, only as the single `lockctl.py run stack` command its brief gives it (see The stack lock) |
 
 ## The two locks
@@ -118,7 +118,8 @@ never delete the file. Everything that writes the checkout is a unit, run start 
    early and escalate.
 7. `git reset --hard @{u}` to drop anything the gate rewrote, confirm `git status --porcelain
    --untracked-files=no` is empty, `lockctl.py release integrate`, then remove the worker's
-   worktree and branch.
+   worktree and branch with the verify-then-force-remove steps in
+   **parallel-worktrees-general** *Cleanup*.
 
 After step 2, every tracked change in the shared checkout is the unit's own, which is why
 `git reset --hard @{u}` is safe in steps 6 and 7 and when leaving early, and nowhere else.
@@ -171,7 +172,8 @@ it on the forge.
    that cannot show the stack suite passed on the pushed head reruns it first.
 7. The operator completes the pull request. Complete it yourself only on the operator's word for
    that pull request; an approval on the forge is not that word.
-8. Once it has merged (the operator says so, or the forge shows it merged), remove the worktree,
+8. Once it has merged (the operator says so, or the forge shows it merged), remove the worktree
+   with the verify-then-force-remove steps in **parallel-worktrees-general** *Cleanup*,
    delete the local branch with `git branch -D` (after a squash merge git sees it as unmerged),
    delete the remote branch if the forge kept it, and delete its line from the file. An
    abandoned pull request is cleaned up the same way, on the operator's word only.

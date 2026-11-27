@@ -10,7 +10,7 @@ description: >-
 license: UNLICENSED
 metadata:
   author: Cristian
-  version: "0.1.16"
+  version: "0.1.17"
 ---
 
 # Syneto Ticket Delivery
@@ -585,18 +585,27 @@ git marks `prunable`), so never run `git worktree prune`.
 
 First prove nothing is lost. The local branch tip must equal the `sha` field of
 `glab mr view <branch> -R <group>/<repo> -F json`, the commit GitLab merged, and
-`git -C <path> status --short` must be empty in every checkout on that branch. For a linked
+`git -C <path> status --short --untracked-files=no` must be empty in every checkout on that
+branch, and every `??` line of plain `--short` must be a build, dependency, env or log
+artifact (`target*/`, `build/`, `dist/`, `node_modules/`, `.venv/`,
+`.env`, a scratch log); an untracked source
+file stops you like a tracked change does. For a linked
 worktree, also list what still runs inside it (his terminal, his editor's language server,
 a dev server):
 
 ```
 for p in /proc/[0-9]*; do c=$(readlink "$p/cwd" 2>/dev/null); case "$c" in <worktree>*) echo "$(basename "$p") $(tr '\0' ' ' < "$p/cmdline")";; esac; done
+docker ps --no-trunc --format '{{.Names}} {{.Mounts}}' | grep -F "<worktree>"
 ```
 
 When a check fails or a process shows up, stop and tell him what you found: never remove
 a tree from under his tools. Then, in this order:
 
-- a linked worktree: `git -C <repo> worktree remove .claude/worktrees/<KEY>`
+- a linked worktree, wherever it lives (`.claude/worktrees/<KEY>`, a sibling
+  `<repo>-<KEY>` directory, `/tmp`): `git -C <repo> worktree unlock <worktree> 2>/dev/null ||
+  true`, then `git -C <repo> worktree remove --force <worktree>`. `--force` takes the
+  untracked artifacts with it; plain `remove` refuses over any untracked file that is not
+  gitignored, or a modified tracked file, and leaves the tree behind
 - a main checkout still on the work branch (the main-worktree choice, or after a
   merge-back): `git -C <repo> checkout <base>`, then `git -C <repo> pull --ff-only`. A main
   checkout on any other branch is someone else's work: leave it.
@@ -683,7 +692,8 @@ Every dispatch that touches a repository carries:
   checkout or reset (a fetch here can move HEAD), no EnterWorktree, no `git clone`. For
   another revision on disk (a check at `HEAD`, a bisect), add a temporary worktree with
   `git -C <repo> worktree add --detach .claude/worktrees/<name> <rev>` and remove it with
-  `git -C <repo> worktree remove` before you report. In a Python repository, trust a run
+  `git -C <repo> worktree remove --force .claude/worktrees/<name>` before you report. In a
+  Python repository, trust a run
   there only once `<repo>/.venv/bin/python -c "import <package>; print(<package>.__file__)"`,
   run from the directory the test runs in, prints no path in the main checkout. No
   `kubectl`."
